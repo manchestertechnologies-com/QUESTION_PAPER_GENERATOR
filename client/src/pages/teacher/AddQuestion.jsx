@@ -29,7 +29,8 @@ const AddQuestion = () => {
     const fetchQuestions = async () => {
         try {
             const res = await api.get('/api/questions');
-            setQuestions(res.data);
+            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            setQuestions(list);
         } catch (err) {
             console.error(err);
         }

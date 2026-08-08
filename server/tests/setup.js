@@ -5,6 +5,8 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-jest-tests-12345';
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Test@Admin123!';
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://vznhcbwrssbqvnihysys.supabase.co';
+process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test_mock_secret_key';
 
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');

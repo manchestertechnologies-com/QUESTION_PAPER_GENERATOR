@@ -209,9 +209,9 @@ describe('Authorization & RBAC', () => {
 
     describe('Question Bank Pagination', () => {
 
-        test('TC-B-030: Questions API returns pagination metadata', async () => {
+        test('TC-B-030: Questions API returns pagination metadata when paginated=true', async () => {
             const { token } = await createTeacher({ subject: 'Physics', email: `pag_${Date.now()}@t.com` });
-            const res = await request(app).get('/api/questions')
+            const res = await request(app).get('/api/questions?paginated=true')
                 .set('Authorization', `Bearer ${token}`);
             expect(res.status).toBe(200);
             expect(res.body.pagination).toBeDefined();
@@ -219,9 +219,9 @@ describe('Authorization & RBAC', () => {
             expect(res.body.pagination.total).toBeDefined();
         });
 
-        test('TC-B-031: Limit is capped at 200', async () => {
+        test('TC-B-031: Limit is capped at 200 when paginated=true', async () => {
             const { token } = await createTeacher({ subject: 'Physics', email: `pag3_${Date.now()}@t.com` });
-            const res = await request(app).get('/api/questions?limit=9999')
+            const res = await request(app).get('/api/questions?limit=9999&paginated=true')
                 .set('Authorization', `Bearer ${token}`);
             expect(res.status).toBe(200);
             expect(res.body.pagination.limit).toBeLessThanOrEqual(200);

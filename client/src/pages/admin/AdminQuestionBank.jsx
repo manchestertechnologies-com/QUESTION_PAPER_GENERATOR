@@ -92,8 +92,9 @@ const AdminQuestionBank = () => {
     const fetchAllQuestionsOnce = async () => {
         try {
             const res = await api.get('/api/questions');
-            setAllQuestions(res.data);
-            const chs = [...new Set(res.data.map(q => q.chapter))].filter(Boolean);
+            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            setAllQuestions(list);
+            const chs = [...new Set(list.map(q => q.chapter))].filter(Boolean);
             setUniqueChapters(chs);
         } catch (err) {
             console.error(err);
@@ -117,7 +118,8 @@ const AdminQuestionBank = () => {
                 }
             });
             const res = await api.get(`/api/questions?${queryParams.toString()}`);
-            setQuestions(res.data);
+            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            setQuestions(list);
         } catch (err) {
             console.error(err);
         }

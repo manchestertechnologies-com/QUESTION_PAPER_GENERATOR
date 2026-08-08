@@ -103,7 +103,15 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 
         const result = await supabaseQuestions.getQuestions(filters, page, limit);
 
-        res.json(result);
+        res.setHeader('X-Total-Count', result.pagination.total);
+        res.setHeader('X-Total-Pages', result.pagination.pages);
+
+        if (req.query.paginated === 'true') {
+            return res.json(result);
+        }
+
+        // Return array by default for backward compatibility with frontend components expecting res.data array
+        return res.json(result.questions);
     } catch (err) {
         console.error('[QUESTIONS GET] error:', err.message);
         res.status(500).json({ msg: 'Server error fetching questions from Supabase.' });

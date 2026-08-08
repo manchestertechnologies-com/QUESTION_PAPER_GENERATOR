@@ -54,12 +54,13 @@ router.post('/login', loginLimiter, async (req, res) => {
         const payload = { id: adminId, role: 'admin' };
         const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10h' });
 
-        // Set as HttpOnly cookie
+        // Set HttpOnly cookie
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
+        // Return token in body for cross-site authorization header fallback
         return res.json({
+            token,
             user: { id: adminId, name: 'College Admin', email, role: 'admin' }
-            // Token NOT sent in body — it's in the HttpOnly cookie
         });
     }
 
@@ -84,10 +85,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
         const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '10h' });
 
-        // Set as HttpOnly cookie
+        // Set HttpOnly cookie
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
+        // Return token in body for cross-site authorization header fallback
         return res.json({
+            token,
             user: {
                 id: user.id,
                 name: user.name,
@@ -95,7 +98,6 @@ router.post('/login', loginLimiter, async (req, res) => {
                 role: user.role,
                 subject: user.subject
             }
-            // Token NOT sent in body — it's in the HttpOnly cookie
         });
     } catch (err) {
         console.error('[AUTH] Login error:', err.message);

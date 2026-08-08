@@ -9,6 +9,7 @@ const BridgeKey = require('../models/BridgeKey');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const { detectLabIp } = require('../middleware/labIp');
+const supabaseQuestions = require('../services/supabaseQuestions');
 
 // ─────────────────────────────────────────────────────────────────
 // ADMIN: Merge 3 papers into one OnlineExam
@@ -491,10 +492,11 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
 
         // Build question-level breakdown
         const originalQuestionIds = exam.questions.map(q => q.questionId).filter(Boolean);
-        const originalQuestions = await Question.find({ _id: { $in: originalQuestionIds } });
+        const originalQuestions = await supabaseQuestions.getQuestionsByIds(originalQuestionIds);
         const originalQuestionsMap = {};
         originalQuestions.forEach(oq => {
-            originalQuestionsMap[oq._id.toString()] = oq;
+            const qId = (oq.id || oq._id || oq.questionId).toString();
+            originalQuestionsMap[qId] = oq;
         });
 
         const breakdown = exam.questions.map(q => {

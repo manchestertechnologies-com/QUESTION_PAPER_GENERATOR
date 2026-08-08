@@ -498,14 +498,18 @@ const CreatePaper = () => {
     const showToast = (msg, type = 'info') => setToast({ msg, type });
 
     useEffect(() => {
-        api.get('/api/questions').then(res => setAllQuestions(res.data)).catch(console.error);
-        api.get('/api/exam-blueprints').then(res => setBlueprints(res.data)).catch(console.error);
-        api.get('/api/grand-tests').then(res => setGrandTests(res.data)).catch(console.error);
-        api.get('/api/previous-year-papers').then(res => setPreviousYearPapers(res.data)).catch(console.error);
+        api.get('/api/questions').then(res => {
+            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            setAllQuestions(list);
+        }).catch(console.error);
+        api.get('/api/exam-blueprints').then(res => setBlueprints(Array.isArray(res.data) ? res.data : [])).catch(console.error);
+        api.get('/api/grand-tests').then(res => setGrandTests(Array.isArray(res.data) ? res.data : [])).catch(console.error);
+        api.get('/api/previous-year-papers').then(res => setPreviousYearPapers(Array.isArray(res.data) ? res.data : [])).catch(console.error);
     }, []);
 
-    const uniqueChapters = [...new Set(allQuestions.map(q => q.chapter))].filter(Boolean);
-    const uniqueConcepts = [...new Set(allQuestions.filter(q => filters.chapter.length === 0 || filters.chapter.includes(q.chapter)).map(q => q.concept))].filter(Boolean);
+    const safeAllQuestions = Array.isArray(allQuestions) ? allQuestions : [];
+    const uniqueChapters = [...new Set(safeAllQuestions.map(q => q.chapter))].filter(Boolean);
+    const uniqueConcepts = [...new Set(safeAllQuestions.filter(q => filters.chapter.length === 0 || filters.chapter.includes(q.chapter)).map(q => q.concept))].filter(Boolean);
 
     const fetchFilteredQuestions = async () => {
         try {
@@ -521,7 +525,8 @@ const CreatePaper = () => {
             });
             if (queryData.class) { queryData.classes = queryData.class; delete queryData.class; }
             const res = await api.get(`/api/questions?${new URLSearchParams(queryData).toString()}`);
-            setQuestions(res.data);
+            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            setQuestions(list);
         } catch (err) { console.error(err); }
     };
 

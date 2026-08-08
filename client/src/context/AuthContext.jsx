@@ -7,29 +7,47 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // Restore session by calling /api/auth/me (validates the HttpOnly cookie server-side)
-    // No longer reading from localStorage — cookie is validated on server
     useEffect(() => {
-        const restoreSession = async () => {
-            try {
-                const res = await api.get('/api/auth/me');
-                setUser(res.data.user);
-            } catch {
-                // Not authenticated — that's fine
-                setUser(null);
-            } finally {
-                setLoading(false);
+        const initAuth = async () => {
+            const savedToken = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+
+            if (savedUser) {
+                try {
+                    setUser(JSON.parse(savedUser));
+                } catch {
+                    localStorage.removeItem('user');
+                }
             }
+
+            if (savedToken || savedUser) {
+                try {
+                    const res = await api.get('/api/auth/me');
+                    setUser(res.data.user);
+                    localStorage.setItem('user', JSON.stringify(res.data.user));
+                } catch {
+                    // Session invalid or expired
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    setUser(null);
+                }
+            }
+            setLoading(false);
         };
-        restoreSession();
+
+        initAuth();
     }, []);
 
     const login = async (email, password) => {
         try {
             const res = await api.post('/api/auth/login', { email, password });
-            // Token is set as HttpOnly cookie by server — NOT in localStorage
-            // Response body only contains user info (no token)
-            setUser(res.data.user);
+            if (res.data.token) {
+                localStorage.setItem('token', res.data.token);
+            }
+            if (res.data.user) {
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                setUser(res.data.user);
+            }
             return res.data.user;
         } catch (err) {
             throw err.response ? err.response.data : new Error('Login failed');
@@ -38,12 +56,14 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            await api.post('/api/auth/logout'); // Server clears the HttpOnly cookie
+            await api.post('/api/auth/logout');
         } catch {
-            // Even if logout API fails, clear local state
+            // Ignore network error on logout
         } finally {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            sessionStorage.clear();
             setUser(null);
-            sessionStorage.clear(); // Clear any remaining exam state
         }
     };
 

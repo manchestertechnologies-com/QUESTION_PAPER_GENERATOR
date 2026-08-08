@@ -12,13 +12,13 @@ describe('Authentication', () => {
 
     describe('POST /api/auth/login', () => {
 
-        test('TC-A-001: Admin login with correct credentials returns 200 + user', async () => {
+        test('TC-A-001: Admin login with correct credentials returns 200 and dual token', async () => {
             const res = await request(app).post('/api/auth/login')
                 .send({ email: 'college@gmail.com', password: 'Test@Admin123!' });
             expect(res.status).toBe(200);
             expect(res.body.user).toBeDefined();
             expect(res.body.user.role).toBe('admin');
-            expect(res.body.token).toBeUndefined(); // Token must NOT be in body
+            expect(res.body.token).toBeDefined(); 
         });
 
         test('TC-A-002: Admin login sets HttpOnly cookie', async () => {
@@ -68,10 +68,10 @@ describe('Authentication', () => {
             expect(res.body.user?.password).toBeUndefined();
         });
 
-        test('TC-A-009: Login response does NOT include token in body', async () => {
+        test('TC-A-009: Login response includes token in body for cross-origin authorization', async () => {
             const res = await request(app).post('/api/auth/login')
                 .send({ email: 'college@gmail.com', password: 'Test@Admin123!' });
-            expect(res.body.token).toBeUndefined();
+            expect(res.body.token).toBeDefined();
         });
 
         test('TC-A-010: Teacher login with correct credentials returns 200', async () => {
