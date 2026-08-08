@@ -1,6 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
 import api from '../api';
-import axios from 'axios';
 
 export const AuthContext = createContext();
 
@@ -8,20 +7,28 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    // Restore session by calling /api/auth/me (validates the HttpOnly cookie server-side)
+    // No longer reading from localStorage — cookie is validated on server
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        const userData = localStorage.getItem('user');
-        if (token && userData) {
-            setUser(JSON.parse(userData));
-        }
-        setLoading(false);
+        const restoreSession = async () => {
+            try {
+                const res = await api.get('/api/auth/me');
+                setUser(res.data.user);
+            } catch {
+                // Not authenticated — that's fine
+                setUser(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        restoreSession();
     }, []);
 
     const login = async (email, password) => {
         try {
             const res = await api.post('/api/auth/login', { email, password });
-            localStorage.setItem('token', res.data.token);
-            localStorage.setItem('user', JSON.stringify(res.data.user));
+            // Token is set as HttpOnly cookie by server — NOT in localStorage
+            // Response body only contains user info (no token)
             setUser(res.data.user);
             return res.data.user;
         } catch (err) {
@@ -29,10 +36,15 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const logout = () => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        setUser(null);
+    const logout = async () => {
+        try {
+            await api.post('/api/auth/logout'); // Server clears the HttpOnly cookie
+        } catch {
+            // Even if logout API fails, clear local state
+        } finally {
+            setUser(null);
+            sessionStorage.clear(); // Clear any remaining exam state
+        }
     };
 
     return (

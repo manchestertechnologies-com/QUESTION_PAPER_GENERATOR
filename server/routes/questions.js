@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const Question = require('../models/Question');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
+const { sanitizeHtml, sanitizeArray } = require('../utils/sanitize');
 
 const { storage } = require('../config/cloudinary');
 
@@ -23,25 +22,44 @@ const upload = multer({
 // @access  Teacher / Admin
 router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'solutionImage', maxCount: 1 }])], async (req, res) => {
     try {
-        // Teacher can only add question for their assigned subject. Admin sets subject from request or defaults.
+        // ── Mass-assignment whitelist — only allowed fields ──────────────────
+        const allowedFields = [
+            'questionText','type','subject','classes','chapter','concept',
+            'subConcept','level','answer','options','solutionText','imageUrl',
+            'solutionImageUrl','statements','matchPairs','sourceType','sourcePaperId',
+            'sourceYear','sourceExam','academicYearLevel','tags'
+        ];
+
+        // Teacher's subject is always from their token — not from request body
         const subject = req.user.role === 'admin' ? (req.body.subject || 'Chemistry') : req.user.subject;
-        const questionData = { ...req.body, subject, createdBy: req.user.id };
-        
-        // Handle JSON array/object parsing since they come as stringified JSON in FormData
-        if (req.body.options && typeof req.body.options === 'string') {
-            try { questionData.options = JSON.parse(req.body.options); } catch(e) {}
+
+        // Build sanitized question data (explicit whitelist)
+        const questionData = {
+            subject,
+            createdBy: req.user.id
+        };
+        allowedFields.forEach(f => {
+            if (req.body[f] !== undefined) questionData[f] = req.body[f];
+        });
+        questionData.subject = subject; // Override subject for teachers
+
+        // Sanitize HTML fields
+        if (questionData.questionText) questionData.questionText = sanitizeHtml(questionData.questionText);
+        if (questionData.solutionText) questionData.solutionText = sanitizeHtml(questionData.solutionText);
+        if (questionData.options) {
+            if (typeof questionData.options === 'string') {
+                try { questionData.options = JSON.parse(questionData.options); } catch(e) {}
+            }
+            questionData.options = sanitizeArray(questionData.options);
         }
+
+        // Handle other JSON fields
         if (req.body.statements && typeof req.body.statements === 'string') {
             try { questionData.statements = JSON.parse(req.body.statements); } catch(e) {}
         }
         if (req.body.matchPairs && typeof req.body.matchPairs === 'string') {
             try { questionData.matchPairs = JSON.parse(req.body.matchPairs); } catch(e) {}
         }
-        
-        // Auto-generate Question ID
-        const count = await Question.countDocuments();
-        questionData.questionId = `Q-${subject.substring(0,3).toUpperCase()}-${Date.now()}-${count+1}`;
-
         if (req.body.classes) {
             if (typeof req.body.classes === 'string') {
                 if (req.body.classes.startsWith('[')) {
@@ -51,6 +69,10 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
                 }
             }
         }
+
+        // Auto-generate Question ID
+        const count = await Question.countDocuments();
+        questionData.questionId = `Q-${subject.substring(0,3).toUpperCase()}-${Date.now()}-${count+1}`;
 
         if (req.files) {
             if (req.files.image && req.files.image[0]) {
@@ -66,7 +88,7 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
         res.json(question);
     } catch (err) {
         console.error('Add question error:', err.message);
-        res.status(500).json({ msg: 'Server Error', error: err.message });
+        res.status(500).json({ msg: 'Server error adding question.' });
     }
 });
 
@@ -78,11 +100,10 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         const { classes, chapter, concept, subConcept, level, type, sourceType, sourcePaperId, sourceYear, sourceExam, academicYearLevel } = req.query;
         let query = {};
         
-        // Only filter by subject if the user is a teacher
+        // Subject-level access control — teachers can ONLY access their own subject
         if (req.user.role === 'teacher') {
             query.subject = req.user.subject;
         } else if (req.query.subject) {
-            // Admin can filter by subject explicitly if provided
             query.subject = req.query.subject;
         }
         
@@ -98,11 +119,23 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         if (sourceExam) query.sourceExam = sourceExam;
         if (academicYearLevel) query.academicYearLevel = academicYearLevel;
 
-        const questions = await Question.find(query).sort({ createdAt: -1 });
-        res.json(questions);
+        // Pagination — default 100 per page, max 200
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(200, parseInt(req.query.limit) || 100);
+        const skip = (page - 1) * limit;
+
+        const [questions, total] = await Promise.all([
+            Question.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Question.countDocuments(query)
+        ]);
+
+        res.json({
+            questions,
+            pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+        });
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        res.status(500).json({ msg: 'Server error fetching questions.' });
     }
 });
 
@@ -112,17 +145,17 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 router.delete('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const question = await Question.findById(req.params.id);
-        if (!question) return res.status(404).json({ msg: 'Question not found' });
+        if (!question) return res.status(404).json({ msg: 'Question not found.' });
         
         if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
-             return res.status(401).json({ msg: 'Not authorized to delete this subject question' });
+             return res.status(403).json({ msg: 'Access denied: this question belongs to a different subject.' });
         }
         
         await Question.findByIdAndDelete(req.params.id);
-        res.json({ msg: 'Question removed' });
+        res.json({ msg: 'Question removed.' });
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error');
+        res.status(500).json({ msg: 'Server error deleting question.' });
     }
 });
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
+import { sanitize } from '../../utils/sanitize';
 
 // ─── Small helper: toast notification ───────────────────────────────────────
 const Toast = ({ msg, type, onClose }) => {
@@ -809,7 +810,7 @@ const CreatePaper = () => {
                                         <span className="font-semibold text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-100">{q.type}</span>
                                         <span className={`font-semibold text-[10px] px-2 py-1 rounded-md border ${q.level === 'hard' ? 'bg-orange-50 text-orange-700 border-orange-100' : q.level === 'medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>{q.level}</span>
                                     </div>
-                                    <div className="text-sm text-gray-700 line-clamp-3 font-medium" dangerouslySetInnerHTML={{ __html: q.questionText }}></div>
+                                    <div className="text-sm text-gray-700 line-clamp-3 font-medium" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></div>
                                 </div>
                             </div>
                         ))}
@@ -834,7 +835,7 @@ const CreatePaper = () => {
                                 </div>
                                 <p 
                                     className="text-gray-800 font-medium whitespace-pre-wrap mb-6 text-sm leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: previewQuestion.questionText }}
+                                    dangerouslySetInnerHTML={{ __html: sanitize(previewQuestion.questionText) }}
                                 />
                                 {previewQuestion.imageUrl && <div className="mb-6"><img src={previewQuestion.imageUrl} alt="Question Reference" className="max-w-full rounded border border-gray-200" /></div>}
                                 {previewQuestion.type === 'MCQ' && previewQuestion.options && (
@@ -842,7 +843,7 @@ const CreatePaper = () => {
                                         {previewQuestion.options.map((opt, i) => (
                                             <li key={i} className="flex items-center gap-3 font-medium">
                                                 <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{String.fromCharCode(65 + i)}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                                <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }} />
                                             </li>
                                         ))}
                                     </ul>
@@ -886,7 +887,7 @@ const CreatePaper = () => {
                             <div key={q._id} className="border border-gray-100 p-4 rounded-xl bg-gray-50 relative group flex gap-3">
                                 <div className="font-bold text-gray-400 text-xs mt-0.5">{idx + 1}.</div>
                                 <div className="flex-1">
-                                    <p className="text-sm text-gray-700 font-medium leading-relaxed pr-6 line-clamp-3" dangerouslySetInnerHTML={{ __html: q.questionText }}></p>
+                                    <p className="text-sm text-gray-700 font-medium leading-relaxed pr-6 line-clamp-3" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
                                     {q.imageUrl && <div className="mt-2"><img src={q.imageUrl} alt="Question Reference" className="max-w-full rounded border border-gray-200 max-h-32 object-contain" /></div>}
                                 </div>
                                 <button className="absolute top-3 right-3 text-red-400 hover:text-red-600 cursor-pointer hidden group-hover:block transition" onClick={() => handleDeselect(q._id)}>

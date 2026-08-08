@@ -5,6 +5,13 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 
+// @route   GET /api/admin
+// @desc    Admin panel status / dashboard stats
+// @access  Admin
+router.get('/', [auth, checkRole(['admin'])], async (req, res) => {
+    res.json({ msg: 'Admin portal accessible', role: req.user.role });
+});
+
 // @route   POST /api/admin/teachers
 // @desc    Create a teacher
 // @access  Admin

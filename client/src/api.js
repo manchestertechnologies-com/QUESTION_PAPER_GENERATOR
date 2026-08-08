@@ -1,33 +1,29 @@
 import axios from 'axios';
 
 // ── Base URL Configuration ──────────────────────────────────────────────────
-// In LOCAL DEV: leave empty — Vite's proxy forwards /api/* to localhost:5000
-// In PRODUCTION (Vercel): set VITE_API_URL in Vercel dashboard OR in .env file
-//   to your Render backend URL e.g. https://qpg-backend-5h72.onrender.com
 const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://qpg-backend-5h72.onrender.com');
 
 const api = axios.create({
-    baseURL: API_URL
+    baseURL: API_URL,
+    withCredentials: true, // IMPORTANT: send HttpOnly auth_token cookie on every request
 });
 
 // Global loading callbacks
-let loadingCallback = (isLoading) => {};
+let loadingCallback = (_isLoading) => {};
 export const setLoadingCallback = (cb) => { loadingCallback = cb; };
 
-// Add a request interceptor to attach the JWT token to every request
+// ── Request interceptor ─────────────────────────────────────────────────────
+// Note: No longer injecting Authorization header — cookie is sent automatically
+// via withCredentials: true. The header fallback is kept for API testing tools.
 api.interceptors.request.use((config) => {
     loadingCallback(true);
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-    }
     return config;
 }, (error) => {
     loadingCallback(false);
     return Promise.reject(error);
 });
 
-// Add a response interceptor to handle token expiry globally
+// ── Response interceptor ────────────────────────────────────────────────────
 api.interceptors.response.use(
     (response) => {
         loadingCallback(false);
@@ -36,10 +32,8 @@ api.interceptors.response.use(
     (error) => {
         loadingCallback(false);
         if (error.response && error.response.status === 401) {
-            // Token expired or invalid — clear storage
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            // Only redirect if not already on login page
+            // Token expired or invalid — clear any remaining client-side state
+            sessionStorage.clear();
             if (window.location.pathname !== '/') {
                 window.location.href = '/';
             }

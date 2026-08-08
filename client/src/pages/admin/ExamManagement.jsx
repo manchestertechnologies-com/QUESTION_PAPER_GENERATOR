@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
 import { exportToWord } from '../../utils/exportWord';
+import { sanitize } from '../../utils/sanitize';
 
 const EXAM_TYPES = ['JEE', 'NEET', 'CET'];
 const STATUS_COLORS = {
@@ -253,7 +254,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                     <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
                                         <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
                                         <div style={{ flex: 1 }}>
-                                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: q.questionText }}></p>
+                                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
                                             {q.imageUrl && (
                                                 <div style={{ marginTop: '12px', marginBottom: '8px' }}>
                                                     <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
@@ -275,7 +276,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                         {q.options.map((opt, i) => (
                                             <div key={i} style={{ display: 'flex' }}>
                                                 <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
-                                                <span dangerouslySetInnerHTML={{ __html: opt }}></span>
+                                                <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
                                             </div>
                                         ))}
                                     </div>

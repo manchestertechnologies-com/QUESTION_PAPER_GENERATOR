@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
+import { sanitize } from '../../utils/sanitize';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -252,7 +253,7 @@ export default function Scorecard() {
                                             {attempted && !data.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
                                             {attempted && data.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
                                         </div>
-                                        <p style={styles.reviewQText} dangerouslySetInnerHTML={{ __html: q.questionText }} />
+                                        <p style={styles.reviewQText} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }} />
                                         
                                         {q.type === 'numerical' || !q.options || q.options.length === 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400 }}>
@@ -261,7 +262,7 @@ export default function Scorecard() {
                                                     background: attempted ? (isCorrect ? '#dcfce7' : '#fee2e2') : '#f9fafb',
                                                     border: attempted ? (isCorrect ? '1.5px solid #10b981' : '1.5px solid #ef4444') : '1.5px solid #e5e7eb'
                                                 }}>
-                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <span dangerouslySetInnerHTML={{ __html: attempted ? q.selectedOption : 'Skipped' }} />
+                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <span dangerouslySetInnerHTML={{ __html: sanitize(attempted ? q.selectedOption : 'Skipped') }} />
                                                 </div>
                                                 {!data.answerKeyHidden && (
                                                     <div style={{
@@ -269,7 +270,7 @@ export default function Scorecard() {
                                                         background: '#dcfce7',
                                                         border: '1.5px solid #10b981'
                                                     }}>
-                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <span dangerouslySetInnerHTML={{ __html: q.correctAnswer }} />
+                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <span dangerouslySetInnerHTML={{ __html: sanitize(q.correctAnswer) }} />
                                                     </div>
                                                 )}
                                             </div>
@@ -285,7 +286,7 @@ export default function Scorecard() {
                                                             background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
                                                             border: isCorrectOpt ? '1.5px solid #10b981' : isSelected ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb'
                                                         }}>
-                                                            <span style={styles.reviewOptLabel}>{label}.</span> <span dangerouslySetInnerHTML={{ __html: opt }} />
+                                                            <span style={styles.reviewOptLabel}>{label}.</span> <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }} />
                                                             {isSelected && <span style={{ marginLeft: 8, fontSize: 12 }}>← Your Answer</span>}
                                                             {isCorrectOpt && <span style={{ marginLeft: 8, fontSize: 12, color: '#10b981' }}>✓ Correct</span>}
                                                         </div>

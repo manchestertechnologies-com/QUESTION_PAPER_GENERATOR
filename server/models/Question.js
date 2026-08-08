@@ -51,4 +51,10 @@ const QuestionSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// ── Indexes for common query patterns ──────────────────────────────────────
+QuestionSchema.index({ subject: 1, chapter: 1, type: 1, classes: 1 });
+QuestionSchema.index({ subject: 1, level: 1 });
+QuestionSchema.index({ sourceType: 1, sourcePaperId: 1 });
+QuestionSchema.index({ createdBy: 1, subject: 1 });
+
 module.exports = mongoose.model('Question', QuestionSchema);
