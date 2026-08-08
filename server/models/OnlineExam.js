@@ -6,7 +6,7 @@ const OnlineExamSchema = new mongoose.Schema({
     blueprintId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExamBlueprint' },
     sourcePapers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Paper' }],
     questions: [{
-        questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Question', required: true },
+        questionId: { type: mongoose.Schema.Types.Mixed, required: true },
         subject: String,
         chapter: String,
         concept: String,

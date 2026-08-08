@@ -3,10 +3,11 @@ const mongoose = require('mongoose');
 const PaperSchema = new mongoose.Schema({
     title: { type: String, required: true },
     subject: { type: String, required: true },
-    classes: [{ type: String, required: true }],
-    teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
-    templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Template' },
+    classes: [{ type: String }],
+    teacherId: { type: String, required: true }, // String to support both MongoDB ObjectId and Supabase User UUID
+    questions: [{ type: String }], // Array of Supabase Question UUIDs or question objects
+    questionObjects: [{ type: mongoose.Schema.Types.Mixed }], // Cached full question snapshots
+    templateId: { type: String },
     pattern: [{
         sectionName: String,
         numQuestions: Number,
