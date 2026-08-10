@@ -194,6 +194,10 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
         const typeStr = (filters.type || '').toLowerCase();
         if (typeStr.includes('numerical')) {
             query = query.eq('q_type', 'numerical');
+        } else if (typeStr.includes('assertion')) {
+            query = query.in('q_type', ['assertion_reason', 'assertion']);
+        } else if (typeStr.includes('match')) {
+            query = query.in('q_type', ['match', 'match_following']);
         } else if (typeStr.includes('mcq')) {
             query = query.in('q_type', ['mcq_single', 'mcq', 'mcq_multiple']);
         }
@@ -201,8 +205,24 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
 
     if (filters.classes) {
         const classesArr = Array.isArray(filters.classes) ? filters.classes : filters.classes.split(',');
-        const klassVals = classesArr.map(c => c.replace(/Class\s*/i, ''));
-        query = query.in('klass', klassVals);
+        const klassVals = [];
+        const examVals = [];
+        classesArr.forEach(c => {
+            const clean = c.replace(/Class\s*/i, '').trim();
+            if (['11', '12'].includes(clean)) {
+                klassVals.push(clean);
+            } else if (clean) {
+                examVals.push(clean);
+            }
+        });
+
+        if (klassVals.length > 0 && examVals.length > 0) {
+            query = query.in('klass', klassVals).overlaps('exams', examVals);
+        } else if (klassVals.length > 0) {
+            query = query.in('klass', klassVals);
+        } else if (examVals.length > 0) {
+            query = query.overlaps('exams', examVals);
+        }
     }
 
     const from = (page - 1) * limit;
