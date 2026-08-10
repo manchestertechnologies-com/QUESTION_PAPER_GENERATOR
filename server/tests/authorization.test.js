@@ -219,12 +219,12 @@ describe('Authorization & RBAC', () => {
             expect(res.body.pagination.total).toBeDefined();
         });
 
-        test('TC-B-031: Limit is capped at 200 when paginated=true', async () => {
+        test('TC-B-031: Limit is capped at 2000 when paginated=true', async () => {
             const { token } = await createTeacher({ subject: 'Physics', email: `pag3_${Date.now()}@t.com` });
             const res = await request(app).get('/api/questions?limit=9999&paginated=true')
                 .set('Authorization', `Bearer ${token}`);
             expect(res.status).toBe(200);
-            expect(res.body.pagination.limit).toBeLessThanOrEqual(200);
+            expect(res.body.pagination.limit).toBeLessThanOrEqual(2000);
         });
     });
 });

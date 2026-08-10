@@ -641,24 +641,24 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                         {q.answer && (
                             <div style={{ marginBottom: '10px', fontSize: '14px' }}>
                                 <strong style={{ color: '#4b5563' }}>Correct Answer / Key:</strong>{' '}
-                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bbf7d0' }}>
-                                    {q.answer}
+                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bbf7d0' }} dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}>
                                 </span>
                             </div>
                         )}
                         {q.solutionText ? (
-                            <div style={{ 
-                                color: '#1e1b4b', 
-                                whiteSpace: 'pre-wrap', 
-                                lineHeight: '1.6', 
-                                background: '#fff', 
-                                padding: '12px', 
-                                borderRadius: '8px', 
-                                border: '1px solid #e0e7ff',
-                                fontSize: '13px'
-                            }}>
-                                {q.solutionText}
-                            </div>
+                            <div 
+                                style={{ 
+                                    color: '#1e1b4b', 
+                                    whiteSpace: 'pre-wrap', 
+                                    lineHeight: '1.6', 
+                                    background: '#fff', 
+                                    padding: '12px', 
+                                    borderRadius: '8px', 
+                                    border: '1px solid #e0e7ff',
+                                    fontSize: '13px'
+                                }} 
+                                dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}
+                            />
                         ) : (
                             <div style={{ background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e0e7ff' }}>
                                 <span style={{ color: '#6b7280', fontStyle: 'italic', display: 'block', marginBottom: '10px' }}>
@@ -741,8 +741,7 @@ const AnswerKeySheet = ({ paper, settings, onGenerateSolution, generatingSolutio
                             <td style={{ padding: '12px 8px', fontWeight: 700, verticalAlign: 'top', fontSize: '13px' }}>{idx + 1}</td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: '#4f46e5' }}>{q.type || 'MCQ'}</td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
-                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', fontSize: '12px', display: 'inline-block' }}>
-                                    {q.answer || '—'}
+                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', fontSize: '12px', display: 'inline-block' }} dangerouslySetInnerHTML={{ __html: sanitize(q.answer || '—') }}>
                                 </span>
                             </td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top', fontSize: '13px', color: '#1f2937' }}>

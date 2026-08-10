@@ -167,7 +167,22 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
         .select('*', { count: 'exact' });
 
     if (filters.subject) {
-        query = query.ilike('subject', filters.subject);
+        const sub = (filters.subject || '').trim().toLowerCase();
+        if (sub === 'maths' || sub === 'math' || sub === 'mathematics') {
+            query = query.in('subject', ['Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS']);
+        } else if (sub === 'physics') {
+            query = query.in('subject', ['Physics', 'PHYSICS']);
+        } else if (sub === 'chemistry') {
+            query = query.in('subject', ['Chemistry', 'CHEMISTRY']);
+        } else if (sub === 'biology') {
+            query = query.in('subject', ['Biology', 'BIOLOGY']);
+        } else {
+            query = query.ilike('subject', filters.subject);
+        }
+    }
+
+    if (filters.search) {
+        query = query.ilike('question', `%${filters.search}%`);
     }
 
     if (filters.chapter) {

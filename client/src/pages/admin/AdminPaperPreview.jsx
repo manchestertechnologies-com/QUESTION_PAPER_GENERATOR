@@ -272,12 +272,11 @@ const QuestionSolution = ({ q, onGenerateSolution, isGenerating }) => {
             </div>
             {q.answer && (
                 <div className="mb-3 text-base">
-                    <strong className="text-gray-700">Correct Answer / Key:</strong> <span className="text-green-700 font-extrabold ml-1 bg-green-50 px-2 py-0.5 rounded border border-green-200">{q.answer}</span>
+                    <strong className="text-gray-700">Correct Answer / Key:</strong> <span className="text-green-700 font-extrabold ml-1 bg-green-50 px-2 py-0.5 rounded border border-green-200" dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span>
                 </div>
             )}
             {q.solutionText ? (
-                <div className="text-gray-800 text-base whitespace-pre-wrap leading-relaxed bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                    {q.solutionText}
+                <div className="text-gray-800 text-base whitespace-pre-wrap leading-relaxed bg-white p-4 rounded-xl border border-gray-100 shadow-sm" dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}>
                 </div>
             ) : (
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">

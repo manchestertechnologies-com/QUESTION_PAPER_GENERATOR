@@ -26,19 +26,44 @@ const AddQuestion = () => {
     const [editId, setEditId] = useState(null);
     const [showForm, setShowForm] = useState(false);
 
-    const fetchQuestions = async () => {
+    // Pagination & Search Filters
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(50);
+    const [search, setSearch] = useState('');
+    const [chapterFilter, setChapterFilter] = useState('');
+    const [typeFilter, setTypeFilter] = useState('');
+    const [classFilter, setClassFilter] = useState('');
+    const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, pages: 1 });
+
+    const fetchQuestions = async (targetPage = page) => {
         try {
-            const res = await api.get('/api/questions');
-            const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
-            setQuestions(list);
+            const params = new URLSearchParams({
+                paginated: 'true',
+                page: targetPage,
+                limit: limit
+            });
+            if (search) params.append('search', search);
+            if (chapterFilter) params.append('chapter', chapterFilter);
+            if (typeFilter) params.append('type', typeFilter);
+            if (classFilter) params.append('classes', classFilter);
+
+            const res = await api.get(`/api/questions?${params.toString()}`);
+            if (res.data && res.data.questions) {
+                setQuestions(res.data.questions);
+                setPagination(res.data.pagination);
+            } else {
+                const list = Array.isArray(res.data) ? res.data : [];
+                setQuestions(list);
+                setPagination({ page: 1, limit: list.length, total: list.length, pages: 1 });
+            }
         } catch (err) {
             console.error(err);
         }
     };
 
     useEffect(() => {
-        fetchQuestions();
-    }, []);
+        fetchQuestions(page);
+    }, [page, limit, chapterFilter, typeFilter, classFilter]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -535,9 +560,71 @@ const AddQuestion = () => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 gap-4">
-                    <div className="bg-gray-50 p-4 rounded-lg flex items-center justify-between mb-2">
-                        <span className="font-bold text-gray-700 text-lg">Total Questions: <span className="text-green-600">{questions.length}</span></span>
+                    <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4 mb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <span className="font-black text-navy text-lg">Total Questions: <span className="text-green-600">{pagination.total || questions.length}</span></span>
+                                <span className="text-xs text-gray-400 font-medium">Page {pagination.page} of {pagination.pages}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    disabled={pagination.page <= 1}
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    className="px-4 py-2 bg-navy/5 text-navy border border-navy/20 font-bold rounded-xl text-xs hover:bg-navy hover:text-white transition disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                    ← Previous
+                                </button>
+                                <span className="text-xs font-bold text-gray-700">Page {pagination.page} / {pagination.pages}</span>
+                                <button 
+                                    disabled={pagination.page >= pagination.pages}
+                                    onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
+                                    className="px-4 py-2 bg-navy/5 text-navy border border-navy/20 font-bold rounded-xl text-xs hover:bg-navy hover:text-white transition disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                    Next →
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Search & Filter Bar */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-3 border-t border-gray-100">
+                            <input 
+                                type="text"
+                                placeholder="🔍 Search question text..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') { setPage(1); fetchQuestions(1); } }}
+                                className="w-full border border-gray-200 px-4 py-2.5 rounded-xl text-xs outline-none focus:border-navy"
+                            />
+                            <input 
+                                type="text"
+                                placeholder="Filter Chapter..."
+                                value={chapterFilter}
+                                onChange={e => { setChapterFilter(e.target.value); setPage(1); }}
+                                className="w-full border border-gray-200 px-4 py-2.5 rounded-xl text-xs outline-none focus:border-navy"
+                            />
+                            <select 
+                                value={typeFilter}
+                                onChange={e => { setTypeFilter(e.target.value); setPage(1); }}
+                                className="w-full border border-gray-200 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-white outline-none focus:border-navy"
+                            >
+                                <option value="">All Question Types</option>
+                                <option value="mcq">MCQ / Multiple Choice</option>
+                                <option value="numerical">Numerical</option>
+                            </select>
+                            <select 
+                                value={classFilter}
+                                onChange={e => { setClassFilter(e.target.value); setPage(1); }}
+                                className="w-full border border-gray-200 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-white outline-none focus:border-navy"
+                            >
+                                <option value="">All Classes</option>
+                                <option value="11">Class 11</option>
+                                <option value="12">Class 12</option>
+                                <option value="JEE">JEE</option>
+                                <option value="NEET">NEET</option>
+                            </select>
+                        </div>
                     </div>
+
                     {questions.map(q => (
                         <div key={q._id} className="border border-gray-200 p-5 rounded-lg shadow-sm bg-white relative group hover:shadow-md transition">
                             <div className="absolute top-4 right-4 hidden group-hover:flex space-x-3 z-10">
@@ -560,14 +647,14 @@ const AddQuestion = () => {
                             {/* Dynamic Display of Question Content */}
                             {q.type === 'ASSERTION_REASON' ? (
                                 <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                    <p><strong>Assertion (A):</strong> {q.assertion}</p>
-                                    <p><strong>Reason (R):</strong> {q.reason}</p>
+                                    <p><strong>Assertion (A):</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.assertion) }}></span></p>
+                                    <p><strong>Reason (R):</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.reason) }}></span></p>
                                 </div>
                             ) : q.type === 'STATEMENT_BASED' ? (
                                 <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
                                     <p dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
                                     {q.statements.map((stmt, idx) => (
-                                        <p key={idx}><strong>Statement {idx+1}:</strong> {stmt}</p>
+                                        <p key={idx}><strong>Statement {idx+1}:</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(stmt) }}></span></p>
                                     ))}
                                 </div>
                             ) : q.type === 'MATCH_FOLLOWING' ? (
@@ -584,8 +671,8 @@ const AddQuestion = () => {
                                             <tbody>
                                                 {q.matchPairs?.map((pair, idx) => (
                                                     <tr key={idx}>
-                                                        <td className="py-1">{String.fromCharCode(65+idx)}. {pair.left}</td>
-                                                        <td className="py-1">{idx+1}. {pair.right}</td>
+                                                        <td className="py-1">{String.fromCharCode(65+idx)}. <span dangerouslySetInnerHTML={{ __html: sanitize(pair.left) }}></span></td>
+                                                        <td className="py-1">{idx+1}. <span dangerouslySetInnerHTML={{ __html: sanitize(pair.right) }}></span></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -611,7 +698,7 @@ const AddQuestion = () => {
                             )}
 
                             <div className="mt-3 text-sm font-bold text-gray-700">
-                                Correct Answer: <span className="text-navy">{q.answer}</span>
+                                Correct Answer: <span className="text-navy" dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span>
                             </div>
                             {q.type === 'NUMERICAL' && q.numericalTolerance > 0 && (
                                 <div className="text-xs text-gray-500">Tolerance range: +/- {q.numericalTolerance}</div>
@@ -634,6 +721,29 @@ const AddQuestion = () => {
                             )}
                         </div>
                     ))}
+
+                    {/* Bottom Pagination controls */}
+                    {questions.length > 0 && (
+                        <div className="bg-gray-50 p-4 rounded-xl flex items-center justify-between mt-4">
+                            <span className="text-xs font-bold text-gray-600">Showing page {pagination.page} of {pagination.pages} ({pagination.total} total questions)</span>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    disabled={pagination.page <= 1}
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    className="px-4 py-2 bg-white text-navy border border-gray-300 font-bold rounded-xl text-xs hover:bg-navy hover:text-white transition disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                    ← Previous
+                                </button>
+                                <button 
+                                    disabled={pagination.page >= pagination.pages}
+                                    onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}
+                                    className="px-4 py-2 bg-white text-navy border border-gray-300 font-bold rounded-xl text-xs hover:bg-navy hover:text-white transition disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                    Next →
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     {questions.length === 0 && (
                         <div className="text-center p-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
                             <div className="text-gray-400 text-5xl mb-4">📚</div>

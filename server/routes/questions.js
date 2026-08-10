@@ -82,7 +82,7 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
 // @access  Teacher / Admin
 router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { classes, chapter, concept, type, subject } = req.query;
+        const { classes, chapter, concept, type, subject, search } = req.query;
         let filters = {};
 
         // Subject-level access control — teachers can ONLY access their own subject
@@ -96,10 +96,11 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         if (chapter) filters.chapter = chapter;
         if (concept) filters.concept = concept;
         if (type) filters.type = type;
+        if (search) filters.search = search;
 
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const limit = Math.min(200, parseInt(req.query.limit) || 100);
+        const limit = Math.min(2000, parseInt(req.query.limit) || 1000);
 
         const result = await supabaseQuestions.getQuestions(filters, page, limit);
 

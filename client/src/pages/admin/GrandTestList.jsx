@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
+import { sanitize } from '../../utils/sanitize';
 
 const GrandTestList = () => {
     const [grandTests, setGrandTests] = useState([]);
@@ -303,18 +304,18 @@ const GrandTestList = () => {
                                                 <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">{q.type}</span>
                                                 <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">Chapter: {q.chapter}</span>
                                                 {q.answer && (
-                                                    <span className="text-[9px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded">Correct: {q.answer}</span>
+                                                    <span className="text-[9px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded flex items-center gap-1">Correct: <span dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span></span>
                                                 )}
                                             </div>
-                                            <p className="font-medium text-slate whitespace-pre-wrap mb-2">{q.questionText}</p>
+                                            <p className="font-medium text-slate whitespace-pre-wrap mb-2" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
                                             {q.options && q.options.length > 0 && (
                                                 <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mb-2 border-t border-gray-100/50 pt-2 mt-2">
-                                                    {q.options.map((o, oi) => <div key={oi}>{String.fromCharCode(65+oi)}) {o}</div>)}
+                                                    {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <span dangerouslySetInnerHTML={{ __html: sanitize(o) }}></span></div>)}
                                                 </div>
                                             )}
                                             {q.solutionText && (
                                                 <div className="text-gray-500 bg-green-50/20 p-2 rounded mt-2 border border-green-50/30">
-                                                    <strong>Solution:</strong> {q.solutionText}
+                                                    <strong>Solution:</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}></span>
                                                 </div>
                                             )}
                                         </div>

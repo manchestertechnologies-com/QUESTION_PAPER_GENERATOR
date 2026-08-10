@@ -100,12 +100,6 @@ const AdminDashboard = () => {
                         Results
                     </Link>
                     <Link 
-                        to="/admin/dashboard/question-bank" 
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${location.pathname.includes('question-bank') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'}`}
-                    >
-                        Q-Bank
-                    </Link>
-                    <Link 
                         to="/admin/dashboard/grand-tests" 
                         className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${location.pathname.includes('grand-tests') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'}`}
                     >
@@ -154,7 +148,6 @@ const AdminDashboard = () => {
                     <Route path="/preview/:paperId" element={<AdminPaperPreview />} />
                     <Route path="/exams" element={<ExamManagement />} />
                     <Route path="/results" element={<AdminResults />} />
-                    <Route path="/question-bank" element={<AdminQuestionBank />} />
                     <Route path="/grand-tests" element={<GrandTestList />} />
                     <Route path="/previous-year-papers" element={<PreviousYearPapers />} />
                     <Route path="/exam-blueprints" element={<ExamBlueprints />} />
