@@ -498,7 +498,7 @@ const CreatePaper = () => {
     const showToast = (msg, type = 'info') => setToast({ msg, type });
 
     useEffect(() => {
-        api.get('/api/questions').then(res => {
+        api.get('/api/questions?limit=2000').then(res => {
             const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             setAllQuestions(list);
         }).catch(console.error);
@@ -513,7 +513,7 @@ const CreatePaper = () => {
 
     const fetchFilteredQuestions = async () => {
         try {
-            const queryData = {};
+            const queryData = { limit: 2000 };
             Object.keys(filters).forEach(k => {
                 if (Array.isArray(filters[k])) {
                     if (filters[k].length > 0) {

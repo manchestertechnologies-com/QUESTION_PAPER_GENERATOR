@@ -168,16 +168,16 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
 
     if (filters.subject) {
         const sub = (filters.subject || '').trim().toLowerCase();
-        if (sub === 'maths' || sub === 'math' || sub === 'mathematics') {
+        if (sub.includes('math')) {
             query = query.in('subject', ['Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS']);
-        } else if (sub === 'physics') {
+        } else if (sub.includes('physic')) {
             query = query.in('subject', ['Physics', 'PHYSICS']);
-        } else if (sub === 'chemistry') {
+        } else if (sub.includes('chem')) {
             query = query.in('subject', ['Chemistry', 'CHEMISTRY']);
-        } else if (sub === 'biology') {
+        } else if (sub.includes('bio')) {
             query = query.in('subject', ['Biology', 'BIOLOGY']);
         } else {
-            query = query.ilike('subject', filters.subject);
+            query = query.ilike('subject', `%${filters.subject}%`);
         }
     }
 
