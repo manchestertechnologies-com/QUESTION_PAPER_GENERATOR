@@ -428,13 +428,13 @@ const MultiSelectCheckbox = ({ label, options, selectedValues, onChange, disable
     };
 
     return (
-        <div ref={containerRef} className="relative inline-block text-left w-48 select-none">
+        <div ref={containerRef} className={`relative inline-block text-left w-48 select-none ${isOpen ? 'z-50' : 'z-10'}`}>
             <div>
                 <button
                     type="button"
                     disabled={disabled}
                     onClick={() => setIsOpen(!isOpen)}
-                    className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-700 bg-white focus:border-blue-500 outline-none shadow-sm cursor-pointer flex justify-between items-center disabled:opacity-50 text-left"
+                    className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-700 bg-white focus:border-blue-500 outline-none shadow-sm cursor-pointer flex justify-between items-center disabled:opacity-50 text-left font-medium"
                 >
                     <span className="truncate">
                         {selectedValues.length === 0 ? label : `${label} (${selectedValues.length})`}
@@ -444,22 +444,22 @@ const MultiSelectCheckbox = ({ label, options, selectedValues, onChange, disable
             </div>
 
             {isOpen && !disabled && (
-                <div className="absolute right-0 mt-1 w-full rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20 max-h-60 overflow-y-auto border border-gray-200">
-                    <div className="py-1">
+                <div className="absolute left-0 mt-1 w-64 rounded-xl shadow-2xl bg-white ring-1 ring-black/10 z-[999] max-h-60 overflow-y-auto border border-gray-200 p-1">
+                    <div>
                         {options.length === 0 ? (
                             <div className="px-4 py-2 text-sm text-gray-400 italic">No options available</div>
                         ) : (
                             options.map((opt) => {
                                 const checked = selectedValues.includes(opt);
                                 return (
-                                    <label key={opt} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer whitespace-nowrap">
+                                    <label key={opt} className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 rounded-lg cursor-pointer whitespace-nowrap">
                                         <input
                                             type="checkbox"
                                             checked={checked}
                                             onChange={() => toggleOption(opt)}
                                             className="h-4 w-4 text-blue-600 border-gray-300 rounded mr-2 focus:ring-blue-500"
                                         />
-                                        <span className="truncate">{opt}</span>
+                                        <span className="truncate font-medium">{opt}</span>
                                     </label>
                                 );
                             })
@@ -717,7 +717,7 @@ const CreatePaper = () => {
             </nav>
 
             {/* Filter Bar */}
-            <div className="px-6 py-4 bg-white border-b border-gray-200 flex flex-wrap gap-4 items-center z-0 mx-4 border-x">
+            <div className="px-6 py-4 bg-white border-b border-gray-200 flex flex-wrap gap-4 items-center relative z-30 mx-4 border-x">
                 <input type="text" placeholder="Paper Title" value={paperTitle} onChange={e => setPaperTitle(e.target.value)} className="border border-gray-300 p-2 rounded-lg font-medium w-48 text-sm focus:border-blue-500 outline-none" />
                 <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mx-2">Blueprint</div>
                 <select value={selectedBlueprintId} onChange={e => handleBlueprintChange(e.target.value)} className="border border-gray-300 p-2 rounded-lg text-sm text-gray-700 bg-white focus:border-blue-500 outline-none shadow-sm cursor-pointer w-48">
@@ -786,7 +786,7 @@ const CreatePaper = () => {
             </div>
 
             {/* Three Columns Workspace */}
-            <div className="flex-1 flex gap-6 overflow-hidden p-6 mx-4 mb-4 border-x border-b border-gray-200 bg-[#f8fafc] rounded-b-lg">
+            <div className="flex-1 flex gap-6 overflow-hidden p-6 mx-4 mb-4 border-x border-b border-gray-200 bg-[#f8fafc] rounded-b-lg relative z-0">
 
                 {/* Left: Available Questions */}
                 <div className="w-1/3 bg-white border border-gray-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
