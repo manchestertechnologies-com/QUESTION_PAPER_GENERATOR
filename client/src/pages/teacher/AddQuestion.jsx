@@ -48,13 +48,22 @@ const AddQuestion = () => {
             if (classFilter) params.append('classes', classFilter);
 
             const res = await api.get(`/api/questions?${params.toString()}`);
+            const totalFromHeader = parseInt(res.headers['x-total-count'] || res.headers['X-Total-Count']);
+
             if (res.data && res.data.questions) {
                 setQuestions(res.data.questions);
-                setPagination(res.data.pagination);
+                const paginationObj = res.data.pagination || {};
+                if (totalFromHeader && !isNaN(totalFromHeader)) {
+                    paginationObj.total = totalFromHeader;
+                    paginationObj.pages = Math.ceil(totalFromHeader / (paginationObj.limit || limit)) || 1;
+                }
+                setPagination(paginationObj);
             } else {
                 const list = Array.isArray(res.data) ? res.data : [];
                 setQuestions(list);
-                setPagination({ page: 1, limit: list.length, total: list.length, pages: 1 });
+                const realTotal = (!isNaN(totalFromHeader) && totalFromHeader > 0) ? totalFromHeader : list.length;
+                const realPages = Math.ceil(realTotal / limit) || 1;
+                setPagination({ page: targetPage, limit, total: realTotal, pages: realPages });
             }
         } catch (err) {
             console.error(err);

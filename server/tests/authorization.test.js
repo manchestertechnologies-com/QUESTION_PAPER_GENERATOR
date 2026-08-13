@@ -224,7 +224,7 @@ describe('Authorization & RBAC', () => {
             const res = await request(app).get('/api/questions?limit=9999&paginated=true')
                 .set('Authorization', `Bearer ${token}`);
             expect(res.status).toBe(200);
-            expect(res.body.pagination.limit).toBeLessThanOrEqual(2000);
+            expect(res.body.pagination.limit).toBeLessThanOrEqual(50000);
         });
     });
 });

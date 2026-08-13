@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const ExamBlueprintSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
-    examType: { type: String, enum: ['JEE', 'NEET', 'CET'], required: true },
+    examType: { type: String, enum: ['JEE', 'NEET', 'CET', 'KCET'], required: true },
     subjects: [{
         subjectName: { type: String, required: true }, // e.g. Physics, Chemistry, Botany, Zoology, Mathematics, Biology
         totalQuestions: { type: Number, required: true },

@@ -91,7 +91,7 @@ const AdminQuestionBank = () => {
 
     const fetchAllQuestionsOnce = async () => {
         try {
-            const res = await api.get('/api/questions');
+            const res = await api.get('/api/questions?limit=20000&paginated=true');
             const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             setAllQuestions(list);
             const chs = [...new Set(list.map(q => q.chapter))].filter(Boolean);
@@ -108,6 +108,8 @@ const AdminQuestionBank = () => {
     const fetchQuestions = async () => {
         try {
             const queryParams = new URLSearchParams();
+            queryParams.append('limit', '20000');
+            queryParams.append('paginated', 'true');
             Object.keys(filters).forEach(key => {
                 if (Array.isArray(filters[key])) {
                     if (filters[key].length > 0) {
