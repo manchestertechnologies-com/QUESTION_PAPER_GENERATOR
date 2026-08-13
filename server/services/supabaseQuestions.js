@@ -167,8 +167,13 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
         .select('*', { count: 'exact' });
 
     if (filters.subject) {
-        const sub = (filters.subject || '').trim().toLowerCase();
-        if (sub.includes('math')) {
+        let sub = (filters.subject || '').trim().toLowerCase();
+        if (sub.includes('__editor__:')) {
+            sub = sub.replace('__editor__:', '').trim();
+        }
+        if (sub === 'all') {
+            // No subject restriction
+        } else if (sub.includes('math')) {
             query = query.in('subject', ['Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS']);
         } else if (sub.includes('physic')) {
             query = query.in('subject', ['Physics', 'PHYSICS']);
@@ -177,7 +182,7 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
         } else if (sub.includes('bio')) {
             query = query.in('subject', ['Biology', 'BIOLOGY']);
         } else {
-            query = query.ilike('subject', `%${filters.subject}%`);
+            query = query.ilike('subject', `%${sub}%`);
         }
     }
 
