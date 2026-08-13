@@ -22,11 +22,11 @@ async function populatePaperQuestions(paper) {
 // @route   POST /api/papers
 // @desc    Save a paper (stores Supabase question IDs and paper pattern)
 // @access  Teacher
-router.post('/', [auth, checkRole(['teacher'])], async (req, res) => {
+router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const paperData = {
             ...req.body,
-            subject: req.user.subject,
+            subject: req.user.subject || 'Mixed',
             teacherId: req.user.id
         };
 

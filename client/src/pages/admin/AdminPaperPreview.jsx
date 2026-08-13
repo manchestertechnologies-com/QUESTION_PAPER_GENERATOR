@@ -104,8 +104,7 @@ const AdminPaperPreview = () => {
                     >
                         {showAnswerKey ? 'Hide Answer Key' : 'Show Answer Key'}
                     </button>
-                    <button onClick={handlePrint} className="bg-navy text-gold px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">Print Archive</button>
-                    <button onClick={() => exportToWord('.print-area', `${selectedPaper.title.replace(/\s+/g, '_')}.doc`)} className="bg-gold text-navy px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">Export Doc</button>
+                    <button onClick={handlePrint} className="bg-navy text-gold px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">🖨 Print / Save PDF</button>
                 </div>
             </div>
 

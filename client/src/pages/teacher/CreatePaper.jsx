@@ -290,15 +290,35 @@ const GeneratePaperModal = ({ onClose, onGenerate, filters, allQuestions, setFil
                                             {sec.sectionName}
                                         </div>
 
-                                        {/* Qty */}
+                                        {/* Qty with dynamic +/- buttons */}
                                         <div className="relative flex-shrink-0">
                                             <label className="absolute -top-2 left-3 bg-gray-50 px-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Questions</label>
-                                            <input
-                                                type="number" min="1" placeholder="Qty"
-                                                value={sec.numQuestions}
-                                                onChange={e => handlePatternChange(idx, 'numQuestions', e.target.value)}
-                                                className="border border-gray-200 p-3 rounded-xl w-20 text-sm font-bold text-gray-700 outline-none text-center focus:border-[#1e3280] bg-white"
-                                            />
+                                            <div className="flex items-center gap-1 mt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const current = parseInt(sec.numQuestions) || 0;
+                                                        if (current > 1) handlePatternChange(idx, 'numQuestions', current - 1);
+                                                    }}
+                                                    className="w-8 h-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-black text-navy flex items-center justify-center transition shadow-sm"
+                                                    title="Decrease question count"
+                                                >-</button>
+                                                <input
+                                                    type="number" min="1" placeholder="Qty"
+                                                    value={sec.numQuestions}
+                                                    onChange={e => handlePatternChange(idx, 'numQuestions', e.target.value)}
+                                                    className="border border-gray-200 p-2 rounded-xl w-16 text-sm font-bold text-gray-700 outline-none text-center focus:border-[#1e3280] bg-white"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const current = parseInt(sec.numQuestions) || 0;
+                                                        handlePatternChange(idx, 'numQuestions', current + 1);
+                                                    }}
+                                                    className="w-8 h-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-black text-navy flex items-center justify-center transition shadow-sm"
+                                                    title="Increase question count"
+                                                >+</button>
+                                            </div>
                                         </div>
 
                                         {/* Type */}

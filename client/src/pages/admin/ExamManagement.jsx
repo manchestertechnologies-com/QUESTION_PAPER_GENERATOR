@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
-import { exportToWord } from '../../utils/exportWord';
 import { sanitize } from '../../utils/sanitize';
 
 const EXAM_TYPES = ['JEE', 'NEET', 'CET'];

@@ -118,6 +118,53 @@ async function seedDefaultBlueprints() {
                             ]
                         }
                     ]
+                },
+                {
+                    name: 'CET Default (KCET)',
+                    examType: 'KCET',
+                    durationMinutes: 180,
+                    subjects: [
+                        {
+                            subjectName: 'Physics',
+                            totalQuestions: 60,
+                            sections: [{
+                                sectionName: 'Physics Section',
+                                numQuestions: 60,
+                                questionTypes: ['MCQ'],
+                                markingRules: { correct: 1, incorrect: 0, unattempted: 0 }
+                            }]
+                        },
+                        {
+                            subjectName: 'Chemistry',
+                            totalQuestions: 60,
+                            sections: [{
+                                sectionName: 'Chemistry Section',
+                                numQuestions: 60,
+                                questionTypes: ['MCQ'],
+                                markingRules: { correct: 1, incorrect: 0, unattempted: 0 }
+                            }]
+                        },
+                        {
+                            subjectName: 'Mathematics',
+                            totalQuestions: 60,
+                            sections: [{
+                                sectionName: 'Mathematics Section',
+                                numQuestions: 60,
+                                questionTypes: ['MCQ'],
+                                markingRules: { correct: 1, incorrect: 0, unattempted: 0 }
+                            }]
+                        },
+                        {
+                            subjectName: 'Biology',
+                            totalQuestions: 60,
+                            sections: [{
+                                sectionName: 'Biology Section',
+                                numQuestions: 60,
+                                questionTypes: ['MCQ'],
+                                markingRules: { correct: 1, incorrect: 0, unattempted: 0 }
+                            }]
+                        }
+                    ]
                 }
             ];
             await ExamBlueprint.insertMany(blueprints);

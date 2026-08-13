@@ -370,9 +370,7 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                         </button>
                         {paperData.status?.toLowerCase() === 'approved' ? (
                             <>
-                                <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print</button>
-                                <button style={S.btnPdf} onClick={() => exportToWord('#qp-print-area', `${paperData.title.replace(/\s+/g, '_')}_QP.doc`, settings)}>⬇ Export QP (Word)</button>
-                                <button style={{ ...S.btnPdf, background: '#10b981' }} onClick={() => exportToWord('#key-print-area', `${paperData.title.replace(/\s+/g, '_')}_AnswerKey.doc`, settings)}>🔑 Export Key (Word)</button>
+                                <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
                             </>
                         ) : (
                             <span style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', padding: '0 10px' }}>
