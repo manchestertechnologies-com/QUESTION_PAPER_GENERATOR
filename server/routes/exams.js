@@ -62,25 +62,100 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
         }
         */
 
-        // Merge questions from all 3 papers, deduplicate by _id
+        // Merge questions from all papers, preserving sections and translations
         const seen = new Set();
         const mergedQuestions = [];
+        const sectionsMap = {};
+
         for (const paper of papers) {
-            for (const q of paper.questions) {
-                if (!seen.has(q._id.toString())) {
-                    seen.add(q._id.toString());
-                    mergedQuestions.push({
-                        questionId: q._id,
-                        subject: q.subject,
-                        chapter: q.chapter,
-                        concept: q.concept,
-                        questionText: q.questionText,
-                        options: q.options || [],
-                        answer: q.answer,
-                        imageUrl: q.imageUrl,
-                        marks: 4,
-                        type: q.type || 'MCQ'
+            let availableQuestions = [...paper.questions];
+            
+            if (paper.pattern && paper.pattern.length > 0) {
+                paper.pattern.forEach(sec => {
+                    const uniqueSecName = `${paper.subject} - ${sec.sectionName}`;
+                    
+                    if (!sectionsMap[uniqueSecName]) {
+                        const isSectionB = sec.sectionName.toLowerCase().endsWith('b');
+                        let allowedToAnswer = 0;
+                        if (isSectionB) {
+                            const subClean = paper.subject.toLowerCase().trim();
+                            allowedToAnswer = (subClean === 'mathematics' || subClean === 'maths') ? 5 : 10;
+                        }
+
+                        sectionsMap[uniqueSecName] = {
+                            sectionName: uniqueSecName,
+                            numQuestions: sec.numQuestions || 0,
+                            allowedToAnswer,
+                            markingRules: {
+                                correct: sec.marks / sec.numQuestions || 4,
+                                incorrect: -1,
+                                unattempted: 0
+                            }
+                        };
+                    }
+
+                    let secQuestions = [];
+                    if (sec.type) {
+                        secQuestions = availableQuestions.filter(q => q.type === sec.type).slice(0, sec.numQuestions);
+                        const usedIds = new Set(secQuestions.map(q => q._id.toString()));
+                        availableQuestions = availableQuestions.filter(q => !usedIds.has(q._id.toString()));
+                    } else {
+                        secQuestions = availableQuestions.slice(0, sec.numQuestions);
+                        availableQuestions = availableQuestions.slice(sec.numQuestions);
+                    }
+
+                    secQuestions.forEach(q => {
+                        if (!seen.has(q._id.toString())) {
+                            seen.add(q._id.toString());
+                            mergedQuestions.push({
+                                questionId: q._id,
+                                subject: q.subject,
+                                chapter: q.chapter,
+                                concept: q.concept,
+                                questionText: q.questionText,
+                                options: q.options || [],
+                                answer: q.answer,
+                                imageUrl: q.imageUrl,
+                                marks: sec.marks / sec.numQuestions || 4,
+                                type: q.type || 'MCQ',
+                                sectionName: uniqueSecName,
+                                questionTextTranslation: q.questionTextTranslation || '',
+                                optionsTranslation: q.optionsTranslation || []
+                            });
+                        }
                     });
+                });
+            } else {
+                // Fallback for papers without patterns
+                const defSecName = `${paper.subject} - Section A`;
+                if (!sectionsMap[defSecName]) {
+                    sectionsMap[defSecName] = {
+                        sectionName: defSecName,
+                        numQuestions: paper.questions.length,
+                        allowedToAnswer: 0,
+                        markingRules: { correct: 4, incorrect: -1, unattempted: 0 }
+                    };
+                }
+
+                for (const q of paper.questions) {
+                    if (!seen.has(q._id.toString())) {
+                        seen.add(q._id.toString());
+                        mergedQuestions.push({
+                            questionId: q._id,
+                            subject: q.subject,
+                            chapter: q.chapter,
+                            concept: q.concept,
+                            questionText: q.questionText,
+                            options: q.options || [],
+                            answer: q.answer,
+                            imageUrl: q.imageUrl,
+                            marks: 4,
+                            type: q.type || 'MCQ',
+                            sectionName: defSecName,
+                            questionTextTranslation: q.questionTextTranslation || '',
+                            optionsTranslation: q.optionsTranslation || []
+                        });
+                    }
                 }
             }
         }
@@ -90,11 +165,13 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
             examType,
             sourcePapers: paperIds,
             questions: mergedQuestions,
+            sections: Object.values(sectionsMap),
             instructions: instructions || getDefaultInstructions(examType),
             start_time: start_time || null,
             end_time: end_time || null,
             duration_minutes: duration_minutes || 180,
             status: start_time ? 'scheduled' : 'draft',
+            shuffleQuestions: req.body.shuffleQuestions || false,
             allowedStudents: Array.isArray(allowedStudents) ? allowedStudents : [],
             createdBy: req.user.id
         });
@@ -247,6 +324,27 @@ router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
     }
 });
 
+// Seeded shuffle helper for deterministic question order
+const seededShuffle = (arr, seed) => {
+    let m = arr.length, t, i;
+    let seedNum = 0;
+    for (let charIdx = 0; charIdx < seed.length; charIdx++) {
+        seedNum += seed.charCodeAt(charIdx);
+    }
+    const random = () => {
+        let x = Math.sin(seedNum++) * 10000;
+        return x - Math.floor(x);
+    };
+    const shuffled = [...arr];
+    while (m) {
+        i = Math.floor(random() * m--);
+        t = shuffled[m];
+        shuffled[m] = shuffled[i];
+        shuffled[i] = t;
+    }
+    return shuffled;
+};
+
 // ─────────────────────────────────────────────────────────────────
 // STUDENT: Get exam for taking (NO answers)
 // GET /api/exams/:id/take
@@ -259,6 +357,13 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             return res.status(403).json({ msg: 'Exam is not currently available.' });
         }
 
+        const { email, rollNumber } = req.query;
+        const studentId = rollNumber || email || 'anonymous';
+        let examQuestions = exam.questions;
+        if (exam.shuffleQuestions) {
+            examQuestions = seededShuffle(exam.questions, `${studentId}-${exam._id}`);
+        }
+
         // Strip answers before sending to student
         const safeExam = {
             _id: exam._id,
@@ -268,7 +373,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             duration_minutes: exam.duration_minutes,
             start_time: exam.start_time,
             end_time: exam.end_time,
-            questions: exam.questions.map(q => ({
+            questions: examQuestions.map(q => ({
                 _id: q._id,
                 questionId: q.questionId,
                 subject: q.subject,
@@ -312,22 +417,28 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
         });
         if (existing) return res.json({ msg: 'Session resumed', session: existing });
 
+        const studentId = rollNumber || studentEmail || 'anonymous';
+        let examQuestions = exam.questions;
+        if (exam.shuffleQuestions) {
+            examQuestions = seededShuffle(exam.questions, `${studentId}-${exam._id}`);
+        }
+
         const session = new ExamSession({
             examId: req.params.id,
-            studentId: rollNumber || studentEmail || 'anonymous',
+            studentId,
             studentName: studentName || 'Student',
             studentEmail: studentEmail || '',
             rollNumber: rollNumber || '',
             fromLabIp: req.isLabIp,
             clientIp: req.clientIp,
             startTime: new Date(),
-            answers: exam.questions.map(q => ({
+            answers: examQuestions.map(q => ({
                 questionId: q._id,
                 selectedOption: null,
                 markedForReview: false,
                 visited: false
             })),
-            totalQuestions: exam.questions.length
+            totalQuestions: examQuestions.length
         });
 
         await session.save();
@@ -359,6 +470,18 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             answers.forEach(a => { answerMap[a.questionId] = a; });
         }
 
+        // Section attempts bookkeeping for JEE/NEET optional rules
+        const sectionAttemptsCounts = {}; // Track number of graded questions in this section
+        const allowedSections = {}; // Map section name to allowed count
+        if (exam.sections && Array.isArray(exam.sections)) {
+            exam.sections.forEach(sec => {
+                if (sec.allowedToAnswer > 0) {
+                    allowedSections[sec.sectionName] = sec.allowedToAnswer;
+                    sectionAttemptsCounts[sec.sectionName] = 0;
+                }
+            });
+        }
+
         // Compute analytics
         let score = 0, correct = 0, incorrect = 0, unattempted = 0;
         const weakMap = {};
@@ -376,9 +499,22 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
         const processedAnswers = exam.questions.map(q => {
             const sid = q._id.toString();
             const submitted = answerMap[sid];
-            const selected = submitted?.selectedOption || null;
+            let selected = submitted?.selectedOption || null;
             const markedForReview = submitted?.markedForReview || false;
             const timeTaken = submitted?.timeTaken || 0;
+
+            const secName = q.sectionName;
+            const isAttempted = selected !== null && selected !== '';
+            
+            if (isAttempted && secName && allowedSections[secName] !== undefined) {
+                const maxAllowed = allowedSections[secName];
+                if (sectionAttemptsCounts[secName] >= maxAllowed) {
+                    // Exceeded the allowed answers for this choice section! Ignore this answer.
+                    selected = null;
+                } else {
+                    sectionAttemptsCounts[secName]++;
+                }
+            }
 
             // Load marking rules (fallback to JEE standard 4, -1, 0)
             let correctMarks = 4;
@@ -763,5 +899,36 @@ function getDefaultInstructions(examType) {
 7. Marking Scheme: +4 for Correct, -1 for Incorrect, 0 for Unattempted.
 8. The Question Palette on the right shows the status of each question.`;
 }
+
+// ─────────────────────────────────────────────────────────────────
+// STUDENT: Save intermediate progress (Autosave / Recover)
+// POST /api/exams/:id/session/save-progress
+// ─────────────────────────────────────────────────────────────────
+router.post('/:id/session/save-progress', async (req, res) => {
+    try {
+        const { sessionId, answers } = req.body;
+        if (!sessionId) return res.status(400).json({ msg: 'Session ID is required' });
+
+        const session = await ExamSession.findById(sessionId);
+        if (!session) return res.status(404).json({ msg: 'Session not found' });
+        if (session.submitted) return res.status(400).json({ msg: 'Cannot save progress for submitted exam' });
+
+        if (answers && Array.isArray(answers)) {
+            session.answers = answers.map(a => ({
+                questionId: a.questionId,
+                selectedOption: a.selectedOption || null,
+                markedForReview: a.markedForReview || false,
+                visited: a.visited || false,
+                timeTaken: a.timeTaken || 0
+            }));
+        }
+
+        await session.save();
+        res.json({ msg: 'Progress autosaved successfully', session });
+    } catch (err) {
+        console.error('Autosave error:', err);
+        res.status(500).json({ msg: 'Server Error during autosave' });
+    }
+});
 
 module.exports = router;

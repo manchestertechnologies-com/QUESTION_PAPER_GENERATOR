@@ -271,9 +271,29 @@ const AdminQuestionBank = () => {
                 <p className="text-sm font-bold text-navy">Matches Found: <span className="text-gold font-black">{questions.length}</span></p>
                 {questions.map(q => (
                     <div key={q._id} className="border border-gray-200 p-6 rounded-3xl shadow-sm bg-white relative group hover:shadow-md transition">
-                        <button onClick={() => handleDelete(q._id)} className="absolute top-4 right-4 text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hidden group-hover:block transition">
-                            Delete
-                        </button>
+                        <div className="absolute top-4 right-4 hidden group-hover:flex gap-2 transition z-10">
+                            <button 
+                                onClick={async () => {
+                                    if (!window.confirm('Are you sure you want to generate an AI variant of this question and save it as a new question in the bank?')) return;
+                                    try {
+                                        const res = await api.post(`/api/questions/${q._id}/generate-variant`);
+                                        alert('AI Variant created and saved successfully as: ' + res.data.questionId);
+                                        fetchQuestions();
+                                    } catch (err) {
+                                        alert(err.response?.data?.msg || err.message);
+                                    }
+                                }} 
+                                className="text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            >
+                                AI Variant
+                            </button>
+                            <button 
+                                onClick={() => handleDelete(q._id)} 
+                                className="text-red-500 hover:text-red-700 bg-red-50 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                            >
+                                Delete
+                            </button>
+                        </div>
                         <div className="flex flex-wrap items-center gap-2 mb-3">
                             <span className="bg-navy/5 text-navy text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wider">{q.questionId}</span>
                             <span className="text-[10px] font-semibold text-gray-600 bg-gray-50 px-3 py-1 rounded-full">Subject: {q.subject}</span>

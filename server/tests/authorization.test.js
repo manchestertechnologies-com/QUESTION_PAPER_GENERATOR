@@ -182,17 +182,17 @@ describe('Authorization & RBAC', () => {
             expect(res.status).toBe(403);
         });
 
-        test('TC-B-022: Teacher cannot access grand-tests list', async () => {
-            const { token } = await createTeacher({ email: `gtteacher_${Date.now()}@t.com` });
+        test('TC-B-022: Lab role cannot access grand-tests list', async () => {
+            const labToken = makeToken({ id: 'labuser1', role: 'lab' });
             const res = await request(app).get('/api/grand-tests')
-                .set('Authorization', `Bearer ${token}`);
+                .set('Authorization', `Bearer ${labToken}`);
             expect(res.status).toBe(403);
         });
 
-        test('TC-B-023: Teacher cannot create grand tests', async () => {
-            const { token } = await createTeacher({ email: `gtcreate_${Date.now()}@t.com` });
+        test('TC-B-023: Lab role cannot create grand tests', async () => {
+            const labToken = makeToken({ id: 'labuser1', role: 'lab' });
             const res = await request(app).post('/api/grand-tests')
-                .set('Authorization', `Bearer ${token}`)
+                .set('Authorization', `Bearer ${labToken}`)
                 .send({ title: 'Hack GT', code: 'GT-001', examType: 'JEE' });
             expect(res.status).toBe(403);
         });

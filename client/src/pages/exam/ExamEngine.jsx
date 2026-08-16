@@ -76,7 +76,9 @@ export default function ExamEngine() {
     useEffect(() => {
         const init = async () => {
             try {
-                const examRes = await api.get(`/api/exams/${examId}/take`);
+                const emailParam = encodeURIComponent(studentInfo.studentEmail || '');
+                const rollParam = encodeURIComponent(studentInfo.rollNumber || '');
+                const examRes = await api.get(`/api/exams/${examId}/take?email=${emailParam}&rollNumber=${rollParam}`);
                 const e = examRes.data;
 
                 // 1. Enforce scheduled start time: if student tries to enter early, redirect to instructions
@@ -116,14 +118,22 @@ export default function ExamEngine() {
                 setTimeLeft(durationSeconds);
 
                 // Initialize local answers state (restore saved state if session resumed)
+                const storageKey = `exam_answers_${examId}_${sessionData._id}`;
+                const cachedAnswersStr = localStorage.getItem(storageKey);
+                let cachedAnswers = null;
+                if (cachedAnswersStr) {
+                    try { cachedAnswers = JSON.parse(cachedAnswersStr); } catch(e) {}
+                }
+
                 setAnswers(e.questions.map((q, i) => {
                     const savedAns = sessionData.answers?.find(sa => sa.questionId?.toString() === q._id?.toString());
+                    const cachedAns = cachedAnswers?.find(ca => ca.questionId?.toString() === q._id?.toString());
                     return {
                         questionId: q._id,
-                        selectedOption: savedAns ? savedAns.selectedOption : null,
-                        markedForReview: savedAns ? savedAns.markedForReview : false,
-                        visited: savedAns ? savedAns.visited : (i === 0),
-                        timeTaken: savedAns ? (savedAns.timeTaken || 0) : 0
+                        selectedOption: cachedAns ? cachedAns.selectedOption : (savedAns ? savedAns.selectedOption : null),
+                        markedForReview: cachedAns ? cachedAns.markedForReview : (savedAns ? savedAns.markedForReview : false),
+                        visited: cachedAns ? cachedAns.visited : (savedAns ? savedAns.visited : (i === 0)),
+                        timeTaken: cachedAns ? (cachedAns.timeTaken || 0) : (savedAns ? (savedAns.timeTaken || 0) : 0)
                     };
                 }));
             } catch (err) {
@@ -232,6 +242,29 @@ export default function ExamEngine() {
         return () => clearInterval(timerRef.current);
     }, [timeLeft !== null, current]);
 
+    // ── Local Storage & Autosave Progress sync ──────────────────
+    useEffect(() => {
+        if (!session?._id || answers.length === 0) return;
+        
+        // 1. Sync immediately to localStorage
+        const storageKey = `exam_answers_${examId}_${session._id}`;
+        localStorage.setItem(storageKey, JSON.stringify(answers));
+
+        // 2. Debounced sync to database
+        const timer = setTimeout(async () => {
+            try {
+                await api.post(`/api/exams/${examId}/session/save-progress`, {
+                    sessionId: session._id,
+                    answers
+                });
+            } catch (err) {
+                console.error('Failed to autosave progress to server:', err);
+            }
+        }, 3000); // debounce 3 seconds
+
+        return () => clearTimeout(timer);
+    }, [answers, session?._id, examId]);
+
     const formatTime = (secs) => {
         const h = Math.floor(secs / 3600);
         const m = Math.floor((secs % 3600) / 60);
@@ -287,6 +320,10 @@ export default function ExamEngine() {
                 sessionId: session?._id,
                 answers
             });
+            try {
+                const storageKey = `exam_answers_${examId}_${session?._id}`;
+                localStorage.removeItem(storageKey);
+            } catch (e) {}
             if (document.fullscreenElement) {
                 document.exitFullscreen().catch(() => {});
             }

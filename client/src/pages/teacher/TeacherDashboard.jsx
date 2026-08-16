@@ -4,6 +4,7 @@ import { useNavigate, Routes, Route, Link, useLocation } from 'react-router-dom'
 import AddQuestion from './AddQuestion';
 import SavedPapers from './SavedPapers';
 import TemplateCart from './TemplateCart';
+import GrandTestList from '../admin/GrandTestList';
 
 const TeacherDashboardHome = () => {
     return (
@@ -21,11 +22,11 @@ const TeacherDashboardHome = () => {
                 <div className="h-px flex-1 bg-gray-100"></div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {/* Question Bank */}
                 <Link
                     to="/teacher/dashboard/add-question"
-                    className="bg-surface p-10 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
                 >
                     <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
                         Q
@@ -39,7 +40,7 @@ const TeacherDashboardHome = () => {
                 {/* Create Paper */}
                 <Link
                     to="/teacher/create-paper"
-                    className="bg-navy p-10 rounded-3xl shadow-2xl text-center border-4 border-gold hover:scale-[1.02] transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-navy p-8 rounded-3xl shadow-2xl text-center border-4 border-gold hover:scale-[1.02] transition-all flex flex-col items-center justify-center gap-4 group"
                 >
                     <div className="bg-gold text-navy w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg group-hover:rotate-12 transition-transform duration-300">
                         +
@@ -53,7 +54,7 @@ const TeacherDashboardHome = () => {
                 {/* Saved Papers */}
                 <Link
                     to="/teacher/dashboard/saved-papers"
-                    className="bg-surface p-10 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
                 >
                     <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
                         P
@@ -61,6 +62,20 @@ const TeacherDashboardHome = () => {
                     <div>
                         <h2 className="text-lg font-black text-navy">Saved Papers</h2>
                         <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Document Archives</p>
+                    </div>
+                </Link>
+
+                {/* Grand Test Papers */}
+                <Link
+                    to="/teacher/dashboard/grand-tests"
+                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                >
+                    <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
+                        GT
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-black text-navy">Grand Tests</h2>
+                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">GT Paper Archives</p>
                     </div>
                 </Link>
             </div>
@@ -120,6 +135,12 @@ const TeacherDashboard = () => {
                             <span>←</span> Back
                         </button>
                     )}
+                    <Link 
+                        to="/teacher/dashboard/grand-tests" 
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${location.pathname.includes('grand-tests') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'}`}
+                    >
+                        GT Papers
+                    </Link>
                     {/* Templates Cart Button */}
                     <button
                         id="teacher-template-cart-btn"
@@ -146,6 +167,7 @@ const TeacherDashboard = () => {
                     <Route path="/" element={<TeacherDashboardHome />} />
                     <Route path="add-question" element={<AddQuestion />} />
                     <Route path="saved-papers" element={<SavedPapers />} />
+                    <Route path="grand-tests" element={<GrandTestList />} />
                 </Routes>
             </div>
 

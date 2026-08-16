@@ -30,6 +30,98 @@ const GrandTestList = () => {
         solutionText: ''
     });
 
+    // DB Question Replacement State
+    const [replacingQuestionId, setReplacingQuestionId] = useState(null);
+    const [showReplaceModal, setShowReplaceModal] = useState(false);
+    const [dbQuestions, setDbQuestions] = useState([]);
+    const [dbSearch, setDbSearch] = useState('');
+    const [dbSubject, setDbSubject] = useState('');
+    const [dbChapter, setDbChapter] = useState('');
+    const [dbLevel, setDbLevel] = useState('');
+    const [dbType, setDbType] = useState('');
+    const [dbPage, setDbPage] = useState(1);
+    const [dbTotalPages, setDbTotalPages] = useState(1);
+    const [loadingDb, setLoadingDb] = useState(false);
+    const [isGeneratingVariant, setIsGeneratingVariant] = useState(false);
+
+    const handleOpenReplaceModal = (qId) => {
+        setReplacingQuestionId(qId);
+        setShowReplaceModal(true);
+        setDbSearch('');
+        setDbChapter('');
+        setDbLevel('');
+        setDbType('');
+        setDbPage(1);
+        setDbSubject(selectedGT?.subject && selectedGT.subject !== 'Mixed' ? selectedGT.subject : '');
+    };
+
+    const fetchDbQuestions = async () => {
+        setLoadingDb(true);
+        try {
+            const queryParams = new URLSearchParams({
+                page: dbPage,
+                limit: 8,
+                paginated: 'true'
+            });
+            if (dbSubject) queryParams.append('subject', dbSubject);
+            else if (selectedGT?.subject && selectedGT.subject !== 'Mixed') queryParams.append('subject', selectedGT.subject);
+            
+            if (dbSearch) queryParams.append('search', dbSearch);
+            if (dbChapter) queryParams.append('chapter', dbChapter);
+            if (dbLevel) queryParams.append('level', dbLevel);
+            if (dbType) queryParams.append('type', dbType);
+
+            const res = await api.get(`/api/questions?${queryParams.toString()}`);
+            if (res.data.questions) {
+                setDbQuestions(res.data.questions);
+                setDbTotalPages(res.data.pagination?.pages || 1);
+            } else {
+                setDbQuestions(res.data || []);
+                setDbTotalPages(1);
+            }
+        } catch (err) {
+            console.error('Failed to fetch DB questions:', err);
+        } finally {
+            setLoadingDb(false);
+        }
+    };
+
+    useEffect(() => {
+        if (showReplaceModal) {
+            fetchDbQuestions();
+        }
+    }, [showReplaceModal, dbPage, dbSubject, dbLevel, dbType]);
+
+    const handleReplaceSubmit = async (newQuestionId) => {
+        if (!window.confirm('Are you sure you want to replace this question?')) return;
+        try {
+            await api.post(`/api/grand-tests/${selectedGT._id}/questions/${replacingQuestionId}/replace`, {
+                dbQuestionId: newQuestionId,
+                source: 'supabase'
+            });
+            alert('Question replaced successfully!');
+            setShowReplaceModal(false);
+            setReplacingQuestionId(null);
+            handleOpenGT(selectedGT._id);
+        } catch (err) {
+            alert(err.response?.data?.msg || err.message);
+        }
+    };
+
+    const handleGenerateVariant = async (qId) => {
+        if (!window.confirm('Generate an AI variant for this question? This will replace the current question with a newly generated AI variation.')) return;
+        setIsGeneratingVariant(true);
+        try {
+            await api.post(`/api/questions/${qId}/generate-variant`);
+            alert('AI Variant generated and swapped successfully!');
+            handleOpenGT(selectedGT._id);
+        } catch (err) {
+            alert(err.response?.data?.msg || err.message);
+        } finally {
+            setIsGeneratingVariant(false);
+        }
+    };
+
     const fetchGrandTests = async () => {
         try {
             const res = await api.get('/api/grand-tests');
@@ -297,6 +389,8 @@ const GrandTestList = () => {
                                         <div key={q._id} className="p-4 bg-gray-50/50 border border-gray-100 rounded-2xl text-xs relative group">
                                             <div className="absolute top-4 right-4 hidden group-hover:flex space-x-2 z-10">
                                                 <button onClick={() => handleOpenEditQuestion(q)} className="text-blue-600 hover:text-blue-800 font-bold bg-blue-50 px-2 py-1 rounded">Edit</button>
+                                                <button onClick={() => handleOpenReplaceModal(q._id)} className="text-purple-600 hover:text-purple-800 font-bold bg-purple-50 px-2 py-1 rounded">Replace</button>
+                                                <button onClick={() => handleGenerateVariant(q._id)} disabled={isGeneratingVariant} className="text-indigo-600 hover:text-indigo-800 font-bold bg-indigo-50 px-2 py-1 rounded disabled:opacity-50">AI Variant</button>
                                                 <button onClick={() => handleRemoveQuestion(q._id)} className="text-red-600 hover:text-red-800 font-bold bg-red-50 px-2 py-1 rounded">Remove</button>
                                             </div>
                                             <div className="flex flex-wrap gap-2 mb-2">
@@ -472,11 +566,133 @@ const GrandTestList = () => {
                                 />
                             </div>
 
+                            <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 font-sans">
+                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Live Question Preview</label>
+                                <div className="text-xs font-medium text-slate whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitize(editForm.questionText) }}></div>
+                            </div>
                             <div className="flex gap-4 pt-4 border-t border-gray-100">
                                 <button type="button" onClick={() => setEditingQuestion(null)} className="flex-1 border border-gray-200 text-slate py-3 rounded-xl text-xs font-black uppercase tracking-widest">Cancel</button>
                                 <button type="submit" className="flex-1 bg-navy text-gold py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md">Save Changes</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+            {/* Replace Question Modal */}
+            {showReplaceModal && (
+                <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-4xl w-full border border-gray-100 max-h-[90vh] overflow-y-auto animate-fade-in-up flex flex-col gap-6 font-sans">
+                        <div className="flex justify-between items-center pb-4 border-b border-gray-100">
+                            <div>
+                                <h3 className="font-black text-xl text-navy uppercase tracking-wide">Replace Question</h3>
+                                <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] mt-1">Select a question from the database to swap</p>
+                            </div>
+                            <button onClick={() => setShowReplaceModal(false)} className="text-slate/40 hover:text-red-500 font-bold text-xl">✕</button>
+                        </div>
+
+                        {/* Search & Filters */}
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <div className="md:col-span-2">
+                                <label className="block text-[9px] font-black text-navy/40 uppercase tracking-widest mb-1">Search Keywords</label>
+                                <input 
+                                    type="text" placeholder="Search question text..."
+                                    className="w-full border border-gray-200 p-2 rounded-xl text-xs bg-white focus:ring-2 focus:ring-navy outline-none"
+                                    value={dbSearch} onChange={e => setDbSearch(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && fetchDbQuestions()}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-navy/40 uppercase tracking-widest mb-1">Subject</label>
+                                <select 
+                                    className="w-full border border-gray-200 p-2 rounded-xl text-xs bg-white font-bold"
+                                    value={dbSubject} onChange={e => setDbSubject(e.target.value)}
+                                >
+                                    <option value="">Any Subject</option>
+                                    <option value="Physics">Physics</option>
+                                    <option value="Chemistry">Chemistry</option>
+                                    <option value="Biology">Biology</option>
+                                    <option value="Botany">Botany</option>
+                                    <option value="Zoology">Zoology</option>
+                                    <option value="Maths">Maths</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[9px] font-black text-navy/40 uppercase tracking-widest mb-1">Difficulty</label>
+                                <select 
+                                    className="w-full border border-gray-200 p-2 rounded-xl text-xs bg-white font-bold"
+                                    value={dbLevel} onChange={e => setDbLevel(e.target.value)}
+                                >
+                                    <option value="">Any Level</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                            <div className="flex items-end">
+                                <button 
+                                    onClick={fetchDbQuestions}
+                                    className="w-full bg-navy text-gold py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition-all shadow-md"
+                                >
+                                    Search
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Questions List */}
+                        <div className="flex-1 overflow-y-auto space-y-4 max-h-[40vh] pr-2">
+                            {loadingDb ? (
+                                <p className="text-center text-xs font-bold text-slate/40 uppercase tracking-widest py-10">Loading database questions...</p>
+                            ) : dbQuestions.length === 0 ? (
+                                <p className="text-center text-xs font-bold text-slate/40 uppercase tracking-widest py-10">No questions found matching filters.</p>
+                            ) : (
+                                dbQuestions.map(q => (
+                                    <div key={q.id || q._id} className="p-4 border border-gray-100 hover:border-navy/20 rounded-2xl bg-gray-50/50 flex flex-col gap-2 relative group text-xs">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="font-black bg-navy text-gold px-2 py-0.5 rounded text-[8px] tracking-wider uppercase">{q.subject}</span>
+                                                <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">{q.type}</span>
+                                                <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">Chapter: {q.chapter}</span>
+                                                <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">Level: {q.level}</span>
+                                            </div>
+                                            <button 
+                                                onClick={() => handleReplaceSubmit(q.id || q._id)}
+                                                className="bg-purple-600 text-white px-4 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-purple-700 transition"
+                                            >
+                                                Select & Replace
+                                            </button>
+                                        </div>
+                                        <p className="font-medium text-slate mt-1" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText || q.question) }}></p>
+                                        {q.options && q.options.length > 0 && (
+                                            <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mt-1">
+                                                {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <span dangerouslySetInnerHTML={{ __html: sanitize(o) }}></span></div>)}
+                                            </div>
+                                        )}
+                                        <div className="font-bold text-green-700 mt-1">Correct Answer: <span dangerouslySetInnerHTML={{ __html: sanitize(q.answer || q.correct_option) }}></span></div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Pagination */}
+                        {dbTotalPages > 1 && (
+                            <div className="flex justify-center items-center gap-4 pt-4 border-t border-gray-100">
+                                <button 
+                                    disabled={dbPage === 1}
+                                    onClick={() => setDbPage(p => Math.max(1, p - 1))}
+                                    className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-40"
+                                >
+                                    Previous
+                                </button>
+                                <span className="text-xs font-bold text-slate/60">Page {dbPage} of {dbTotalPages}</span>
+                                <button 
+                                    disabled={dbPage === dbTotalPages}
+                                    onClick={() => setDbPage(p => Math.min(dbTotalPages, p + 1))}
+                                    className="px-4 py-2 border border-gray-200 rounded-xl text-xs font-black uppercase tracking-wider disabled:opacity-40"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

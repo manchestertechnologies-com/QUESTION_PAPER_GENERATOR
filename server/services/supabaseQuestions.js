@@ -66,6 +66,8 @@ function mapSupabaseToQuestion(row) {
         correct_option: row.correct_option,
         num_answer: row.num_answer,
         solutionText: row.solution_text || '',
+        questionTextTranslation: row.question_text_translation || '',
+        optionsTranslation: row.options_translation || [],
         assertion: row.assertion || '',
         reason: row.reason || '',
         column_a: row.column_a || [],
@@ -303,6 +305,8 @@ async function createQuestion(dto, userId = null, userName = 'Admin') {
             options: dto.options || [],
             answer: dto.answer || '',
             solutionText: sanitizeHtml(dto.solutionText || ''),
+            questionTextTranslation: dto.questionTextTranslation || '',
+            optionsTranslation: dto.optionsTranslation || [],
             createdBy: userId,
             createdAt: payload.created_at
         };

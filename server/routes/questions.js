@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
+const mongoose = require('mongoose');
+const Question = require('../models/Question');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const { sanitizeHtml, sanitizeArray } = require('../utils/sanitize');
@@ -25,7 +27,8 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
         const allowedFields = [
             'questionText','type','subject','classes','chapter','concept',
             'subConcept','level','answer','options','solutionText','imageUrl',
-            'solutionImageUrl','assertion','reason','sourceType','sourceExam'
+            'solutionImageUrl','assertion','reason','sourceType','sourceExam',
+            'questionTextTranslation', 'optionsTranslation'
         ];
 
         // Teacher's subject is always from their token — not from request body
@@ -43,11 +46,20 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
         // Sanitize HTML fields
         if (questionData.questionText) questionData.questionText = sanitizeHtml(questionData.questionText);
         if (questionData.solutionText) questionData.solutionText = sanitizeHtml(questionData.solutionText);
+        if (questionData.questionTextTranslation) questionData.questionTextTranslation = sanitizeHtml(questionData.questionTextTranslation);
+        
         if (questionData.options) {
             if (typeof questionData.options === 'string') {
                 try { questionData.options = JSON.parse(questionData.options); } catch(e) {}
             }
             questionData.options = sanitizeArray(questionData.options);
+        }
+
+        if (questionData.optionsTranslation) {
+            if (typeof questionData.optionsTranslation === 'string') {
+                try { questionData.optionsTranslation = JSON.parse(questionData.optionsTranslation); } catch(e) {}
+            }
+            questionData.optionsTranslation = sanitizeArray(questionData.optionsTranslation);
         }
 
         if (req.body.classes) {
@@ -120,10 +132,19 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 });
 
 // @route   GET /api/questions/:id
-// @desc    Get a single question by ID from Supabase
+// @desc    Get a single question by ID from Supabase or MongoDB
 // @access  Teacher / Admin
 router.get('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            const question = await Question.findById(req.params.id);
+            if (!question) return res.status(404).json({ msg: 'Question not found in MongoDB.' });
+            if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
+                return res.status(403).json({ msg: 'Access denied: this question belongs to a different subject.' });
+            }
+            return res.json(question);
+        }
+
         const question = await supabaseQuestions.getQuestionById(req.params.id);
         if (!question) return res.status(404).json({ msg: 'Question not found.' });
 
@@ -139,10 +160,20 @@ router.get('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => 
 });
 
 // @route   DELETE /api/questions/:id
-// @desc    Delete a question from Supabase
+// @desc    Delete a question from Supabase or MongoDB
 // @access  Teacher / Admin
 router.delete('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            const question = await Question.findById(req.params.id);
+            if (!question) return res.status(404).json({ msg: 'Question not found in MongoDB.' });
+            if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
+                return res.status(403).json({ msg: 'Access denied: this question belongs to a different subject.' });
+            }
+            await Question.findByIdAndDelete(req.params.id);
+            return res.json({ msg: 'Question removed from MongoDB.' });
+        }
+
         const question = await supabaseQuestions.getQuestionById(req.params.id);
         if (!question) return res.status(404).json({ msg: 'Question not found.' });
 
@@ -159,10 +190,70 @@ router.delete('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) 
 });
 
 // @route   POST /api/questions/update/:id
-// @desc    Update a question in Supabase
+// @desc    Update a question in Supabase or MongoDB
 // @access  Teacher / Admin
 router.post('/update/:id', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 'image', maxCount: 1 }, { name: 'solutionImage', maxCount: 1 }])], async (req, res) => {
     try {
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            let question = await Question.findById(req.params.id);
+            if (!question) return res.status(404).json({ msg: 'Question not found in MongoDB.' });
+
+            if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
+                return res.status(403).json({ msg: 'Access denied: not authorized to edit this subject question.' });
+            }
+
+            const fieldsToUpdate = [
+                'questionText', 'options', 'answer', 'chapter', 'concept', 
+                'subConcept', 'level', 'type', 'solutionText', 'assertion', 
+                'reason', 'statements', 'matchPairs', 'numericalTolerance',
+                'questionTextTranslation', 'optionsTranslation'
+            ];
+            
+            fieldsToUpdate.forEach(field => {
+                if (req.body[field] !== undefined) {
+                    if (field === 'options' && typeof req.body[field] === 'string') {
+                        try {
+                            question.options = JSON.parse(req.body[field]);
+                        } catch (e) {
+                            question.options = req.body[field];
+                        }
+                    } else if (field === 'optionsTranslation' && typeof req.body[field] === 'string') {
+                        try {
+                            question.optionsTranslation = JSON.parse(req.body[field]);
+                        } catch (e) {
+                            question.optionsTranslation = req.body[field];
+                        }
+                    } else if (field === 'statements' && typeof req.body[field] === 'string') {
+                        try {
+                            question.statements = JSON.parse(req.body[field]);
+                        } catch (e) {
+                            question.statements = req.body[field];
+                        }
+                    } else if (field === 'matchPairs' && typeof req.body[field] === 'string') {
+                        try {
+                            question.matchPairs = JSON.parse(req.body[field]);
+                        } catch (e) {
+                            question.matchPairs = req.body[field];
+                        }
+                    } else {
+                        question[field] = req.body[field];
+                    }
+                }
+            });
+
+            if (req.files) {
+                if (req.files.image && req.files.image[0]) {
+                    question.imageUrl = req.files.image[0].path;
+                }
+                if (req.files.solutionImage && req.files.solutionImage[0]) {
+                    question.solutionImageUrl = req.files.solutionImage[0].path;
+                }
+            }
+
+            await question.save();
+            return res.json(question);
+        }
+
         let question = await supabaseQuestions.getQuestionById(req.params.id);
         if (!question) return res.status(404).json({ msg: 'Question not found.' });
 
@@ -172,15 +263,204 @@ router.post('/update/:id', [auth, checkRole(['admin', 'teacher']), upload.fields
 
         const questionData = { ...req.body };
 
-        if (req.body.options && typeof req.body.options === 'string') {
-            try { questionData.options = JSON.parse(req.body.options); } catch(e) {}
-        }
-
         const updated = await supabaseQuestions.updateQuestion(req.params.id, questionData, req.user.id, req.user.name || 'User');
         res.json(updated);
     } catch (err) {
         console.error(err.message);
         res.status(500).json({ msg: 'Server error updating question.' });
+    }
+});
+
+// @route   POST /api/questions/:id/generate-variant
+// @desc    Use Gemini AI to create a similar variant of a question
+// @access  Teacher / Admin
+router.post('/:id/generate-variant', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        let question;
+        let isMongo = false;
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            question = await Question.findById(req.params.id);
+            isMongo = true;
+        } else {
+            question = await supabaseQuestions.getQuestionById(req.params.id);
+        }
+
+        if (!question) return res.status(404).json({ msg: 'Question not found.' });
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ msg: 'Gemini API Key is not configured.' });
+        }
+
+        const prompt = `You are a professional coaching-institute exam editor.
+Create a new question that is a VARIANT of the following input question.
+The variant must test the exact same concept and sub-concept with the same difficulty level, but should use DIFFERENT numerical values, names, options, or a slightly different context so it is not identical.
+Do not change the structure of the options format (MCQ or Numerical, matching the input type).
+
+Input Question:
+Type: ${question.type || question.q_type}
+Question Text: ${question.questionText || question.question}
+Options: ${JSON.stringify(question.options || [])}
+Correct Answer: ${question.answer || question.correct_option || question.num_answer}
+
+Provide the output as a clean JSON object following this format:
+{
+  "questionText": "...",
+  "options": ["...", "...", "...", "..."], // Empty if type is numerical
+  "answer": "..." // Correct option index value/text or numerical answer
+}
+
+Output ONLY this JSON block. Do not include markdown code block formatting (like \`\`\`json) or any explanations.`;
+
+        const fetchResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+
+        if (!fetchResponse.ok) {
+            const err = await fetchResponse.json();
+            return res.status(502).json({ msg: 'Gemini API call failed', error: err });
+        }
+
+        const data = await fetchResponse.json();
+        let rawJson = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        rawJson = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        const parsed = JSON.parse(rawJson);
+
+        // Map back to the system question structure
+        const variantData = {
+            subject: question.subject,
+            classes: question.classes,
+            chapter: question.chapter,
+            concept: question.concept || 'General',
+            subConcept: question.subConcept || '',
+            level: question.level || 'medium',
+            type: question.type || 'MCQ',
+            questionText: parsed.questionText,
+            options: parsed.options || [],
+            answer: String(parsed.answer || ''),
+            solutionText: `Variant of question ${question.questionId}`,
+            createdBy: req.user.id
+        };
+
+        if (isMongo) {
+            // If it was a MongoDB question (like in a GT), we can save it as a new MongoDB Question
+            const count = await Question.countDocuments();
+            const subjectCode = (variantData.subject || 'GEN').substring(0, 3).toUpperCase();
+            const questionId = `Q-${subjectCode}-VAR-${Date.now()}-${count + 1}`;
+            
+            const newQ = new Question({
+                ...variantData,
+                questionId,
+                sourceType: question.sourceType,
+                sourcePaperId: question.sourcePaperId,
+                sourceModel: question.sourceModel,
+                sourcePaperName: question.sourcePaperName,
+                sourceExam: question.sourceExam,
+                sourceDisplayCode: question.sourceDisplayCode,
+                academicYearLevel: question.academicYearLevel
+            });
+            await newQ.save();
+            return res.json(newQ);
+        } else {
+            // Save to Supabase Question Bank
+            const newQ = await supabaseQuestions.createQuestion(variantData, req.user.id, req.user.name || 'User');
+            return res.json(newQ);
+        }
+    } catch (err) {
+        console.error('Generate variant error:', err);
+        res.status(500).json({ msg: 'Server error generating question variant.' });
+    }
+});
+
+// @route   POST /api/questions/bulk-import
+// @desc    Bulk import questions with AI schema-mapping cleanup
+// @access  Teacher / Admin
+router.post('/bulk-import', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const { questions } = req.body;
+        if (!Array.isArray(questions)) return res.status(400).json({ msg: 'Questions array is required.' });
+
+        const getValCI = (obj, keys) => {
+            const objKeys = Object.keys(obj);
+            for (const k of keys) {
+                const matchedKey = objKeys.find(ok => ok.toLowerCase().replace(/[\s_-]+/g, '') === k.toLowerCase().replace(/[\s_-]+/g, ''));
+                if (matchedKey !== undefined) return obj[matchedKey];
+            }
+            return undefined;
+        };
+
+        const imported = [];
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            
+            let qText = getValCI(q, ['questionText', 'question', 'text', 'question_text', 'questioncontent']) || '';
+            if (!qText) continue;
+
+            let qType = getValCI(q, ['type', 'qtype', 'questiontype', 'q_type']) || 'MCQ';
+            
+            let options = getValCI(q, ['options']) || [];
+            if (typeof options === 'string') {
+                try { options = JSON.parse(options); } catch(e) { options = options.split(',').map(o => o.trim()); }
+            }
+            if (options.length === 0) {
+                const aVal = getValCI(q, ['opt_a', 'option_a', 'optiona', 'a', 'A']);
+                const bVal = getValCI(q, ['opt_b', 'option_b', 'optionb', 'b', 'B']);
+                const cVal = getValCI(q, ['opt_c', 'option_c', 'optionc', 'c', 'C']);
+                const dVal = getValCI(q, ['opt_d', 'option_d', 'optiond', 'd', 'D']);
+                if (aVal !== undefined || bVal !== undefined || cVal !== undefined || dVal !== undefined) {
+                    options = [aVal || '', bVal || '', cVal || '', dVal || ''].filter(Boolean);
+                }
+            }
+            
+            let answer = String(getValCI(q, ['answer', 'correct_option', 'correct', 'correctoption', 'ans']) || '');
+            let classes = getValCI(q, ['classes', 'class', 'classes_level']) || ['12'];
+            if (typeof classes === 'string') {
+                classes = classes.split(',').map(c => c.trim());
+            }
+
+            const transText = getValCI(q, ['questionTextTranslation', 'translation', 'translatedQuestionText', 'translatedQuestion', 'translated_text', 'hindi', 'kannada', 'tamil', 'telugu']) || '';
+            let transOptions = getValCI(q, ['optionsTranslation', 'translatedOptions', 'translated_options']) || [];
+            if (typeof transOptions === 'string') {
+                try { transOptions = JSON.parse(transOptions); } catch(e) { transOptions = transOptions.split(',').map(o => o.trim()); }
+            }
+            if (transOptions.length === 0) {
+                const taVal = getValCI(q, ['trans_opt_a', 'translated_option_a', 'translated_optiona', 'trans_a', 'trans_A']);
+                const tbVal = getValCI(q, ['trans_opt_b', 'translated_option_b', 'translated_optionb', 'trans_b', 'trans_B']);
+                const tcVal = getValCI(q, ['trans_opt_c', 'translated_option_c', 'translated_optionc', 'trans_c', 'trans_C']);
+                const tdVal = getValCI(q, ['trans_opt_d', 'translated_option_d', 'translated_optiond', 'trans_d', 'trans_D']);
+                if (taVal !== undefined || tbVal !== undefined || tcVal !== undefined || tdVal !== undefined) {
+                    transOptions = [taVal || '', tbVal || '', tcVal || '', tdVal || ''].filter(Boolean);
+                }
+            }
+
+            const newQData = {
+                questionText: qText,
+                type: qType,
+                options,
+                answer,
+                subject: req.user.role === 'admin' ? (getValCI(q, ['subject', 'subj']) || 'Chemistry') : req.user.subject,
+                chapter: getValCI(q, ['chapter', 'chap']) || 'General',
+                concept: getValCI(q, ['concept', 'conc']) || 'General',
+                level: getValCI(q, ['level', 'difficulty']) || 'medium',
+                solutionText: getValCI(q, ['solutionText', 'solution', 'explanation']) || '',
+                classes,
+                questionTextTranslation: transText,
+                optionsTranslation: transOptions
+            };
+
+            const saved = await supabaseQuestions.createQuestion(newQData, req.user.id, req.user.name || 'User');
+            imported.push(saved);
+        }
+
+        res.json({ msg: `Successfully imported ${imported.length} questions.`, count: imported.length });
+    } catch (err) {
+        console.error('Bulk import error:', err);
+        res.status(500).json({ msg: 'Server error during bulk question import.' });
     }
 });
 

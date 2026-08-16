@@ -19,28 +19,39 @@ const upload = multer({
 });
 
 // @route   POST /api/templates
-// @desc    Upload a template
+// @desc    Upload or create a custom template
 // @access  Admin
 router.post('/', [auth, checkRole(['admin']), upload.single('template')], async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ msg: 'No file uploaded' });
+        let fileUrl = '';
+        let filename = '';
+        let originalName = '';
 
-        // Cloudinary returns the full URL in req.file.path
-        const fileUrl = req.file.path;
+        if (req.file) {
+            fileUrl = req.file.path;
+            filename = req.file.filename;
+            originalName = req.file.originalname;
+        }
 
         const template = new Template({
-            filename: req.file.filename,
-            originalName: req.file.originalname,
-            title: req.body.title || req.file.originalname,
+            filename,
+            originalName,
+            title: req.body.title || (req.file ? req.file.originalname : 'Custom Template'),
             description: req.body.description || '',
             uploadedBy: req.user.id,
-            fileUrl
+            fileUrl,
+            institutionName: req.body.institutionName || '',
+            address: req.body.address || '',
+            headerText: req.body.headerText || '',
+            instructions: req.body.instructions || '',
+            footerText: req.body.footerText || '',
+            watermarkText: req.body.watermarkText || ''
         });
 
         await template.save();
         res.json(template);
     } catch (err) {
-        console.error('Template upload error:', err.message);
+        console.error('Template upload/creation error:', err.message);
         res.status(500).json({ msg: 'Server Error', error: err.message });
     }
 });

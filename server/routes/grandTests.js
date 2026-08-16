@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const GrandTestPaper = require('../models/GrandTestPaper');
 const Question = require('../models/Question');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
+const supabaseQuestions = require('../services/supabaseQuestions');
 
 // @route   POST /api/grand-tests
 // @desc    Create Grand Test paper metadata
 // @access  Admin
-router.post('/', [auth, checkRole(['admin'])], async (req, res) => {
+router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const { title, code, examType, academicYearLevel, subject } = req.body;
         const existing = await GrandTestPaper.findOne({ code, examType });
@@ -34,7 +36,7 @@ router.post('/', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   GET /api/grand-tests
 // @desc    Get all Grand Test papers
 // @access  Admin
-router.get('/', [auth, checkRole(['admin'])], async (req, res) => {
+router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const papers = await GrandTestPaper.find().populate('uploadedBy', 'name email').sort({ createdAt: -1 });
         res.json(papers);
@@ -47,7 +49,7 @@ router.get('/', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   GET /api/grand-tests/:id
 // @desc    Get a single Grand Test paper details with populated questions
 // @access  Admin
-router.get('/:id', [auth, checkRole(['admin'])], async (req, res) => {
+router.get('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const paper = await GrandTestPaper.findById(req.params.id)
             .populate('uploadedBy', 'name email')
@@ -63,7 +65,7 @@ router.get('/:id', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   PUT /api/grand-tests/:id
 // @desc    Update Grand Test paper metadata
 // @access  Admin
-router.put('/:id', [auth, checkRole(['admin'])], async (req, res) => {
+router.put('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const { title, code, examType, academicYearLevel, subject, questions } = req.body;
         const paper = await GrandTestPaper.findById(req.params.id);
@@ -87,7 +89,7 @@ router.put('/:id', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   DELETE /api/grand-tests/:id
 // @desc    Delete a Grand Test paper (with dependency checks)
 // @access  Admin
-router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
+router.delete('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const paper = await GrandTestPaper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Grand Test not found' });
@@ -110,7 +112,7 @@ router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   POST /api/grand-tests/parse-text
 // @desc    Use Gemini AI to parse raw pasted text into structured questions
 // @access  Admin
-router.post('/parse-text', [auth, checkRole(['admin'])], async (req, res) => {
+router.post('/parse-text', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const { text, examType, subject } = req.body;
         if (!text) return res.status(400).json({ msg: 'Text is required for parsing' });
@@ -177,7 +179,7 @@ ${text}`;
 // @route   POST /api/grand-tests/:id/import
 // @desc    Import confirmed questions list and link them to the GT paper
 // @access  Admin
-router.post('/:id/import', [auth, checkRole(['admin'])], async (req, res) => {
+router.post('/:id/import', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const { questions } = req.body;
         if (!Array.isArray(questions)) return res.status(400).json({ msg: 'Questions array is required.' });
@@ -267,7 +269,7 @@ router.post('/:id/import', [auth, checkRole(['admin'])], async (req, res) => {
 // @route   DELETE /api/grand-tests/:id/questions/:questionId
 // @desc    Remove a question from a Grand Test
 // @access  Admin
-router.delete('/:id/questions/:questionId', [auth, checkRole(['admin'])], async (req, res) => {
+router.delete('/:id/questions/:questionId', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const gtPaper = await GrandTestPaper.findById(req.params.id);
         if (!gtPaper) return res.status(404).json({ msg: 'Grand Test paper not found.' });
@@ -280,6 +282,87 @@ router.delete('/:id/questions/:questionId', [auth, checkRole(['admin'])], async 
         await Question.deleteOne({ _id: req.params.questionId });
 
         res.json({ msg: 'Question removed from Grand Test.', questionsCount: gtPaper.questions.length });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST /api/grand-tests/:id/questions/:oldQuestionId/replace
+// @desc    Replace a question in a Grand Test with a question from the DB
+// @access  Admin / Teacher
+router.post('/:id/questions/:oldQuestionId/replace', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const { dbQuestionId, source } = req.body;
+        if (!dbQuestionId) return res.status(400).json({ msg: 'Database question ID is required.' });
+
+        const gtPaper = await GrandTestPaper.findById(req.params.id);
+        if (!gtPaper) return res.status(404).json({ msg: 'Grand Test paper not found.' });
+
+        // Verify old question is in the paper
+        const oldIndex = gtPaper.questions.findIndex(qId => qId.toString() === req.params.oldQuestionId);
+        if (oldIndex === -1) {
+            return res.status(400).json({ msg: 'Old question not found in this Grand Test.' });
+        }
+
+        // Fetch the new question
+        let newQuestionData;
+        if (source === 'supabase' || !mongoose.Types.ObjectId.isValid(dbQuestionId)) {
+            const supabaseQ = await supabaseQuestions.getQuestionById(dbQuestionId);
+            if (!supabaseQ) return res.status(404).json({ msg: 'Question not found in Supabase question bank.' });
+            newQuestionData = supabaseQ;
+        } else {
+            const mongoQ = await Question.findById(dbQuestionId);
+            if (!mongoQ) return res.status(404).json({ msg: 'Question not found in MongoDB question bank.' });
+            newQuestionData = mongoQ.toObject();
+        }
+
+        // Generate a unique question ID
+        const count = await Question.countDocuments();
+        const subjectCode = (newQuestionData.subject || gtPaper.subject || 'GEN').substring(0, 3).toUpperCase();
+        const questionId = `Q-${subjectCode}-GT-${Date.now()}-${count + 1}`;
+
+        // Create a new MongoDB question document based on the fetched question data
+        const newQ = new Question({
+            questionId,
+            subject: newQuestionData.subject || gtPaper.subject || 'Chemistry',
+            classes: newQuestionData.classes || [gtPaper.examType],
+            chapter: newQuestionData.chapter || 'General',
+            concept: newQuestionData.concept || 'General',
+            subConcept: newQuestionData.subConcept || '',
+            level: newQuestionData.level || 'medium',
+            type: newQuestionData.type || 'MCQ',
+            questionText: newQuestionData.questionText || newQuestionData.question || '',
+            options: newQuestionData.options || [],
+            answer: String(newQuestionData.answer || newQuestionData.correct_option || ''),
+            assertion: newQuestionData.assertion || '',
+            reason: newQuestionData.reason || '',
+            statements: newQuestionData.statements || [],
+            matchPairs: newQuestionData.matchPairs || [],
+            numericalTolerance: newQuestionData.numericalTolerance || 0,
+            imageUrl: newQuestionData.imageUrl || '',
+            solutionText: newQuestionData.solutionText || newQuestionData.solution_text || '',
+            
+            sourceType: 'GT',
+            sourcePaperId: gtPaper._id,
+            sourceModel: 'GrandTestPaper',
+            sourcePaperName: gtPaper.title,
+            sourceExam: gtPaper.examType,
+            sourceDisplayCode: `${gtPaper.code}`,
+            academicYearLevel: gtPaper.academicYearLevel,
+            createdBy: req.user.id
+        });
+
+        await newQ.save();
+
+        // Update Grand Test paper
+        gtPaper.questions[oldIndex] = newQ._id;
+        await gtPaper.save();
+
+        // Delete the old question document from MongoDB if it is a GT question
+        await Question.deleteOne({ _id: req.params.oldQuestionId });
+
+        res.json({ msg: 'Question replaced successfully.', newQuestion: newQ });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');

@@ -293,10 +293,10 @@ describe('Authentication', () => {
             expect(res.status).toBe(403);
         });
 
-        test('TC-A-040: Grand tests require admin role', async () => {
-            const { token } = await createTeacher();
+        test('TC-A-040: Grand tests block lab role access', async () => {
+            const labToken = require('./helpers').makeToken({ id: 'labuser1', role: 'lab' });
             const res = await request(app).get('/api/grand-tests')
-                .set('Authorization', `Bearer ${token}`);
+                .set('Authorization', `Bearer ${labToken}`);
             expect(res.status).toBe(403);
         });
     });

@@ -1,12 +1,18 @@
 const mongoose = require('mongoose');
 
 const TemplateSchema = new mongoose.Schema({
-    filename: { type: String, required: true },
-    originalName: { type: String, required: true },
-    title: { type: String },
+    filename: { type: String, default: '' },
+    originalName: { type: String, default: '' },
+    title: { type: String, required: true },
     description: { type: String },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    fileUrl: { type: String, required: true },
+    fileUrl: { type: String, default: '' },
+    institutionName: { type: String, default: '' },
+    address: { type: String, default: '' },
+    headerText: { type: String, default: '' },
+    instructions: { type: String, default: '' },
+    footerText: { type: String, default: '' },
+    watermarkText: { type: String, default: '' },
     createdAt: { type: Date, default: Date.now }
 });
 

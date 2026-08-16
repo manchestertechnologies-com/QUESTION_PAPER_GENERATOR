@@ -15,6 +15,8 @@ const QuestionSchema = new mongoose.Schema({
     imageUrl: { type: String },
     solutionText: { type: String },
     solutionImageUrl: { type: String },
+    questionTextTranslation: { type: String, default: '' },
+    optionsTranslation: [{ type: String }],
 
     // Assertion & Reason fields
     assertion: { type: String, default: '' },

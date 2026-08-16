@@ -200,10 +200,10 @@ describe('Answer Key Protection', () => {
             expect(res.status).toBe(401);
         });
 
-        test('TC-D-016: Grand tests require admin role', async () => {
-            const { token } = await createTeacher();
+        test('TC-D-016: Grand tests block lab role access', async () => {
+            const labToken = require('./helpers').makeToken({ id: 'labuser1', role: 'lab' });
             const res = await request(app).get('/api/grand-tests')
-                .set('Authorization', `Bearer ${token}`);
+                .set('Authorization', `Bearer ${labToken}`);
             expect(res.status).toBe(403);
         });
     });

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const ExamBlueprint = require('../models/ExamBlueprint');
+const Paper = require('../models/Paper');
+const supabaseQuestions = require('../services/supabaseQuestions');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 
@@ -264,6 +266,84 @@ router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
         res.json({ msg: 'Blueprint removed' });
     } catch (err) {
         console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST /api/exam-blueprints/:id/generate-paper
+// @desc    Auto-generate a question paper from a blueprint
+// @access  Teacher / Admin
+router.post('/:id/generate-paper', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const blueprint = await ExamBlueprint.findById(req.params.id);
+        if (!blueprint) return res.status(404).json({ msg: 'Blueprint not found' });
+
+        const selectedQuestions = [];
+        const paperPattern = [];
+
+        // For each subject and section, query question bank
+        for (const sub of blueprint.subjects) {
+            // Retrieve questions for this subject from question bank (limit 2000 to get a wide pool)
+            const result = await supabaseQuestions.getQuestions({ subject: sub.subjectName }, 1, 2000);
+            const pool = result.questions || [];
+
+            for (const sec of sub.sections) {
+                // Filter pool by question types
+                const types = sec.questionTypes.map(t => t.toLowerCase());
+                const matchingQuestions = pool.filter(q => {
+                    const qType = (q.type || '').toLowerCase();
+                    return types.some(t => {
+                        if (t === 'mcq' && qType.includes('mcq')) return true;
+                        if (t === 'numerical' && qType.includes('numerical')) return true;
+                        if (t === 'assertion_reason' && qType.includes('assertion')) return true;
+                        if (t === 'statement_based' && qType.includes('statement')) return true;
+                        if (t === 'match_following' && qType.includes('match')) return true;
+                        return qType === t;
+                    });
+                });
+
+                if (matchingQuestions.length < sec.numQuestions) {
+                    console.warn(`Not enough questions of type ${sec.questionTypes} for ${sub.subjectName} Section ${sec.sectionName}.`);
+                }
+
+                // Shuffle and pick
+                const shuffled = matchingQuestions.sort(() => 0.5 - Math.random());
+                const picked = shuffled.slice(0, sec.numQuestions);
+                
+                picked.forEach(q => {
+                    selectedQuestions.push(q.id || q._id);
+                });
+
+                paperPattern.push({
+                    sectionName: `${sub.subjectName} - ${sec.sectionName}`,
+                    numQuestions: sec.numQuestions,
+                    type: sec.questionTypes[0] || 'MCQ',
+                    description: sec.allowedToAnswer ? `Answer any ${sec.allowedToAnswer} questions.` : 'Answer all questions.',
+                    marks: sec.numQuestions * (sec.markingRules?.correct || 4)
+                });
+            }
+        }
+
+        if (selectedQuestions.length === 0) {
+            return res.status(400).json({ msg: 'Could not fetch any questions matching blueprint criteria.' });
+        }
+
+        const title = `${blueprint.name} Auto-Paper - ${new Date().toLocaleDateString('en-IN')}`;
+        const newPaper = new Paper({
+            title,
+            examType: blueprint.examType,
+            academicYearLevel: 'SECOND_YEAR', // default
+            subject: blueprint.subjects.map(s => s.subjectName).join(', '),
+            questions: selectedQuestions,
+            pattern: paperPattern,
+            teacherId: req.user.id,
+            status: req.user.role === 'admin' ? 'Approved' : 'Pending Approval'
+        });
+
+        await newPaper.save();
+        res.json(newPaper);
+    } catch (err) {
+        console.error('Failed to generate paper from blueprint:', err.message);
         res.status(500).send('Server Error');
     }
 });

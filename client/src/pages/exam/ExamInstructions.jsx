@@ -13,7 +13,10 @@ export default function ExamInstructions() {
     const [timeLeftToStart, setTimeLeftToStart] = useState(null); // seconds until start
 
     useEffect(() => {
-        api.get(`/api/exams/${examId}/take`).then(r => { setExam(r.data); setLoading(false); })
+        const emailParam = encodeURIComponent(studentInfo.studentEmail || '');
+        const rollParam = encodeURIComponent(studentInfo.rollNumber || '');
+        api.get(`/api/exams/${examId}/take?email=${emailParam}&rollNumber=${rollParam}`)
+            .then(r => { setExam(r.data); setLoading(false); })
             .catch(() => { setLoading(false); });
     }, [examId]);
 

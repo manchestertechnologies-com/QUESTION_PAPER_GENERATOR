@@ -95,6 +95,51 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
         exportToWord('.print-area', `${exam.title.replace(/\s+/g, '_')}.doc`, settings);
     };
 
+    const seededShuffle = (arr, seed) => {
+        let m = arr.length, t, i;
+        let seedNum = 0;
+        for (let charIdx = 0; charIdx < seed.length; charIdx++) {
+            seedNum += seed.charCodeAt(charIdx);
+        }
+        const random = () => {
+            let x = Math.sin(seedNum++) * 10000;
+            return x - Math.floor(x);
+        };
+        const shuffled = [...arr];
+        while (m) {
+            i = Math.floor(random() * m--);
+            t = shuffled[m];
+            shuffled[m] = shuffled[i];
+            shuffled[i] = t;
+        }
+        return shuffled;
+    };
+
+    const getProcessedQuestions = () => {
+        if (!exam || !exam.questions) return [];
+        const activeSet = settings.activeSet || 'Standard';
+        
+        const subjects = {};
+        exam.questions.forEach(q => {
+            const sub = q.subject || 'Default';
+            if (!subjects[sub]) subjects[sub] = [];
+            subjects[sub].push(q);
+        });
+
+        let processed = [];
+        Object.keys(subjects).forEach(sub => {
+            const list = subjects[sub];
+            const shuffled = activeSet !== 'Standard'
+                ? seededShuffle(list, `${activeSet}-${exam._id}-${sub}`)
+                : list;
+            processed = processed.concat(shuffled);
+        });
+
+        return processed;
+    };
+
+    const processedQuestions = getProcessedQuestions();
+
     return (
         <div style={{ fontFamily: 'Inter, sans-serif' }}>
             {/* Settings Toolbar (hidden on print) */}
@@ -195,6 +240,62 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                 ))}
                             </select>
                         </div>
+                        <div>
+                            <label style={printViewStyles.label}>Offline Set-Shuffling</label>
+                            <select 
+                                style={styles.input} 
+                                value={settings.numSets || 4}
+                                onChange={e => setSettings(s => ({ ...s, numSets: parseInt(e.target.value), activeSet: 'Standard' }))}
+                            >
+                                <option value={2}>2 Sets (A, B)</option>
+                                <option value={3}>3 Sets (A, B, C)</option>
+                                <option value={4}>4 Sets (P, Q, R, S)</option>
+                                <option value={5}>5 Sets (A, B, C, D, E)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={printViewStyles.label}>Active Print Set</label>
+                            <select 
+                                style={styles.input} 
+                                value={settings.activeSet || 'Standard'}
+                                onChange={e => setSettings(s => ({ ...s, activeSet: e.target.value }))}
+                            >
+                                <option value="Standard">Standard (Unshuffled)</option>
+                                {(() => {
+                                    const count = settings.numSets || 4;
+                                    const getSetNames = (c) => {
+                                        if (c === 4) return ['P', 'Q', 'R', 'S'];
+                                        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                                        return alphabet.split('').slice(0, c);
+                                    };
+                                    return getSetNames(count).map(setLetter => (
+                                        <option key={setLetter} value={setLetter}>Set {setLetter}</option>
+                                    ));
+                                })()}
+                            </select>
+                        </div>
+                        <div>
+                            <label style={printViewStyles.label}>Print Layout Type</label>
+                            <select 
+                                style={styles.input} 
+                                value={settings.printOMRSheet ? 'omr' : 'questions'}
+                                onChange={e => setSettings(s => ({ ...s, printOMRSheet: e.target.value === 'omr' }))}
+                            >
+                                <option value="questions">Questions Paper Only</option>
+                                <option value="omr">OMR Bubble Answer Sheet</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style={printViewStyles.label}>Dual-Language Mode</label>
+                            <select 
+                                style={styles.input} 
+                                value={settings.bilingualMode ? 'bilingual' : 'english'}
+                                onChange={e => setSettings(s => ({ ...s, bilingualMode: e.target.value === 'bilingual' }))}
+                            >
+                                <option value="english">English Version Only</option>
+                                <option value="bilingual">Bilingual Side-by-Side</option>
+                            </select>
+                        </div>
                         <div style={{ gridColumn: 'span 3', marginTop: '12px' }}>
                             <label style={printViewStyles.label}>Print Sheet Instructions</label>
                             <textarea 
@@ -215,78 +316,244 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                 fontFamily: settings.fontFamily, fontSize: settings.fontSize,
                 lineHeight: settings.lineHeight,
                 boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-                color: '#000'
+                color: '#000',
+                position: 'relative'
             }}>
-                {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                    <div style={{ marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
-                        <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', margin: '0 auto', display: 'block' }} />
+                {/* Watermark */}
+                {activeTemplate?.watermarkText && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%) rotate(-45deg)',
+                        fontSize: '5rem',
+                        fontWeight: 'bold',
+                        color: 'rgba(0, 0, 0, 0.04)',
+                        pointerEvents: 'none',
+                        userSelect: 'none',
+                        zIndex: 0,
+                        whiteSpace: 'nowrap'
+                    }}>
+                        {activeTemplate.watermarkText}
                     </div>
                 )}
 
-                <div style={{ marginBottom: '24px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                        <h1 style={{ fontSize: '22px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{exam.title}</h1>
-                        <p style={{ marginTop: '6px', color: '#333', fontWeight: 500 }}>Exam Type: {exam.examType} &nbsp;|&nbsp; Duration: {exam.duration_minutes} minutes</p>
+                {/* Custom Institutional Header Layout */}
+                {activeTemplate && (activeTemplate.institutionName || activeTemplate.headerText) ? (
+                    <div style={{ marginBottom: '24px', borderBottom: '4px double #000', paddingBottom: '12px', textAlign: 'center', position: 'relative', zIndex: 10 }}>
+                        {activeTemplate.fileUrl && (
+                            <img src={activeTemplate.fileUrl} alt="Logo" style={{ maxHeight: '80px', objectFit: 'contain', margin: '0 auto 8px block' }} />
+                        )}
+                        {activeTemplate.institutionName && (
+                            <h2 style={{ fontSize: '22px', fontWeight: 900, textTransform: 'uppercase', margin: '0 0 4px' }}>
+                                {activeTemplate.institutionName} {settings.activeSet && settings.activeSet !== 'Standard' && `— SET ${settings.activeSet}`}
+                            </h2>
+                        )}
+                        {activeTemplate.address && (
+                            <p style={{ fontSize: '12px', color: '#444', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 8px' }}>{activeTemplate.address}</p>
+                        )}
+                        {activeTemplate.headerText && (
+                            <h3 style={{ fontSize: '16px', fontWeight: 700, textTransform: 'uppercase', borderTop: '1px solid #ddd', paddingTop: '6px', margin: '8px 0 0' }}>{activeTemplate.headerText}</h3>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', fontSize: '12px', fontWeight: 700, textAlign: 'left', marginTop: '12px', borderTop: '2px solid #000', paddingTop: '10px' }}>
+                            <div>Exam: <span style={{ fontWeight: 500 }}>{exam.title}</span></div>
+                            <div>Exam Type: <span style={{ fontWeight: 500 }}>{exam.examType}</span></div>
+                            <div>Duration: <span style={{ fontWeight: 500 }}>{exam.duration_minutes} mins</span></div>
+                            <div>Questions: <span style={{ fontWeight: 500 }}>{exam.questions?.length || 0}</span></div>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', borderBottom: '2px solid #000', paddingBottom: '8px', fontWeight: 700, fontSize: '15px' }}>
-                        <span>Time: {exam.duration_minutes} mins</span>
-                        <span>Total Questions: {exam.questions?.length || 0}</span>
-                    </div>
-                </div>
-
-                {settings.instructions && (
-                    <div style={{ marginBottom: 24, fontSize: '0.9em', borderBottom: '1px solid #ddd', paddingBottom: 16 }}>
-                        <p style={{ fontWeight: 'bold', margin: '0 0 8px' }}>Instructions:</p>
-                        <div style={{ whiteSpace: 'pre-wrap' }}>{settings.instructions}</div>
-                    </div>
-                )}
-
-                <div style={{ 
-                    columnCount: settings.columns, 
-                    columnGap: '40px', 
-                    columnRule: settings.columns > 1 ? '1px solid #eee' : 'none' 
-                }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                        {exam.questions?.map((q, idx) => (
-                            <div key={q._id || idx} style={{ color: '#111', breakInside: 'avoid-column' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
-                                        <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
-                                            {q.imageUrl && (
-                                                <div style={{ marginTop: '12px', marginBottom: '8px' }}>
-                                                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    {settings.showMarks && <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.9em' }}>[{formatMarks(q.type)}]</span>}
-                                </div>
-                                {q.options && q.options.length > 0 && (
-                                    <div style={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: '1fr 1fr', 
-                                        gap: '8px 24px', 
-                                        marginTop: '8px', 
-                                        marginLeft: '24px', 
-                                        fontSize: '0.95em' 
-                                    }}>
-                                        {q.options.map((opt, i) => (
-                                            <div key={i} style={{ display: 'flex' }}>
-                                                <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
-                                                <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                ) : (
+                    /* Fallback to simple title/image logo header */
+                    <>
+                        {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
+                            <div style={{ marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center', position: 'relative', zIndex: 10 }}>
+                                <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', margin: '0 auto', display: 'block' }} />
                             </div>
-                        ))}
+                        )}
+
+                        <div style={{ marginBottom: '24px', position: 'relative', zIndex: 10 }}>
+                            <div style={{ textAlign: 'center' }}>
+                                <h1 style={{ fontSize: '22px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+                                    {exam.title} {settings.activeSet && settings.activeSet !== 'Standard' && `— SET ${settings.activeSet}`}
+                                </h1>
+                                <p style={{ marginTop: '6px', color: '#333', fontWeight: 500 }}>Exam Type: {exam.examType} &nbsp;|&nbsp; Duration: {exam.duration_minutes} minutes</p>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', borderBottom: '2px solid #000', paddingBottom: '8px', fontWeight: 700, fontSize: '15px' }}>
+                                <span>Time: {exam.duration_minutes} mins</span>
+                                <span>Total Questions: {exam.questions?.length || 0}</span>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {settings.printOMRSheet ? (
+                    <div className="relative z-10 mt-8 text-black" style={{ fontFamily: 'Inter, sans-serif' }}>
+                        <div style={{ textAlign: 'center', borderBottom: '3px double #000', paddingBottom: '12px', marginBottom: '20px' }}>
+                            <h3 style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', margin: 0 }}>
+                                {activeTemplate?.institutionName || 'OMR ANSWER RESPONSE SHEET'}
+                            </h3>
+                            <p style={{ fontSize: '13px', fontWeight: 700, margin: '4px 0 0' }}>
+                                EXAM: {exam.title.toUpperCase()} {settings.activeSet && settings.activeSet !== 'Standard' && `— SET ${settings.activeSet}`}
+                            </p>
+                        </div>
+
+                        {/* Candidate Info Grid */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                            {/* Left Box: Name & Details */}
+                            <div style={{ border: '2px solid #000', padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Candidate Name (In Block Letters)</label>
+                                    <div style={{ borderBottom: '1.5px solid #000', height: '24px' }}></div>
+                                </div>
+                                <div>
+                                    <label style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Student Email / Roll Number</label>
+                                    <div style={{ borderBottom: '1.5px solid #000', height: '24px' }}></div>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '8px' }}>
+                                    <div>
+                                        <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Candidate Signature</label>
+                                        <div style={{ border: '1.5px solid #000', height: '40px', borderRadius: '6px' }}></div>
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Invigilator Signature</label>
+                                        <div style={{ border: '1.5px solid #000', height: '40px', borderRadius: '6px' }}></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right Box: Roll Number Bubbles (standard 10-digit bubble grid) */}
+                            <div style={{ border: '2px solid #000', padding: '12px', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 900, textTransform: 'uppercase', marginBottom: '8px' }}>Roll Number Bubbling Grid</span>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                    {Array.from({ length: 10 }).map((_, colIdx) => (
+                                        <div key={colIdx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                            <div style={{ width: '16px', height: '16px', border: '1.5px solid #000', borderBottomWidth: '3px', textAlign: 'center', fontSize: '9px', fontWeight: 900, marginBottom: '2px' }}></div>
+                                            {Array.from({ length: 10 }).map((_, val) => (
+                                                <span key={val} style={{
+                                                    width: '18px', height: '18px', border: '1px solid #000', borderRadius: '50%',
+                                                    display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center',
+                                                    fontSize: '8px', fontWeight: 900, cursor: 'pointer'
+                                                }}>{val}</span>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* OMR Question Circles Grid */}
+                        <div style={{ border: '2px solid #000', borderRadius: '12px', padding: '20px', background: '#fff' }}>
+                            <div style={{ fontSize: '12px', fontWeight: 900, textAlign: 'center', borderBottom: '1.5px solid #000', paddingBottom: '8px', marginBottom: '16px', textTransform: 'uppercase' }}>
+                                Mark your answers by filling the bubbles completely. Use blue/black ballpoint pen only.
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px 24px' }}>
+                                {(() => {
+                                    const items = processedQuestions || [];
+                                    const colSize = Math.ceil(items.length / 4) || 1;
+                                    return Array.from({ length: 4 }).map((_, colIdx) => (
+                                        <div key={colIdx} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {items.slice(colIdx * colSize, (colIdx + 1) * colSize).map((q, localIdx) => {
+                                                const qNum = colIdx * colSize + localIdx + 1;
+                                                return (
+                                                    <div key={qNum} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 700 }}>
+                                                        <span style={{ minWidth: '24px', textAlign: 'right' }}>{qNum}.</span>
+                                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                                            {['A', 'B', 'C', 'D'].map(opt => (
+                                                                <span key={opt} style={{
+                                                                    width: '20px', height: '20px', border: '1px solid #000', borderRadius: '50%',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                    fontSize: '9px', fontWeight: 900
+                                                                }}>{opt}</span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <>
+                        {/* Instructions */}
+                        {(activeTemplate?.instructions || settings.instructions) && (
+                            <div style={{ marginBottom: 24, fontSize: '0.9em', borderBottom: '1px solid #ddd', paddingBottom: 16, position: 'relative', zIndex: 10 }}>
+                                <p style={{ fontWeight: 'bold', margin: '0 0 8px' }}>Instructions:</p>
+                                <div style={{ whiteSpace: 'pre-wrap', color: '#333' }}>
+                                    {activeTemplate?.instructions || settings.instructions}
+                                </div>
+                            </div>
+                        )}
+
+                        <div style={{ 
+                            columnCount: settings.columns, 
+                            columnGap: '40px', 
+                            columnRule: settings.columns > 1 ? '1px solid #eee' : 'none' 
+                        }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                {processedQuestions?.map((q, idx) => (
+                                    <div key={q._id || idx} style={{ color: '#111', breakInside: 'avoid-column' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
+                                                <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ display: 'grid', gridTemplateColumns: settings.bilingualMode ? '1fr 1fr' : '1fr', gap: '20px' }}>
+                                                        <div>
+                                                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                                        </div>
+                                                        {settings.bilingualMode && (
+                                                            <div style={{ borderLeft: '1.5px dashed #ccc', paddingLeft: '20px' }}>
+                                                                <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0, color: '#374151', fontFamily: 'sans-serif', fontStyle: 'italic' }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionTextTranslation || '<span style="font-size:11px;color:#9ca3af">[No Translation]</span>') }}></p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {q.imageUrl && (
+                                                        <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {settings.showMarks && <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.9em' }}>[{formatMarks(q.type)}]</span>}
+                                        </div>
+                                        {q.options && q.options.length > 0 && (
+                                            <div style={{ 
+                                                display: 'grid', 
+                                                gridTemplateColumns: '1fr 1fr', 
+                                                gap: '8px 24px', 
+                                                marginTop: '8px', 
+                                                marginLeft: '24px', 
+                                                fontSize: '0.95em' 
+                                            }}>
+                                                {q.options.map((opt, i) => (
+                                                    <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline' }}>
+                                                        <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
+                                                        <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
+                                                        {settings.bilingualMode && q.optionsTranslation?.[i] && (
+                                                            <span style={{ color: '#6b7280', fontSize: '11px', fontFamily: 'sans-serif', fontStyle: 'italic', marginLeft: '6px' }}>
+                                                                / {q.optionsTranslation[i]}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 <div style={{ textAlign: 'center', fontWeight: 700, borderTop: '2px solid #000', paddingTop: '16px', marginTop: '48px', fontSize: '13px' }}>
                     *** End of Exam ***
+                    {activeTemplate?.footerText && (
+                        <div style={{ marginTop: '12px', fontSize: '12px', fontWeight: 500, textTransform: 'uppercase', color: '#666' }}>
+                            {activeTemplate.footerText}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -348,7 +615,8 @@ export default function ExamManagement() {
     // Merge form state
     const [mergeForm, setMergeForm] = useState({
         title: '', examType: 'NEET', paperIds: [], instructions: '',
-        start_time: '', end_time: '', duration_minutes: 180, allowedStudents: ''
+        start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '',
+        shuffleQuestions: false
     });
 
     // Grand Test exam creation state
@@ -356,7 +624,8 @@ export default function ExamManagement() {
 
     // Config edit state
     const [configForm, setConfigForm] = useState({
-        start_time: '', end_time: '', duration_minutes: 180, instructions: '', status: '', allowedStudents: ''
+        start_time: '', end_time: '', duration_minutes: 180, instructions: '', status: '', allowedStudents: '',
+        shuffleQuestions: false
     });
 
     // Print / offline state
@@ -368,7 +637,11 @@ export default function ExamManagement() {
         columns: 1,
         showMarks: true,
         selectedTemplateId: '',
-        showSettings: true
+        showSettings: true,
+        numSets: 4,
+        activeSet: 'Standard',
+        printOMRSheet: false,
+        bilingualMode: false
     });
 
     useEffect(() => { 
@@ -428,7 +701,7 @@ export default function ExamManagement() {
             await api.post('/api/exams/merge', payload);
             setMsg('✅ Exam created successfully!');
             setShowMergeModal(false);
-            setMergeForm({ title: '', examType: 'NEET', paperIds: [], instructions: '', start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '' });
+            setMergeForm({ title: '', examType: 'NEET', paperIds: [], instructions: '', start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '', shuffleQuestions: false });
             fetchExams();
         } catch (e) {
             setMsg(e.response?.data?.msg || 'Merge failed');
@@ -453,7 +726,7 @@ export default function ExamManagement() {
             setMsg('✅ Grand Test Exam created successfully!');
             setShowMergeModal(false);
             setSelectedGTId('');
-            setMergeForm({ title: '', examType: 'NEET', paperIds: [], instructions: '', start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '' });
+            setMergeForm({ title: '', examType: 'NEET', paperIds: [], instructions: '', start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '', shuffleQuestions: false });
             fetchExams();
         } catch (e) {
             setMsg(e.response?.data?.msg || 'Failed to create exam from Grand Test');
@@ -468,7 +741,8 @@ export default function ExamManagement() {
             duration_minutes: exam.duration_minutes || 180,
             instructions: exam.instructions || '',
             status: exam.status || 'draft',
-            allowedStudents: exam.allowedStudents ? exam.allowedStudents.join(', ') : ''
+            allowedStudents: exam.allowedStudents ? exam.allowedStudents.join(', ') : '',
+            shuffleQuestions: exam.shuffleQuestions || false
         });
         setShowConfigModal(exam._id);
     };
@@ -690,6 +964,19 @@ export default function ExamManagement() {
                             <input style={styles.input} placeholder="Leave blank to allow all students" value={mergeForm.allowedStudents}
                                 onChange={e => setMergeForm(f => ({ ...f, allowedStudents: e.target.value }))} />
 
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 16 }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="shuffleQuestions"
+                                    checked={mergeForm.shuffleQuestions || false}
+                                    onChange={e => setMergeForm(f => ({ ...f, shuffleQuestions: e.target.checked }))}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="shuffleQuestions" style={{ fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', userSelect: 'none' }}>
+                                    🔀 Shuffle Questions (Randomizes question order per student session to prevent lab screen copying)
+                                </label>
+                            </div>
+
                             <label style={styles.label}>
                                 Select Papers ({mergeForm.paperIds.length} selected)
                             </label>
@@ -802,6 +1089,19 @@ export default function ExamManagement() {
                             <label style={styles.label}>Allowed Students (Roll Numbers, comma separated)</label>
                             <input style={styles.input} placeholder="Leave blank to allow all students" value={configForm.allowedStudents}
                                 onChange={e => setConfigForm(f => ({ ...f, allowedStudents: e.target.value }))} />
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 16 }}>
+                                <input 
+                                    type="checkbox" 
+                                    id="shuffleQuestionsEdit"
+                                    checked={configForm.shuffleQuestions || false}
+                                    onChange={e => setConfigForm(f => ({ ...f, shuffleQuestions: e.target.checked }))}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                                <label htmlFor="shuffleQuestionsEdit" style={{ fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer', userSelect: 'none' }}>
+                                    🔀 Shuffle Questions (Randomizes question order per student session to prevent lab screen copying)
+                                </label>
+                            </div>
 
                             <label style={styles.label}>Duration (minutes)</label>
                             <input style={styles.input} type="number" value={configForm.duration_minutes}

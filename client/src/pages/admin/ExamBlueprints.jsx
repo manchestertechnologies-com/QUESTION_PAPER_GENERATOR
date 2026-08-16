@@ -105,12 +105,29 @@ const ExamBlueprints = () => {
                                 <span>Duration: {bp.durationMinutes} min</span>
                                 <span className="text-navy">{bp.subjects?.length || 0} Subjects</span>
                             </div>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleDelete(bp._id); }} 
-                                className="text-[10px] text-red-500 font-bold hover:text-red-700 mt-4 block"
-                            >
-                                Delete Blueprint
-                            </button>
+                            <div className="flex gap-4 mt-4 items-center">
+                                <button 
+                                    onClick={async (e) => {
+                                        e.stopPropagation();
+                                        if (!window.confirm(`Auto-generate a new question paper from blueprint "${bp.name}"?`)) return;
+                                        try {
+                                            const res = await api.post(`/api/exam-blueprints/${bp._id}/generate-paper`);
+                                            alert(`Successfully auto-generated paper: "${res.data.title}"! It is now saved as a draft.`);
+                                        } catch (err) {
+                                            alert(err.response?.data?.msg || err.message);
+                                        }
+                                    }}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-1 rounded-xl text-[9px] uppercase tracking-wider transition"
+                                >
+                                    ⚡ Generate Paper
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(bp._id); }} 
+                                    className="text-[10px] text-red-500 font-bold hover:text-red-700 block"
+                                >
+                                    Delete
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>

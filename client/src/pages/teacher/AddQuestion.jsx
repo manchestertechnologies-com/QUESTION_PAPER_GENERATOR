@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import * as XLSX from 'xlsx';
 
 const AddQuestion = () => {
     const [questions, setQuestions] = useState([]);
@@ -19,12 +20,55 @@ const AddQuestion = () => {
         reason: '',
         statements: ['', ''],
         matchPairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
-        numericalTolerance: 0
+        numericalTolerance: 0,
+        questionTextTranslation: '',
+        optionsTranslation: ['', '', '', '']
     });
     const [imageFile, setImageFile] = useState(null);
     const [solutionImageFile, setSolutionImageFile] = useState(null);
     const [editId, setEditId] = useState(null);
     const [showForm, setShowForm] = useState(false);
+
+    // Bulk Import Excel/CSV state
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [importing, setImporting] = useState(false);
+
+    const handleBulkExcelImport = async (e) => {
+        e.preventDefault();
+        if (!importFile) return alert('Please select an Excel or CSV file first.');
+        
+        setImporting(true);
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = new Uint8Array(event.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                if (json.length === 0) {
+                    alert('The selected sheet is empty.');
+                    setImporting(false);
+                    return;
+                }
+
+                // POST parsed JSON to bulk import API
+                const res = await api.post('/api/questions/bulk-import', { questions: json });
+                alert(`Successfully imported ${res.data.count} questions!`);
+                setShowImportModal(false);
+                setImportFile(null);
+                fetchQuestions(1);
+            } catch (err) {
+                console.error(err);
+                alert('Import failed: ' + (err.response?.data?.msg || err.message));
+            } finally {
+                setImporting(false);
+            }
+        };
+        reader.readAsArrayBuffer(importFile);
+    };
 
     // Pagination & Search Filters
     const [page, setPage] = useState(1);
@@ -89,6 +133,12 @@ const AddQuestion = () => {
             if (formData.solutionText) {
                 submitData.append('solutionText', formData.solutionText);
             }
+            if (formData.questionTextTranslation) {
+                submitData.append('questionTextTranslation', formData.questionTextTranslation);
+            }
+            if (formData.optionsTranslation && formData.optionsTranslation.some(Boolean)) {
+                submitData.append('optionsTranslation', JSON.stringify(formData.optionsTranslation));
+            }
             
             // Format options & fields based on Question Type
             if (formData.type === 'MCQ' || formData.type === 'DIAGRAM_BASED') {
@@ -146,7 +196,9 @@ const AddQuestion = () => {
                 reason: '',
                 statements: ['', ''],
                 matchPairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
-                numericalTolerance: 0
+                numericalTolerance: 0,
+                questionTextTranslation: '',
+                optionsTranslation: ['', '', '', '']
             });
             setImageFile(null);
             setSolutionImageFile(null);
@@ -175,7 +227,9 @@ const AddQuestion = () => {
             reason: q.reason || '',
             statements: q.statements && q.statements.length > 0 ? q.statements : ['', ''],
             matchPairs: q.matchPairs && q.matchPairs.length > 0 ? q.matchPairs : [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
-            numericalTolerance: q.numericalTolerance || 0
+            numericalTolerance: q.numericalTolerance || 0,
+            questionTextTranslation: q.questionTextTranslation || '',
+            optionsTranslation: q.optionsTranslation && q.optionsTranslation.length === 4 ? q.optionsTranslation : ['', '', '', '']
         });
         setEditId(q._id);
         setShowForm(true);
@@ -218,38 +272,48 @@ const AddQuestion = () => {
                     <h2 className="text-3xl font-black text-navy tracking-tight mb-2 uppercase">Institutional Repository</h2>
                     <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] ml-1">Academic Question Bank Management</p>
                 </div>
-                <button 
-                    onClick={() => {
-                        if (showForm) {
-                            setShowForm(false);
-                            setEditId(null);
-                            setFormData({
-                                chapter: '',
-                                concept: '',
-                                subConcept: '',
-                                level: 'easy',
-                                classes: '11',
-                                type: 'MCQ',
-                                questionText: '',
-                                options: ['', '', '', ''],
-                                answer: '',
-                                solutionText: '',
-                                assertion: '',
-                                reason: '',
-                                statements: ['', ''],
-                                matchPairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
-                                numericalTolerance: 0
-                            });
-                            setImageFile(null);
-                            setSolutionImageFile(null);
-                        } else {
-                            setShowForm(true);
-                        }
-                    }} 
-                    className={`px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg ${showForm ? 'bg-gray-100 text-slate/60 hover:bg-gray-200' : 'bg-navy text-gold hover:scale-105 active:scale-95'}`}
-                >
-                    {showForm ? '← View Repository' : '+ New Question'}
-                </button>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => setShowImportModal(true)}
+                        className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 text-white hover:scale-105 active:scale-95 transition-all shadow-lg"
+                    >
+                        📤 Bulk Import (Excel/CSV)
+                    </button>
+                    <button 
+                        onClick={() => {
+                            if (showForm) {
+                                setShowForm(false);
+                                setEditId(null);
+                                setFormData({
+                                    chapter: '',
+                                    concept: '',
+                                    subConcept: '',
+                                    level: 'easy',
+                                    classes: '11',
+                                    type: 'MCQ',
+                                    questionText: '',
+                                    options: ['', '', '', ''],
+                                    answer: '',
+                                    solutionText: '',
+                                    assertion: '',
+                                    reason: '',
+                                    statements: ['', ''],
+                                    matchPairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }],
+                                    numericalTolerance: 0,
+                                    questionTextTranslation: '',
+                                    optionsTranslation: ['', '', '', '']
+                                });
+                                setImageFile(null);
+                                setSolutionImageFile(null);
+                            } else {
+                                setShowForm(true);
+                            }
+                        }} 
+                        className={`px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg ${showForm ? 'bg-gray-100 text-slate/60 hover:bg-gray-200' : 'bg-navy text-gold hover:scale-105 active:scale-95'}`}
+                    >
+                        {showForm ? '← View Repository' : '+ New Question'}
+                    </button>
+                </div>
             </div>
 
             {showForm ? (
@@ -523,6 +587,49 @@ const AddQuestion = () => {
                             </div>
                         )}
 
+                        {/* Bilingual Translations Block */}
+                        <div className="bg-blue-50/30 p-6 rounded-2xl border border-blue-200/60 space-y-4">
+                            <h4 className="font-black text-navy text-xs uppercase tracking-wide flex items-center gap-2">
+                                🌐 Bilingual Translations (Optional)
+                            </h4>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Question Content Translation</label>
+                                <textarea 
+                                    placeholder="Enter regional language translation (Hindi, Kannada, etc.) here..." 
+                                    className="w-full border border-gray-300 p-3 rounded-lg h-20 focus:ring-2 focus:ring-blue-500 text-sm" 
+                                    value={formData.questionTextTranslation || ''} 
+                                    onChange={e=>setFormData({...formData, questionTextTranslation: e.target.value})}
+                                ></textarea>
+                            </div>
+
+                            {formData.options && formData.options.length > 0 && (
+                                <div className="space-y-3">
+                                    <label className="block text-xs font-bold text-gray-700">Options Translation</label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {formData.options.map((opt, i) => (
+                                            <div key={i} className="flex items-center">
+                                                <span className="font-bold bg-blue-100 text-blue-800 w-8 h-8 flex items-center justify-center rounded-l-md border border-r-0 border-blue-200 text-xs">
+                                                    {String.fromCharCode(65+i)}
+                                                </span>
+                                                <input 
+                                                    type="text" 
+                                                    placeholder={`Translated Option`} 
+                                                    className="flex-1 border border-gray-300 p-2 rounded-r-md text-xs focus:ring-2 focus:ring-blue-500"
+                                                    value={formData.optionsTranslation?.[i] || ''} 
+                                                    onChange={e => {
+                                                        const newTrans = [...(formData.optionsTranslation || ['', '', '', ''])];
+                                                        newTrans[i] = e.target.value;
+                                                        setFormData({...formData, optionsTranslation: newTrans});
+                                                    }} 
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-200">
                             <h4 className="font-black text-navy mb-4 border-b border-gray-200 pb-2">Detailed Solution (Optional)</h4>
                             
@@ -766,6 +873,48 @@ const AddQuestion = () => {
                             </button>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Bulk Import Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full border border-gray-100 animate-fade-in-up flex flex-col gap-6 font-sans">
+                        <div className="flex justify-between items-center pb-4 border-b border-gray-100">
+                            <div>
+                                <h3 className="font-black text-xl text-navy uppercase tracking-wide">Bulk Import Questions</h3>
+                                <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] mt-1">Upload XLSX / XLS / CSV sheet</p>
+                            </div>
+                            <button onClick={() => setShowImportModal(false)} className="text-slate/40 hover:text-red-500 font-bold text-xl">✕</button>
+                        </div>
+
+                        <form onSubmit={handleBulkExcelImport} className="space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Select Spreadsheet File</label>
+                                <input 
+                                    type="file" required accept=".xlsx, .xls, .csv"
+                                    onChange={e => setImportFile(e.target.files[0])}
+                                    className="w-full border-2 border-gray-100 p-4 rounded-xl bg-gray-50/50 hover:bg-white focus:border-navy outline-none font-bold text-xs"
+                                />
+                            </div>
+
+                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-[11px] leading-relaxed text-slate/60 space-y-1">
+                                <p className="font-bold text-navy uppercase tracking-wider mb-1">Expected Spreadsheet Format:</p>
+                                <p>• <strong>questionText</strong> / <strong>question</strong> : Question text</p>
+                                <p>• <strong>type</strong>: MCQ, NUMERICAL, ASSERTION_REASON, etc.</p>
+                                <p>• <strong>a, b, c, d</strong> (or OptionA, OptionB, OptionC, OptionD): Options text</p>
+                                <p>• <strong>answer</strong>: Index/Value matching options or exact value</p>
+                                <p>• <strong>chapter</strong>, <strong>concept</strong>, <strong>level</strong> (easy/medium/hard)</p>
+                            </div>
+
+                            <button 
+                                type="submit" disabled={importing}
+                                className="w-full bg-navy text-gold py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition shadow-lg disabled:opacity-50"
+                            >
+                                {importing ? 'Processing & Importing...' : 'Import Data'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
