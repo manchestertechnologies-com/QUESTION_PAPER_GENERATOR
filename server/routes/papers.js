@@ -117,6 +117,38 @@ router.get('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
     }
 });
 
+// @route   GET /api/papers/:id/export-word
+// @desc    Export paper to Word (.docx)
+// @access  Teacher, Admin
+router.get('/:id/export-word', [auth, checkRole(['teacher', 'admin'])], async (req, res) => {
+    try {
+        const paper = await Paper.findById(req.params.id);
+        if (!paper) return res.status(404).json({ msg: 'Paper not found.' });
+
+        if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
+            return res.status(403).json({ msg: 'Access denied: not your paper.' });
+        }
+
+        const populatedPaper = await populatePaperQuestions(paper);
+
+        let template = null;
+        if (paper.templateId) {
+            const Template = require('../models/Template');
+            template = await Template.findById(paper.templateId);
+        }
+
+        const { generatePaperDoc } = require('../services/wordExport');
+        const buffer = await generatePaperDoc(populatedPaper, template);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${paper.title.replace(/\s+/g, '_')}.docx"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Word export error:', err.message);
+        res.status(500).json({ msg: 'Server error exporting paper to Word.', error: err.message });
+    }
+});
+
 // @route   DELETE /api/papers/:id
 // @desc    Delete a paper
 // @access  Teacher, Admin

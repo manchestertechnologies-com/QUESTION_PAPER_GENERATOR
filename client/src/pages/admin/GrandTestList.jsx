@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 const GrandTestList = () => {
     const [grandTests, setGrandTests] = useState([]);
+    const [templates, setTemplates] = useState([]);
     const [selectedGT, setSelectedGT] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [createForm, setCreateForm] = useState({
@@ -11,7 +13,8 @@ const GrandTestList = () => {
         code: '',
         examType: 'NEET',
         academicYearLevel: 'FIRST_YEAR',
-        subject: 'Mixed'
+        subject: 'Mixed',
+        templateId: ''
     });
 
     const [importText, setImportText] = useState('');
@@ -133,6 +136,7 @@ const GrandTestList = () => {
 
     useEffect(() => {
         fetchGrandTests();
+        api.get('/api/templates').then(res => setTemplates(res.data)).catch(console.error);
     }, []);
 
     const handleCreateSubmit = async (e) => {
@@ -141,7 +145,18 @@ const GrandTestList = () => {
             await api.post('/api/grand-tests', createForm);
             alert('Grand Test created successfully!');
             setShowCreateModal(false);
-            setCreateForm({ title: '', code: '', examType: 'NEET', academicYearLevel: 'FIRST_YEAR', subject: 'Mixed' });
+            setCreateForm({ title: '', code: '', examType: 'NEET', academicYearLevel: 'FIRST_YEAR', subject: 'Mixed', templateId: '' });
+            fetchGrandTests();
+        } catch (err) {
+            alert(err.response?.data?.msg || err.message);
+        }
+    };
+
+    const handleUpdateTemplate = async (templateId) => {
+        try {
+            const res = await api.put(`/api/grand-tests/${selectedGT._id}`, { templateId: templateId || null });
+            setSelectedGT(prev => ({ ...prev, templateId: res.data.templateId }));
+            alert('Template layout updated successfully!');
             fetchGrandTests();
         } catch (err) {
             alert(err.response?.data?.msg || err.message);
@@ -307,9 +322,24 @@ const GrandTestList = () => {
                 <div className="lg:col-span-2 space-y-8">
                     {selectedGT ? (
                         <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-md space-y-6">
-                            <div className="border-b border-gray-100 pb-4">
-                                <h3 className="text-2xl font-black text-navy uppercase tracking-tight">{selectedGT.title}</h3>
-                                <p className="text-[10px] font-bold text-slate/40 uppercase tracking-[0.2em] mt-1">{selectedGT.examType} • {selectedGT.academicYearLevel} • {selectedGT.subject}</p>
+                            <div className="border-b border-gray-100 pb-4 space-y-4">
+                                <div>
+                                    <h3 className="text-2xl font-black text-navy uppercase tracking-tight">{selectedGT.title}</h3>
+                                    <p className="text-[10px] font-bold text-slate/40 uppercase tracking-[0.2em] mt-1">{selectedGT.examType} • {selectedGT.academicYearLevel} • {selectedGT.subject}</p>
+                                </div>
+                                <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                                    <label className="text-[10px] font-black text-navy/60 uppercase tracking-widest">Template Layout:</label>
+                                    <select 
+                                        className="border border-gray-200 px-3 py-1.5 rounded-xl text-xs bg-white focus:ring-2 focus:ring-navy outline-none font-bold text-navy"
+                                        value={selectedGT.templateId || ''} 
+                                        onChange={(e) => handleUpdateTemplate(e.target.value)}
+                                    >
+                                        <option value="">— None (No Template) —</option>
+                                        {templates.map(t => (
+                                            <option key={t._id} value={t._id}>{t.name} ({t.templateType || 'LOGO/HEADER'})</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
                             {/* Paste text parser */}
@@ -398,18 +428,18 @@ const GrandTestList = () => {
                                                 <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">{q.type}</span>
                                                 <span className="text-[9px] font-bold text-slate/40 uppercase tracking-wider">Chapter: {q.chapter}</span>
                                                 {q.answer && (
-                                                    <span className="text-[9px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded flex items-center gap-1">Correct: <span dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span></span>
+                                                    <span className="text-[9px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded flex items-center gap-1">Correct: <MathRenderer inline={true} text={q.answer} /></span>
                                                 )}
                                             </div>
-                                            <p className="font-medium text-slate whitespace-pre-wrap mb-2" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                            <MathRenderer className="font-medium text-slate whitespace-pre-wrap mb-2" text={q.questionText} />
                                             {q.options && q.options.length > 0 && (
                                                 <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mb-2 border-t border-gray-100/50 pt-2 mt-2">
-                                                    {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <span dangerouslySetInnerHTML={{ __html: sanitize(o) }}></span></div>)}
+                                                    {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <MathRenderer inline={true} text={o} /></div>)}
                                                 </div>
                                             )}
                                             {q.solutionText && (
                                                 <div className="text-gray-500 bg-green-50/20 p-2 rounded mt-2 border border-green-50/30">
-                                                    <strong>Solution:</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}></span>
+                                                    <strong>Solution:</strong> <MathRenderer inline={true} text={q.solutionText} />
                                                 </div>
                                             )}
                                         </div>
@@ -471,6 +501,18 @@ const GrandTestList = () => {
                                 >
                                     <option value="FIRST_YEAR">Class 11 / 1st Year</option>
                                     <option value="SECOND_YEAR">Class 12 / 2nd Year</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Template Layout</label>
+                                <select 
+                                    className="w-full border border-gray-200 p-3 rounded-xl text-xs bg-white focus:ring-2 focus:ring-navy outline-none font-bold"
+                                    value={createForm.templateId} onChange={e => setCreateForm({...createForm, templateId: e.target.value})}
+                                >
+                                    <option value="">— None (No Template) —</option>
+                                    {templates.map(t => (
+                                        <option key={t._id} value={t._id}>{t.name} ({t.templateType || 'LOGO/HEADER'})</option>
+                                    ))}
                                 </select>
                             </div>
                             <div className="flex gap-4 pt-4">
@@ -568,7 +610,7 @@ const GrandTestList = () => {
 
                             <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-100 font-sans">
                                 <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Live Question Preview</label>
-                                <div className="text-xs font-medium text-slate whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitize(editForm.questionText) }}></div>
+                                <MathRenderer className="text-xs font-medium text-slate whitespace-pre-wrap" text={editForm.questionText} />
                             </div>
                             <div className="flex gap-4 pt-4 border-t border-gray-100">
                                 <button type="button" onClick={() => setEditingQuestion(null)} className="flex-1 border border-gray-200 text-slate py-3 rounded-xl text-xs font-black uppercase tracking-widest">Cancel</button>
@@ -661,13 +703,13 @@ const GrandTestList = () => {
                                                 Select & Replace
                                             </button>
                                         </div>
-                                        <p className="font-medium text-slate mt-1" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText || q.question) }}></p>
+                                        <MathRenderer className="font-medium text-slate mt-1" text={q.questionText || q.question} />
                                         {q.options && q.options.length > 0 && (
                                             <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mt-1">
-                                                {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <span dangerouslySetInnerHTML={{ __html: sanitize(o) }}></span></div>)}
+                                                {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <MathRenderer inline={true} text={o} /></div>)}
                                             </div>
                                         )}
-                                        <div className="font-bold text-green-700 mt-1">Correct Answer: <span dangerouslySetInnerHTML={{ __html: sanitize(q.answer || q.correct_option) }}></span></div>
+                                        <div className="font-bold text-green-700 mt-1">Correct Answer: <MathRenderer inline={true} text={q.answer || q.correct_option} /></div>
                                     </div>
                                 ))
                             )}

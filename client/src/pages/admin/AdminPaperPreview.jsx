@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
-import { exportToWord } from '../../utils/exportWord';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 const AdminPaperPreview = () => {
     const { paperId } = useParams();
@@ -70,6 +70,12 @@ const AdminPaperPreview = () => {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleWordExport = () => {
+        const token = localStorage.getItem('token');
+        const downloadUrl = `${api.defaults.baseURL || ''}/api/papers/${selectedPaper._id}/export-word?token=${token}`;
+        window.open(downloadUrl, '_blank');
     };
 
     const formatMarks = (type) => {
@@ -242,6 +248,7 @@ const AdminPaperPreview = () => {
                         {showAnswerKey ? 'Hide Answers' : 'Show Answers'}
                     </button>
                     <button onClick={handlePrint} className="bg-navy text-gold px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">🖨 Print / Save PDF</button>
+                    <button onClick={handleWordExport} className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">⬇️ Export Word</button>
                 </div>
             </div>
 
@@ -421,7 +428,7 @@ const AdminPaperPreview = () => {
                                 <tr>
                                     <td className="border border-gray-400 p-2 font-bold text-center text-xs">Key</td>
                                     {flatProcessedQuestions?.map((q, idx) => (
-                                        <td key={idx} className="border border-gray-400 p-2 font-black text-center text-sm text-green-700" dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></td>
+                                        <td key={idx} className="border border-gray-400 p-2 font-black text-center text-sm text-green-700"><MathRenderer inline={true} text={q.answer} /></td>
                                     ))}
                                 </tr>
                             </tbody>
@@ -433,11 +440,11 @@ const AdminPaperPreview = () => {
                             {flatProcessedQuestions?.map((q, idx) => (
                                 <div key={idx} className="pb-6 border-b border-gray-200">
                                     <div className="font-bold text-base text-gray-900 mb-2">Q.{idx + 1} Solution:</div>
-                                    <p className="font-medium text-gray-700 mb-2 text-sm" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                    <MathRenderer className="font-medium text-gray-700 mb-2 text-sm" text={q.questionText} />
                                     <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs text-gray-800 leading-relaxed whitespace-pre-wrap font-sans">
                                         <strong>Explanation:</strong><br />
                                         {q.solutionText ? (
-                                            <span dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}></span>
+                                            <MathRenderer text={q.solutionText} />
                                         ) : (
                                             <span className="italic text-gray-400">No explanation provided.</span>
                                         )}
@@ -469,11 +476,11 @@ const AdminPaperPreview = () => {
                                                             <div className="flex-1">
                                                                 <div style={{ display: 'grid', gridTemplateColumns: bilingualMode ? '1fr 1fr' : '1fr', gap: '20px' }}>
                                                                     <div>
-                                                                        <p className="whitespace-pre-wrap text-justify text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                                                        <MathRenderer className="whitespace-pre-wrap text-justify text-base leading-relaxed" text={q.questionText} />
                                                                     </div>
                                                                     {bilingualMode && (
                                                                         <div style={{ borderLeft: '1.5px dashed #ccc', paddingLeft: '20px' }}>
-                                                                            <p className="whitespace-pre-wrap text-justify text-base leading-relaxed text-slate-800 font-sans italic" dangerouslySetInnerHTML={{ __html: sanitize(q.questionTextTranslation || '<span class="text-xs text-slate-400 font-sans">[No Translation]</span>') }}></p>
+                                                                            <MathRenderer className="whitespace-pre-wrap text-justify text-base leading-relaxed text-slate-800 font-sans italic" text={q.questionTextTranslation || '<span class="text-xs text-slate-400 font-sans">[No Translation]</span>'} />
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -491,7 +498,7 @@ const AdminPaperPreview = () => {
                                                             {q.options.map((opt, i) => (
                                                                 <div key={i} className="flex flex-wrap items-baseline">
                                                                     <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>
-                                                                    <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
+                                                                    <MathRenderer inline={true} text={opt} />
                                                                     {bilingualMode && q.optionsTranslation?.[i] && (
                                                                         <span className="text-gray-500 font-sans text-xs ml-2 italic">
                                                                             / {q.optionsTranslation[i]}
@@ -524,11 +531,11 @@ const AdminPaperPreview = () => {
                                             <div className="flex-1">
                                                 <div style={{ display: 'grid', gridTemplateColumns: bilingualMode ? '1fr 1fr' : '1fr', gap: '20px' }}>
                                                     <div>
-                                                        <p className="whitespace-pre-wrap text-justify text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                                        <MathRenderer className="whitespace-pre-wrap text-justify text-base leading-relaxed" text={q.questionText} />
                                                     </div>
                                                     {bilingualMode && (
                                                         <div style={{ borderLeft: '1.5px dashed #ccc', paddingLeft: '20px' }}>
-                                                            <p className="whitespace-pre-wrap text-justify text-base leading-relaxed text-slate-800 font-sans italic" dangerouslySetInnerHTML={{ __html: sanitize(q.questionTextTranslation || '<span class="text-xs text-slate-400 font-sans">[No Translation]</span>') }}></p>
+                                                            <MathRenderer className="whitespace-pre-wrap text-justify text-base leading-relaxed text-slate-800 font-sans italic" text={q.questionTextTranslation || '<span class="text-xs text-slate-400 font-sans">[No Translation]</span>'} />
                                                         </div>
                                                     )}
                                                 </div>
@@ -546,7 +553,7 @@ const AdminPaperPreview = () => {
                                             {q.options.map((opt, i) => (
                                                 <div key={i} className="flex flex-wrap items-baseline">
                                                     <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>
-                                                    <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
+                                                    <MathRenderer inline={true} text={opt} />
                                                     {bilingualMode && q.optionsTranslation?.[i] && (
                                                         <span className="text-gray-500 font-sans text-xs ml-2 italic">
                                                             / {q.optionsTranslation[i]}
@@ -610,22 +617,14 @@ const QuestionSolution = ({ q, onGenerateSolution, isGenerating }) => {
             </div>
             {q.answer && (
                 <div className="mb-3 text-base">
-                    <strong className="text-gray-700">Correct Answer / Key:</strong> <span className="text-green-700 font-extrabold ml-1 bg-green-50 px-2 py-0.5 rounded border border-green-200" dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span>
+                    <strong className="text-gray-700">Correct Answer / Key:</strong> <MathRenderer inline={true} className="text-green-700 font-extrabold ml-1 bg-green-50 px-2 py-0.5 rounded border border-green-200" text={q.answer} />
                 </div>
             )}
             {q.solutionText ? (
-                <div className="text-gray-800 text-base whitespace-pre-wrap leading-relaxed bg-white p-4 rounded-xl border border-gray-100 shadow-sm" dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}>
-                </div>
+                <MathRenderer className="text-gray-800 text-base whitespace-pre-wrap leading-relaxed bg-white p-4 rounded-xl border border-gray-100 shadow-sm" text={q.solutionText} />
             ) : (
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                    <span className="text-gray-500 italic block mb-3 text-base">No detailed solution has been created for this question yet.</span>
-                    <button
-                        onClick={() => onGenerateSolution(q._id)}
-                        disabled={isGenerating}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-5 py-2.5 rounded-xl text-xs uppercase tracking-widest transition-all disabled:opacity-50 active:scale-95 shadow-md shadow-indigo-200"
-                    >
-                        {isGenerating ? '🤖 Generating Solution...' : '🤖 Solve with Gemini AI'}
-                    </button>
+                    <span className="text-gray-500 italic block text-base">No detailed solution has been added for this question yet.</span>
                 </div>
             )}
             {q.solutionImageUrl && (

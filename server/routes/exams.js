@@ -172,6 +172,7 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
             duration_minutes: duration_minutes || 180,
             status: start_time ? 'scheduled' : 'draft',
             shuffleQuestions: req.body.shuffleQuestions || false,
+            examMode: req.body.examMode || 'ONLINE',
             allowedStudents: Array.isArray(allowedStudents) ? allowedStudents : [],
             createdBy: req.user.id
         });
@@ -225,6 +226,7 @@ router.post('/from-grand-test', [auth, checkRole(['admin'])], async (req, res) =
             end_time: end_time || null,
             duration_minutes: duration_minutes || 180,
             status: start_time ? 'scheduled' : 'draft',
+            examMode: req.body.examMode || 'ONLINE',
             allowedStudents: Array.isArray(allowedStudents) ? allowedStudents : [],
             createdBy: req.user.id
         });
@@ -287,13 +289,14 @@ router.get('/admin/:id', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.put('/:id/config', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const { start_time, end_time, duration_minutes, instructions, status, allowedStudents } = req.body;
+        const { start_time, end_time, duration_minutes, instructions, status, allowedStudents, examMode } = req.body;
         const update = {};
         if (start_time !== undefined) update.start_time = start_time;
         if (end_time !== undefined) update.end_time = end_time;
         if (duration_minutes !== undefined) update.duration_minutes = duration_minutes;
         if (instructions !== undefined) update.instructions = instructions;
         if (status !== undefined) update.status = status;
+        if (examMode !== undefined) update.examMode = examMode;
         if (allowedStudents !== undefined) update.allowedStudents = Array.isArray(allowedStudents) ? allowedStudents : [];
         update.updatedAt = new Date();
 
@@ -624,6 +627,10 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
         const exam = await OnlineExam.findById(req.params.id);
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
 
+        if (exam.examMode === 'OFFLINE') {
+            return res.status(403).json({ msg: 'Access denied: Scorecard is not available for offline exams.' });
+        }
+
         const isLab = (session.fromLabIp || req.isLabIp) && process.env.LAB_IP !== '*';
 
         // Build question-level breakdown
@@ -928,6 +935,108 @@ router.post('/:id/session/save-progress', async (req, res) => {
     } catch (err) {
         console.error('Autosave error:', err);
         res.status(500).json({ msg: 'Server Error during autosave' });
+    }
+});
+
+// @route   GET /api/exams/:id/export-word
+// @desc    Export online exam to Word (.docx)
+// @access  Admin
+router.get('/:id/export-word', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const OnlineExam = require('../models/OnlineExam');
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found.' });
+
+        const paperAdapter = {
+            title: exam.title,
+            subject: exam.questions?.[0]?.subject || 'Mixed',
+            classes: [exam.examType],
+            questions: exam.questions,
+            pattern: exam.sections
+        };
+
+        let template = null;
+        if (exam.templateId) {
+            const Template = require('../models/Template');
+            template = await Template.findById(exam.templateId);
+        }
+
+        const { generatePaperDoc } = require('../services/wordExport');
+        const buffer = await generatePaperDoc(paperAdapter, template);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${exam.title.replace(/\s+/g, '_')}.docx"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error('Exam Word export error:', err.message);
+        res.status(500).json({ msg: 'Server error exporting exam to Word.', error: err.message });
+    }
+});
+
+// @route   GET /api/exams/:id/pdf-report/:sessionId
+// @desc    Download PDF scorecard for an exam session
+// @access  Student (own), Teacher, Admin
+router.get('/:id/pdf-report/:sessionId', auth, async (req, res) => {
+    try {
+        const session = await ExamSession.findById(req.params.sessionId);
+        if (!session) return res.status(404).json({ msg: 'Session not found' });
+
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        if (req.user.role === 'student' && session.studentEmail !== req.user.email) {
+            return res.status(403).json({ msg: 'Access denied: You can only download your own scorecard.' });
+        }
+
+        const { generateReportPdf } = require('../services/pdfReport');
+        const buffer = await generateReportPdf(session, exam);
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${session.studentName?.replace(/\s+/g, '_') || 'Result'}.pdf"`);
+        res.send(buffer);
+    } catch (err) {
+        console.error('PDF report error:', err.message);
+        res.status(500).json({ msg: 'Server error generating PDF report.', error: err.message });
+    }
+});
+
+// @route   GET /api/exams/:id/download-all-reports
+// @desc    Download zip of all scorecards for an exam
+// @access  Admin
+router.get('/:id/download-all-reports', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        const sessions = await ExamSession.find({ examId: req.params.id, submitted: true });
+        if (sessions.length === 0) {
+            return res.status(400).json({ msg: 'No completed exam sessions found for this exam.' });
+        }
+
+        const archiver = require('archiver');
+        const archive = archiver('zip', { zlib: { level: 9 } });
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${exam.title.replace(/\s+/g, '_')}_Reports.zip"`);
+
+        archive.on('error', (err) => {
+            throw err;
+        });
+
+        archive.pipe(res);
+
+        const { generateReportPdf } = require('../services/pdfReport');
+
+        for (const session of sessions) {
+            const pdfBuffer = await generateReportPdf(session, exam);
+            const filename = `${session.studentName?.replace(/\s+/g, '_') || session.studentEmail}_Result.pdf`;
+            archive.append(pdfBuffer, { name: filename });
+        }
+
+        await archive.finalize();
+    } catch (err) {
+        console.error('Zip reports error:', err.message);
+        res.status(500).json({ msg: 'Server error generating zip reports.', error: err.message });
     }
 });
 

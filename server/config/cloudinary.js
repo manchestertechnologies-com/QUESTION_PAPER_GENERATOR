@@ -12,11 +12,20 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: {
-    folder: 'qpg_uploads',
-    allowed_formats: ['jpg', 'png', 'jpeg', 'svg', 'webp'],
-    transformation: [{ width: 1000, height: 1000, crop: 'limit' }],
-  },
+  params: async (req, file) => {
+    if (file && file.mimetype === 'application/pdf') {
+      return {
+        folder: 'qpg_uploads',
+        format: 'pdf',
+        resource_type: 'raw'
+      };
+    }
+    return {
+      folder: 'qpg_uploads',
+      allowed_formats: ['jpg', 'png', 'jpeg', 'svg', 'webp'],
+      transformation: [{ width: 1000, height: 1000, crop: 'limit' }]
+    };
+  }
 });
 
 module.exports = { cloudinary, storage };

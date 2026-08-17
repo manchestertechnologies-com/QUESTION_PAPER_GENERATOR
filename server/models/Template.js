@@ -13,6 +13,7 @@ const TemplateSchema = new mongoose.Schema({
     instructions: { type: String, default: '' },
     footerText: { type: String, default: '' },
     watermarkText: { type: String, default: '' },
+    templateType: { type: String, enum: ['LOGO', 'HEADER', 'FULL_PAPER'], default: 'FULL_PAPER' },
     createdAt: { type: Date, default: Date.now }
 });
 

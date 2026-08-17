@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import MathRenderer from '../../components/MathRenderer';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -11,9 +10,6 @@ export default function Scorecard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('summary');
-    const [expandedSolutions, setExpandedSolutions] = useState({});
-    const [expandedSolutionsData, setExpandedSolutionsData] = useState({});
-    const [loadingSolutions, setLoadingSolutions] = useState({});
     const [leaderboard, setLeaderboard] = useState([]);
     const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
@@ -32,34 +28,7 @@ export default function Scorecard() {
         return m > 0 ? `${m}m ${s}s` : `${s}s`;
     };
 
-    const toggleSolution = async (qIndex, questionId, savedSolutionText) => {
-        if (expandedSolutions[qIndex]) {
-            setExpandedSolutions(prev => ({ ...prev, [qIndex]: false }));
-            return;
-        }
 
-        if (savedSolutionText || expandedSolutionsData[qIndex]) {
-            setExpandedSolutions(prev => ({ ...prev, [qIndex]: true }));
-            return;
-        }
-
-        if (!questionId) {
-            alert('Cannot generate solution: Original question ID is missing.');
-            return;
-        }
-
-        setLoadingSolutions(prev => ({ ...prev, [qIndex]: true }));
-        try {
-            const res = await api.post(`/api/questions/${questionId}/solve`);
-            setExpandedSolutionsData(prev => ({ ...prev, [qIndex]: res.data }));
-            setExpandedSolutions(prev => ({ ...prev, [qIndex]: true }));
-        } catch (err) {
-            console.error('Failed to load solution:', err);
-            alert('Could not retrieve solution. Please try again.');
-        } finally {
-            setLoadingSolutions(prev => ({ ...prev, [qIndex]: false }));
-        }
-    };
 
     useEffect(() => {
         api.get(`/api/exams/${examId}/scorecard/${sessionId}`)
@@ -68,83 +37,9 @@ export default function Scorecard() {
     }, [examId, sessionId]);
 
     const downloadPDF = () => {
-        const doc = new jsPDF();
-        
-        // Institutional/Exam Title Header Band
-        doc.setFillColor(15, 23, 42); // Navy
-        doc.rect(0, 0, 210, 40, 'F');
-        
-        doc.setTextColor(212, 175, 55); // Gold
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(20);
-        doc.text(data.examTitle || 'Exam Scorecard', 105, 18, { align: 'center' });
-        
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`EXAM SCORECARD | DURATION: ${data.durationMinutes || 180} MINS`, 105, 28, { align: 'center' });
-        
-        // Student Details Section
-        doc.setTextColor(15, 23, 42);
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text("STUDENT DETAILS", 15, 52);
-        
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(212, 175, 55);
-        doc.line(15, 55, 195, 55);
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        
-        const detailsData = [
-            ['Student Name:', data.studentName || 'N/A', 'Exam Type:', data.examType || 'N/A'],
-            ['Email:', data.studentEmail || 'N/A', 'Submission:', data.submittedAt ? new Date(data.submittedAt).toLocaleString('en-IN') : 'N/A'],
-            ['Correct Answers:', String(data.correctAnswers || 0), 'Incorrect Answers:', String(data.wrongAnswers || 0)],
-            ['Unattempted:', String((data.totalQuestions || 0) - (data.correctAnswers || 0) - (data.wrongAnswers || 0)), 'Final Marks Obtained:', `${data.score} / ${(data.totalQuestions || 0) * 4}`]
-        ];
-        
-        doc.autoTable({
-            startY: 59,
-            body: detailsData,
-            theme: 'plain',
-            styles: { fontSize: 9, cellPadding: 2.5 },
-            columnStyles: {
-                0: { fontStyle: 'bold', width: 45 },
-                1: { width: 55 },
-                2: { fontStyle: 'bold', width: 45 },
-                3: { width: 45 }
-            }
-        });
-        
-        // Weak Areas Section
-        const nextY = doc.previousAutoTable.finalY + 12;
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text("WEAK AREAS ANALYSIS (ITEM ANALYSIS)", 15, nextY);
-        doc.line(15, nextY + 3, 195, nextY + 3);
-        
-        const weakData = data.weakAreas && data.weakAreas.length > 0
-            ? data.weakAreas.map(w => [w.chapter || 'N/A', `${w.incorrect} Incorrect Answers`])
-            : [['No weak areas identified.', '100% Concept Mastery!']];
-
-        doc.autoTable({
-            startY: nextY + 8,
-            head: [['Chapter / Topic', 'Analysis Details']],
-            body: weakData,
-            theme: 'grid',
-            headStyles: { fillColor: [15, 23, 42], textColor: [212, 175, 55], fontStyle: 'bold' },
-            styles: { fontSize: 9, cellPadding: 3 }
-        });
-        
-        const endY = doc.previousAutoTable.finalY + 15;
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'italic');
-        doc.setTextColor(120, 120, 120);
-        doc.text("This is an official assessment scorecard generated by the Coaching Exam Portal.", 105, endY, { align: 'center' });
-        
-        // Save file
-        doc.save(`${data.studentName || 'Scorecard'}_Result.pdf`);
+        const token = localStorage.getItem('token');
+        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${examId}/pdf-report/${sessionId}?token=${token}`;
+        window.open(downloadUrl, '_blank');
     };
 
     if (loading) return <div style={styles.center}>Loading scorecard...</div>;
@@ -336,7 +231,7 @@ export default function Scorecard() {
                                             {attempted && !data.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
                                             {attempted && data.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
                                         </div>
-                                        <p style={styles.reviewQText} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }} />
+                                        <MathRenderer style={styles.reviewQText} text={q.questionText} />
                                         
                                         {q.type === 'numerical' || !q.options || q.options.length === 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400 }}>
@@ -345,7 +240,7 @@ export default function Scorecard() {
                                                     background: attempted ? (isCorrect ? '#dcfce7' : '#fee2e2') : '#f9fafb',
                                                     border: attempted ? (isCorrect ? '1.5px solid #10b981' : '1.5px solid #ef4444') : '1.5px solid #e5e7eb'
                                                 }}>
-                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <span dangerouslySetInnerHTML={{ __html: sanitize(attempted ? q.selectedOption : 'Skipped') }} />
+                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? q.selectedOption : 'Skipped'} />
                                                 </div>
                                                 {!data.answerKeyHidden && (
                                                     <div style={{
@@ -353,7 +248,7 @@ export default function Scorecard() {
                                                         background: '#dcfce7',
                                                         border: '1.5px solid #10b981'
                                                     }}>
-                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <span dangerouslySetInnerHTML={{ __html: sanitize(q.correctAnswer) }} />
+                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <MathRenderer inline={true} text={q.correctAnswer} />
                                                     </div>
                                                 )}
                                             </div>
@@ -369,7 +264,7 @@ export default function Scorecard() {
                                                             background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
                                                             border: isCorrectOpt ? '1.5px solid #10b981' : isSelected ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb'
                                                         }}>
-                                                            <span style={styles.reviewOptLabel}>{label}.</span> <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }} />
+                                                            <span style={styles.reviewOptLabel}>{label}.</span> <MathRenderer inline={true} text={opt} />
                                                             {isSelected && <span style={{ marginLeft: 8, fontSize: 12 }}>← Your Answer</span>}
                                                             {isCorrectOpt && <span style={{ marginLeft: 8, fontSize: 12, color: '#10b981' }}>✓ Correct</span>}
                                                         </div>

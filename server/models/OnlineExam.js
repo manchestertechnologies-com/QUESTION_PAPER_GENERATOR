@@ -26,6 +26,7 @@ const OnlineExamSchema = new mongoose.Schema({
     duration_minutes: { type: Number, default: 180 },
     status: { type: String, enum: ['draft', 'scheduled', 'live', 'ended'], default: 'draft' },
     shuffleQuestions: { type: Boolean, default: false },
+    examMode: { type: String, enum: ['ONLINE', 'OFFLINE'], default: 'ONLINE' },
     sections: [{
         sectionName: String,
         numQuestions: Number,

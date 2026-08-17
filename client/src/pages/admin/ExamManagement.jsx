@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 const EXAM_TYPES = ['JEE', 'NEET', 'CET'];
 const STATUS_COLORS = {
@@ -92,7 +93,9 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
     };
 
     const handleWordExport = () => {
-        exportToWord('.print-area', `${exam.title.replace(/\s+/g, '_')}.doc`, settings);
+        const token = localStorage.getItem('token');
+        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${exam._id}/export-word?token=${token}`;
+        window.open(downloadUrl, '_blank');
     };
 
     const seededShuffle = (arr, seed) => {
@@ -501,11 +504,11 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ display: 'grid', gridTemplateColumns: settings.bilingualMode ? '1fr 1fr' : '1fr', gap: '20px' }}>
                                                         <div>
-                                                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                                            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} text={q.questionText} />
                                                         </div>
                                                         {settings.bilingualMode && (
                                                             <div style={{ borderLeft: '1.5px dashed #ccc', paddingLeft: '20px' }}>
-                                                                <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0, color: '#374151', fontFamily: 'sans-serif', fontStyle: 'italic' }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionTextTranslation || '<span style="font-size:11px;color:#9ca3af">[No Translation]</span>') }}></p>
+                                                                <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0, color: '#374151', fontFamily: 'sans-serif', fontStyle: 'italic' }} text={q.questionTextTranslation || '<span style="font-size:11px;color:#9ca3af">[No Translation]</span>'} />
                                                             </div>
                                                         )}
                                                     </div>
@@ -530,7 +533,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                                 {q.options.map((opt, i) => (
                                                     <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline' }}>
                                                         <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
-                                                        <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
+                                                        <MathRenderer inline={true} text={opt} />
                                                         {settings.bilingualMode && q.optionsTranslation?.[i] && (
                                                             <span style={{ color: '#6b7280', fontSize: '11px', fontFamily: 'sans-serif', fontStyle: 'italic', marginLeft: '6px' }}>
                                                                 / {q.optionsTranslation[i]}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 // ── Palette States ──────────────────────────────────────────────
 // not_visited: #6b7280 (grey)
@@ -387,7 +388,7 @@ export default function ExamEngine() {
 
                         {currentQ.type === 'STATEMENT_BASED' && (
                             <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6', color: '#1f2937' }}>
-                                <p style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: sanitize(currentQ.questionText) }}></p>
+                                <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={currentQ.questionText} />
                                 {currentQ.statements?.map((stmt, idx) => (
                                     <p key={idx} style={{ marginLeft: '1rem', marginBottom: '0.5rem' }}><strong>Statement {idx + 1}:</strong> {stmt}</p>
                                 ))}
@@ -396,7 +397,7 @@ export default function ExamEngine() {
 
                         {currentQ.type === 'MATCH_FOLLOWING' && (
                             <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', color: '#1f2937' }}>
-                                <p style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} dangerouslySetInnerHTML={{ __html: sanitize(currentQ.questionText) }}></p>
+                                <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={currentQ.questionText} />
                                 <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', background: '#f9fafb', maxWidth: '500px', marginBottom: '1rem' }}>
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
@@ -419,7 +420,7 @@ export default function ExamEngine() {
                         )}
 
                         {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (
-                            <p style={styles.qText} dangerouslySetInnerHTML={{ __html: sanitize(currentQ.questionText) }} />
+                            <MathRenderer style={styles.qText} text={currentQ.questionText} />
                         )}
                         {currentQ.imageUrl && (
                             <img src={currentQ.imageUrl} alt="Question" style={styles.qImage} />
@@ -532,7 +533,7 @@ export default function ExamEngine() {
                                         return (
                                             <div key={i} style={styles.optionTextLine}>
                                                 <span style={styles.optionTextLabel}>{label}.</span>
-                                                <span style={styles.optionTextContent} dangerouslySetInnerHTML={{ __html: sanitize(opt) }} />
+                                                <MathRenderer inline={true} style={styles.optionTextContent} text={opt} />
                                             </div>
                                         );
                                     })}

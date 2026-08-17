@@ -13,8 +13,8 @@ const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
     fileFilter: (req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) cb(null, true);
-        else cb(new Error('Only image files are allowed'), false);
+        if (file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf') cb(null, true);
+        else cb(new Error('Only image and PDF files are allowed'), false);
     }
 });
 
@@ -40,6 +40,7 @@ router.post('/', [auth, checkRole(['admin']), upload.single('template')], async 
             description: req.body.description || '',
             uploadedBy: req.user.id,
             fileUrl,
+            templateType: req.body.templateType || 'FULL_PAPER',
             institutionName: req.body.institutionName || '',
             address: req.body.address || '',
             headerText: req.body.headerText || '',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 import * as XLSX from 'xlsx';
 
 const AddQuestion = () => {
@@ -766,19 +767,19 @@ const AddQuestion = () => {
                             {/* Dynamic Display of Question Content */}
                             {q.type === 'ASSERTION_REASON' ? (
                                 <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                    <p><strong>Assertion (A):</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.assertion) }}></span></p>
-                                    <p><strong>Reason (R):</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(q.reason) }}></span></p>
+                                    <p><strong>Assertion (A):</strong> <MathRenderer inline={true} text={q.assertion} /></p>
+                                    <p><strong>Reason (R):</strong> <MathRenderer inline={true} text={q.reason} /></p>
                                 </div>
                             ) : q.type === 'STATEMENT_BASED' ? (
                                 <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                    <p dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                    <MathRenderer text={q.questionText} />
                                     {q.statements.map((stmt, idx) => (
-                                        <p key={idx}><strong>Statement {idx+1}:</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(stmt) }}></span></p>
+                                        <p key={idx}><strong>Statement {idx+1}:</strong> <MathRenderer inline={true} text={stmt} /></p>
                                     ))}
                                 </div>
                             ) : q.type === 'MATCH_FOLLOWING' ? (
                                 <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                    <p dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                    <MathRenderer text={q.questionText} />
                                     <div className="border border-gray-100 rounded-lg p-3 bg-gray-50/50 max-w-md">
                                         <table className="w-full text-sm">
                                             <thead>
@@ -790,8 +791,8 @@ const AddQuestion = () => {
                                             <tbody>
                                                 {q.matchPairs?.map((pair, idx) => (
                                                     <tr key={idx}>
-                                                        <td className="py-1">{String.fromCharCode(65+idx)}. <span dangerouslySetInnerHTML={{ __html: sanitize(pair.left) }}></span></td>
-                                                        <td className="py-1">{idx+1}. <span dangerouslySetInnerHTML={{ __html: sanitize(pair.right) }}></span></td>
+                                                        <td className="py-1">{String.fromCharCode(65+idx)}. <MathRenderer inline={true} text={pair.left} /></td>
+                                                        <td className="py-1">{idx+1}. <MathRenderer inline={true} text={pair.right} /></td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -799,7 +800,7 @@ const AddQuestion = () => {
                                     </div>
                                 </div>
                             ) : (
-                                <p className="mt-2 text-base text-gray-900 font-medium whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                <MathRenderer className="mt-2 text-base text-gray-900 font-medium whitespace-pre-wrap" text={q.questionText} />
                             )}
 
                             {q.imageUrl && (
@@ -811,13 +812,13 @@ const AddQuestion = () => {
                             {(q.type === 'MCQ' || q.type === 'DIAGRAM_BASED' || q.type === 'ASSERTION_REASON' || q.type === 'STATEMENT_BASED' || q.type === 'MATCH_FOLLOWING') && q.options && q.options.length > 0 && (
                                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-100">
                                     {q.options.map((opt, idx) => (
-                                        <div key={idx} className="flex"><strong className="mr-1">{String.fromCharCode(65+idx)})</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span></div>
+                                        <div key={idx} className="flex"><strong className="mr-1">{String.fromCharCode(65+idx)})</strong> <MathRenderer inline={true} text={opt} /></div>
                                     ))}
                                 </div>
                             )}
 
                             <div className="mt-3 text-sm font-bold text-gray-700">
-                                Correct Answer: <span className="text-navy" dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}></span>
+                                Correct Answer: <MathRenderer inline={true} className="text-navy" text={q.answer} />
                             </div>
                             {q.type === 'NUMERICAL' && q.numericalTolerance > 0 && (
                                 <div className="text-xs text-gray-500">Tolerance range: +/- {q.numericalTolerance}</div>
@@ -829,7 +830,7 @@ const AddQuestion = () => {
                                         <span>💡</span> Detailed Solution
                                     </h5>
                                     {q.solutionText && (
-                                        <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2" dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}></p>
+                                        <MathRenderer className="text-sm text-gray-700 whitespace-pre-wrap mb-2" text={q.solutionText} />
                                     )}
                                     {q.solutionImageUrl && (
                                         <div className="mt-2">

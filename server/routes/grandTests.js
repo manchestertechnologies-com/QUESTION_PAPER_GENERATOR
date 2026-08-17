@@ -23,6 +23,7 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
             examType,
             academicYearLevel,
             subject: subject || 'Mixed',
+            templateId: req.body.templateId || null,
             uploadedBy: req.user.id
         });
         await gtPaper.save();
@@ -67,7 +68,7 @@ router.get('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => 
 // @access  Admin
 router.put('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { title, code, examType, academicYearLevel, subject, questions } = req.body;
+        const { title, code, examType, academicYearLevel, subject, questions, templateId } = req.body;
         const paper = await GrandTestPaper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Grand Test not found' });
 
@@ -77,6 +78,7 @@ router.put('/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => 
         if (academicYearLevel) paper.academicYearLevel = academicYearLevel;
         if (subject) paper.subject = subject;
         if (questions) paper.questions = questions;
+        if (templateId !== undefined) paper.templateId = templateId;
 
         await paper.save();
         res.json(paper);

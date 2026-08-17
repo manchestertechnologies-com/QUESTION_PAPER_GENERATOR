@@ -3,6 +3,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 // ─── Small helper: toast notification ───────────────────────────────────────
 const Toast = ({ msg, type, onClose }) => {
@@ -835,7 +836,7 @@ const CreatePaper = () => {
                                         <span className="font-semibold text-[10px] bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-100">{q.type}</span>
                                         <span className={`font-semibold text-[10px] px-2 py-1 rounded-md border ${q.level === 'hard' ? 'bg-orange-50 text-orange-700 border-orange-100' : q.level === 'medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-100' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>{q.level}</span>
                                     </div>
-                                    <div className="text-sm text-gray-700 line-clamp-3 font-medium" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></div>
+                                    <MathRenderer className="text-sm text-gray-700 line-clamp-3 font-medium" text={q.questionText} />
                                 </div>
                             </div>
                         ))}
@@ -858,9 +859,9 @@ const CreatePaper = () => {
                                     <span className="font-semibold text-xs bg-gray-50 text-gray-600 px-2 py-1 rounded-md border border-gray-200">Class: {previewQuestion.classes?.join(',')}</span>
                                     <span className="font-semibold text-xs bg-green-50 text-green-700 px-2 py-1 rounded-md border border-green-100">{previewQuestion.type}</span>
                                 </div>
-                                <p 
+                                <MathRenderer 
                                     className="text-gray-800 font-medium whitespace-pre-wrap mb-6 text-sm leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: sanitize(previewQuestion.questionText) }}
+                                    text={previewQuestion.questionText}
                                 />
                                 {previewQuestion.imageUrl && <div className="mb-6"><img src={previewQuestion.imageUrl} alt="Question Reference" className="max-w-full rounded border border-gray-200" /></div>}
                                 {previewQuestion.type === 'MCQ' && previewQuestion.options && (
@@ -868,7 +869,7 @@ const CreatePaper = () => {
                                         {previewQuestion.options.map((opt, i) => (
                                             <li key={i} className="flex items-center gap-3 font-medium">
                                                 <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{String.fromCharCode(65 + i)}</span>
-                                                <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }} />
+                                                <MathRenderer inline={true} text={opt} />
                                             </li>
                                         ))}
                                     </ul>

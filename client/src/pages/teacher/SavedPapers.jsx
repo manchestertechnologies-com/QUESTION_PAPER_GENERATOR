@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { exportToWord } from '../../utils/exportWord';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 /* ─── Inline styles ─── */
 const S = {
@@ -295,6 +295,12 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
             setGeneratingSolutions(prev => ({ ...prev, [qId]: false }));
         }
     };
+
+    const handleWordExport = () => {
+        const token = localStorage.getItem('token');
+        const downloadUrl = `${api.defaults.baseURL || ''}/api/papers/${paperData._id}/export-word?token=${token}`;
+        window.open(downloadUrl, '_blank');
+    };
     
     // Paper Settings State
     const [settings, setSettings] = useState({
@@ -371,6 +377,7 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                         {paperData.status?.toLowerCase() === 'approved' ? (
                             <>
                                 <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
+                                <button style={{ ...S.btnPrint, background: '#7c3aed', marginLeft: '10px' }} onClick={handleWordExport}>⬇️ Export Word</button>
                             </>
                         ) : (
                             <span style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', padding: '0 10px' }}>
@@ -596,7 +603,7 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                     <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
                         <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
                         <div style={{ flex: 1 }}>
-                            <p style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} text={q.questionText} />
                             {q.imageUrl && (
                                 <div style={{ marginTop: '12px', marginBottom: '8px' }}>
                                     <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
@@ -618,7 +625,7 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                         {q.options.map((opt, i) => (
                             <div key={i} style={{ display: 'flex' }}>
                                 <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
-                                <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span>
+                                <MathRenderer inline={true} text={opt} />
                             </div>
                         ))}
                     </div>
@@ -639,12 +646,11 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                         {q.answer && (
                             <div style={{ marginBottom: '10px', fontSize: '14px' }}>
                                 <strong style={{ color: '#4b5563' }}>Correct Answer / Key:</strong>{' '}
-                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bbf7d0' }} dangerouslySetInnerHTML={{ __html: sanitize(q.answer) }}>
-                                </span>
+                                <MathRenderer inline={true} style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-block' }} text={q.answer} />
                             </div>
                         )}
                         {q.solutionText ? (
-                            <div 
+                            <MathRenderer 
                                 style={{ 
                                     color: '#1e1b4b', 
                                     whiteSpace: 'pre-wrap', 
@@ -655,33 +661,13 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                                     border: '1px solid #e0e7ff',
                                     fontSize: '13px'
                                 }} 
-                                dangerouslySetInnerHTML={{ __html: sanitize(q.solutionText) }}
+                                text={q.solutionText}
                             />
                         ) : (
                             <div style={{ background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e0e7ff' }}>
-                                <span style={{ color: '#6b7280', fontStyle: 'italic', display: 'block', marginBottom: '10px' }}>
-                                    No detailed solution has been created for this question yet.
+                                <span style={{ color: '#6b7280', fontStyle: 'italic', display: 'block', fontSize: '13px' }}>
+                                    No detailed solution has been added for this question yet.
                                 </span>
-                                <button
-                                    onClick={() => onGenerateSolution(q._id)}
-                                    disabled={generatingSolutions[q._id]}
-                                    style={{
-                                        background: '#4f46e5',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        padding: '8px 16px',
-                                        fontSize: '11px',
-                                        fontWeight: 700,
-                                        cursor: 'pointer',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
-                                        transition: 'all 0.2s',
-                                        opacity: generatingSolutions[q._id] ? 0.5 : 1
-                                    }}
-                                >
-                                    {generatingSolutions[q._id] ? '🤖 Generating Solution...' : '🤖 Solve with Gemini AI'}
-                                </button>
                             </div>
                         )}
                         {q.solutionImageUrl && (
@@ -739,27 +725,13 @@ const AnswerKeySheet = ({ paper, settings, onGenerateSolution, generatingSolutio
                             <td style={{ padding: '12px 8px', fontWeight: 700, verticalAlign: 'top', fontSize: '13px' }}>{idx + 1}</td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: '#4f46e5' }}>{q.type || 'MCQ'}</td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
-                                <span style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', fontSize: '12px', display: 'inline-block' }} dangerouslySetInnerHTML={{ __html: sanitize(q.answer || '—') }}>
-                                </span>
+                                <MathRenderer inline={true} style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', fontSize: '12px', display: 'inline-block' }} text={q.answer || '—'} />
                             </td>
                             <td style={{ padding: '12px 8px', verticalAlign: 'top', fontSize: '13px', color: '#1f2937' }}>
                                 {q.solutionText ? (
                                     <div style={{ whiteSpace: 'pre-wrap' }}>{q.solutionText}</div>
                                 ) : (
-                                    <div>
-                                        <span style={{ color: '#6b7280', fontStyle: 'italic', display: 'block', marginBottom: '8px', fontSize: '12px' }}>No explanation.</span>
-                                        <button
-                                            className="no-print"
-                                            onClick={() => onGenerateSolution(q._id)}
-                                            disabled={generatingSolutions[q._id]}
-                                            style={{
-                                                background: '#4f46e5', color: '#fff', border: 'none', borderRadius: '6px',
-                                                padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 600
-                                            }}
-                                        >
-                                            {generatingSolutions[q._id] ? 'Solving...' : '🤖 Solve with Gemini AI'}
-                                        </button>
-                                    </div>
+                                    <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '12px' }}>No detailed solution has been added for this question yet.</span>
                                 )}
                             </td>
                         </tr>

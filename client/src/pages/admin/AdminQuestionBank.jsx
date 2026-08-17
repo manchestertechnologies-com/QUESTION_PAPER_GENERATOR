@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
+import MathRenderer from '../../components/MathRenderer';
 
 
 const MultiSelectCheckbox = ({ label, options, selectedValues, onChange, disabled }) => {
@@ -311,14 +312,14 @@ const AdminQuestionBank = () => {
                             </div>
                         ) : q.type === 'STATEMENT_BASED' ? (
                             <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                <p dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                <MathRenderer text={q.questionText} />
                                 {q.statements?.map((stmt, idx) => (
                                     <p key={idx}><strong>Statement {idx+1}:</strong> {stmt}</p>
                                 ))}
                             </div>
                         ) : q.type === 'MATCH_FOLLOWING' ? (
                             <div className="space-y-2 mt-2 text-base text-gray-900 font-medium">
-                                <p dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                                <MathRenderer text={q.questionText} />
                                 <div className="border border-gray-100 rounded-lg p-3 bg-gray-50/50 max-w-md">
                                     <table className="w-full text-sm">
                                         <thead>
@@ -339,7 +340,7 @@ const AdminQuestionBank = () => {
                                 </div>
                             </div>
                         ) : (
-                            <p className="mt-2 text-base text-gray-900 font-medium whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitize(q.questionText) }}></p>
+                            <MathRenderer className="mt-2 text-base text-gray-900 font-medium whitespace-pre-wrap" text={q.questionText} />
                         )}
 
                         {q.imageUrl && (
@@ -351,7 +352,7 @@ const AdminQuestionBank = () => {
                         {(q.type === 'MCQ' || q.type === 'DIAGRAM_BASED' || q.type === 'ASSERTION_REASON' || q.type === 'STATEMENT_BASED' || q.type === 'MATCH_FOLLOWING') && q.options && q.options.length > 0 && (
                             <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-100">
                                 {q.options.map((opt, idx) => (
-                                    <div key={idx} className="flex"><strong className="mr-1">{String.fromCharCode(65+idx)})</strong> <span dangerouslySetInnerHTML={{ __html: sanitize(opt) }}></span></div>
+                                    <div key={idx} className="flex"><strong className="mr-1">{String.fromCharCode(65+idx)})</strong> <MathRenderer inline={true} text={opt} /></div>
                                 ))}
                             </div>
                         )}

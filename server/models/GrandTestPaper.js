@@ -9,6 +9,7 @@ const GrandTestPaperSchema = new mongoose.Schema({
     originalFileUrl: { type: String, default: '' },
     questions: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Question' }],
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', default: null },
     createdAt: { type: Date, default: Date.now }
 });
 
