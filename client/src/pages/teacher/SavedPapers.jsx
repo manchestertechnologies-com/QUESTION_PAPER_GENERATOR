@@ -296,11 +296,7 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
         }
     };
 
-    const handleWordExport = () => {
-        const token = localStorage.getItem('token');
-        const downloadUrl = `${api.defaults.baseURL || ''}/api/papers/${paperData._id}/export-word?token=${token}`;
-        window.open(downloadUrl, '_blank');
-    };
+    // Word export removed — use Print / Save PDF instead
     
     // Paper Settings State
     const [settings, setSettings] = useState({
@@ -375,10 +371,7 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                             ⚙️ Paper Settings
                         </button>
                         {paperData.status?.toLowerCase() === 'approved' ? (
-                            <>
-                                <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
-                                <button style={{ ...S.btnPrint, background: '#7c3aed', marginLeft: '10px' }} onClick={handleWordExport}>⬇️ Export Word</button>
-                            </>
+                            <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
                         ) : (
                             <span style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', padding: '0 10px' }}>
                                 Paper must be approved by admin to print or export.
@@ -480,17 +473,17 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                     boxSizing: 'border-box'
                 }}>
                     {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                        <div style={{ marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
-                            <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', margin: '0 auto', display: 'block' }} />
+                        <div style={{ marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '8px', textAlign: 'center' }}>
+                            <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '90px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                         </div>
                     )}
 
-                    <div style={{ marginBottom: '24px' }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <h1 style={{ fontSize: '22px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{paper.title}</h1>
-                            <p style={{ marginTop: '6px', color: '#333', fontWeight: 500 }}>Subject: {paper.subject} &nbsp;|&nbsp; Class: {paper.classes?.join(', ')}</p>
+                    <div style={{ marginBottom: '12px' }}>
+                        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+                            <h1 style={{ fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>{paper.title}</h1>
+                            <p style={{ margin: '2px 0', color: '#333', fontWeight: 500, fontSize: '13px' }}>Subject: {paper.subject} | Class: {paper.classes?.join(', ')}</p>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', borderBottom: '2px solid #000', paddingBottom: '8px', fontWeight: 700, fontSize: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '14px', marginTop: '4px' }}>
                             <span>Time: 3 Hours</span>
                             <span>Max. Marks: {totalMarks}</span>
                         </div>
@@ -526,17 +519,17 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                             boxSizing: 'border-box'
                         }}>
                             {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                                <div style={{ marginBottom: '20px', borderBottom: '2px solid #000', paddingBottom: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
-                                    <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', margin: '0 auto', display: 'block' }} />
+                                <div style={{ marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '8px', textAlign: 'center' }}>
+                                    <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '90px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                                 </div>
                             )}
 
-                            <div style={{ marginBottom: '24px' }}>
-                                <div style={{ textAlign: 'center' }}>
-                                    <h1 style={{ fontSize: '22px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{paper.title}</h1>
-                                    <p style={{ marginTop: '6px', color: '#333', fontWeight: 500 }}>Subject: {paper.subject} &nbsp;|&nbsp; Class: {paper.classes?.join(', ')}</p>
+                            <div style={{ marginBottom: '12px' }}>
+                                <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+                                    <h1 style={{ fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>{paper.title}</h1>
+                                    <p style={{ margin: '2px 0', color: '#333', fontWeight: 500, fontSize: '13px' }}>Subject: {paper.subject} | Class: {paper.classes?.join(', ')}</p>
                                 </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px', borderBottom: '2px solid #000', paddingBottom: '8px', fontWeight: 700, fontSize: '15px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '14px', marginTop: '4px' }}>
                                     <span>Time: 3 Hours</span>
                                     <span>Max. Marks: {totalMarks}</span>
                                 </div>
@@ -641,89 +634,224 @@ const getOptionsGridStyle = (options) => {
     };
 };
 
-const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, onGenerateSolution, generatingSolutions }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        {questions.map((q, idx) => (
-            <div key={q._id} style={{ color: '#111', breakInside: 'avoid-column' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
-                        <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
-                        <div style={{ flex: 1 }}>
-                            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} text={q.questionText} />
-                            {q.imageUrl && (
-                                <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
-                                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '130px', objectFit: 'contain' }} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    {showMarks && <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.9em' }}>[{formatMarks(q.type, classes)}]</span>}
+/* ── Renders a single question with full type support ── */
+const QuestionItem = ({ q, idx, showMarks, classes, showAnswerKey }) => {
+    const qLabel = optionLabel(0, classes) === 'A' ? 'alpha' : 'numeric';
+    const optLbl = (i) => optionLabel(i, classes);
+
+    // ── ASSERTION_REASON ──────────────────────────────────────────────────
+    const renderAssertionReason = () => {
+        const text = q.questionText || '';
+        // Try to split on Assertion/Reason prefixes
+        const assertMatch = text.match(/Assertion\s*(?:\(A\))?\s*[:\-]?\s*(.*?)(?=Reason\s*(?:\(R\))?|$)/si);
+        const reasonMatch = text.match(/Reason\s*(?:\(R\))?\s*[:\-]?\s*(.*?)$/si);
+        const assertion = assertMatch ? assertMatch[1].trim() : text;
+        const reason = reasonMatch ? reasonMatch[1].trim() : '';
+        return (
+            <div style={{ marginLeft: '4px' }}>
+                <div style={{ marginBottom: '4px' }}>
+                    <strong>Assertion (A):</strong> <MathRenderer inline text={assertion} />
                 </div>
-                {q.type === 'MCQ' && q.options && (
+                {reason && (
+                    <div style={{ marginBottom: '8px' }}>
+                        <strong>Reason (R):</strong> <MathRenderer inline text={reason} />
+                    </div>
+                )}
+                {q.imageUrl && (
+                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
+                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                    </div>
+                )}
+                <div style={{ marginTop: '8px', fontSize: '0.93em', color: '#444', marginLeft: '0' }}>
+                    {['Both (A) and (R) are true, and (R) is the correct explanation of (A)',
+                      'Both (A) and (R) are true, but (R) is not the correct explanation of (A)',
+                      '(A) is true, but (R) is false',
+                      '(A) is false, but (R) is true'
+                    ].map((opt, i) => (
+                        <div key={i} style={{ display: 'flex', marginBottom: '3px' }}>
+                            <span style={{ fontWeight: 600, marginRight: '6px', minWidth: '18px' }}>{optLbl(i)})</span>
+                            <span>{opt}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
+    // ── MATCH_FOLLOWING ───────────────────────────────────────────────────
+    const renderMatchFollowing = () => {
+        const pairs = q.matchPairs || [];
+        const colA = pairs.map(p => p.left || '');
+        const colB = [...pairs].sort(() => 0).map((p, i) => ({ label: String(i + 1), val: p.right || '' }));
+        return (
+            <div style={{ marginLeft: '4px' }}>
+                <MathRenderer style={{ marginBottom: '6px' }} text={q.questionText} />
+                {q.imageUrl && (
+                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
+                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                    </div>
+                )}
+                <table style={{ borderCollapse: 'collapse', width: '90%', margin: '8px 0 10px', fontSize: '0.95em' }}>
+                    <thead>
+                        <tr>
+                            <th style={{ border: '1px solid #ccc', padding: '5px 10px', background: '#f5f5f5', textAlign: 'left', fontWeight: 700 }}>Column I</th>
+                            <th style={{ border: '1px solid #ccc', padding: '5px 10px', background: '#f5f5f5', textAlign: 'left', fontWeight: 700 }}>Column II</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pairs.map((pair, pi) => (
+                            <tr key={pi}>
+                                <td style={{ border: '1px solid #ccc', padding: '5px 10px', verticalAlign: 'top' }}>
+                                    <strong>({String.fromCharCode(65 + pi)})</strong>&nbsp;<MathRenderer inline text={pair.left || ''} />
+                                </td>
+                                <td style={{ border: '1px solid #ccc', padding: '5px 10px', verticalAlign: 'top' }}>
+                                    <strong>({pi + 1})</strong>&nbsp;<MathRenderer inline text={pair.right || ''} />
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {q.options && q.options.length > 0 && (
                     <div style={getOptionsGridStyle(q.options)}>
                         {q.options.map((opt, i) => (
                             <div key={i} style={{ display: 'flex' }}>
-                                <span style={{ marginRight: '6px', fontWeight: 600 }}>{optionLabel(i, classes)})</span>
-                                <MathRenderer inline={true} text={opt} />
+                                <span style={{ fontWeight: 600, marginRight: '6px' }}>{optLbl(i)})</span>
+                                <MathRenderer inline text={opt} />
                             </div>
                         ))}
                     </div>
                 )}
-                {showAnswerKey && (
-                    <div className="no-print" style={{
-                        marginTop: '16px',
-                        padding: '16px',
-                        background: '#f5f7ff',
-                        border: '1px solid #c7d2fe',
-                        borderRadius: '12px',
-                        fontFamily: "system-ui, -apple-system, sans-serif",
-                        fontSize: '13px'
-                    }}>
-                        <div style={{ fontWeight: 800, color: '#312e81', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span>💡</span> Scheme of Evaluation & Hint
-                        </div>
-                        {q.answer && (
-                            <div style={{ marginBottom: '10px', fontSize: '14px' }}>
-                                <strong style={{ color: '#4b5563' }}>Correct Answer / Key:</strong>{' '}
-                                <MathRenderer inline={true} style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '2px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-block' }} text={q.answer} />
+            </div>
+        );
+    };
+
+    // ── STATEMENT_BASED ───────────────────────────────────────────────────
+    const renderStatementBased = () => {
+        const stmts = q.statements || [];
+        return (
+            <div style={{ marginLeft: '4px' }}>
+                <MathRenderer style={{ marginBottom: '6px' }} text={q.questionText} />
+                {stmts.length > 0 && (
+                    <div style={{ margin: '6px 0 8px 12px', borderLeft: '3px solid #ccc', paddingLeft: '10px' }}>
+                        {stmts.map((s, i) => (
+                            <div key={i} style={{ marginBottom: '3px' }}>
+                                <strong>Statement {i + 1}:</strong> <MathRenderer inline text={s} />
                             </div>
-                        )}
-                        {q.solutionText ? (
-                            <MathRenderer 
-                                style={{ 
-                                    color: '#1e1b4b', 
-                                    whiteSpace: 'pre-wrap', 
-                                    lineHeight: '1.6', 
-                                    background: '#fff', 
-                                    padding: '12px', 
-                                    borderRadius: '8px', 
-                                    border: '1px solid #e0e7ff',
-                                    fontSize: '13px'
-                                }} 
-                                text={q.solutionText}
-                            />
-                        ) : (
-                            <div style={{ background: '#fff', padding: '12px', borderRadius: '8px', border: '1px solid #e0e7ff' }}>
-                                <span style={{ color: '#6b7280', fontStyle: 'italic', display: 'block', fontSize: '13px' }}>
-                                    No detailed solution has been added for this question yet.
-                                </span>
+                        ))}
+                    </div>
+                )}
+                {q.imageUrl && (
+                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
+                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                    </div>
+                )}
+                {q.options && q.options.length > 0 && (
+                    <div style={getOptionsGridStyle(q.options)}>
+                        {q.options.map((opt, i) => (
+                            <div key={i} style={{ display: 'flex' }}>
+                                <span style={{ fontWeight: 600, marginRight: '6px' }}>{optLbl(i)})</span>
+                                <MathRenderer inline text={opt} />
                             </div>
-                        )}
-                        {q.solutionImageUrl && (
-                            <div style={{ marginTop: '12px' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                                    Diagrammatic Solution
-                                </div>
-                                <img 
-                                    src={q.solutionImageUrl} 
-                                    alt="Solution Diagram" 
-                                    style={{ maxHeight: '180px', borderRadius: '8px', border: '1px solid #e5e7eb', background: '#fff', padding: '6px', objectFit: 'contain' }} 
-                                />
-                            </div>
-                        )}
+                        ))}
                     </div>
                 )}
             </div>
+        );
+    };
+
+    // ── MCQ / DIAGRAM_BASED / default ────────────────────────────────────
+    const renderMCQ = () => (
+        <div style={{ marginLeft: '4px' }}>
+            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', margin: 0 }} text={q.questionText} />
+            {q.imageUrl && (
+                <div style={{ margin: '10px 0 6px', textAlign: 'center' }}>
+                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '180px', objectFit: 'contain', display: 'block', margin: '0 auto', pageBreakInside: 'avoid' }} />
+                </div>
+            )}
+            {q.options && q.options.length > 0 && (
+                <div style={getOptionsGridStyle(q.options)}>
+                    {q.options.map((opt, i) => (
+                        <div key={i} style={{ display: 'flex' }}>
+                            <span style={{ marginRight: '6px', fontWeight: 600 }}>{optLbl(i)})</span>
+                            <MathRenderer inline text={opt} />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+
+    // ── NUMERICAL ─────────────────────────────────────────────────────────
+    const renderNumerical = () => (
+        <div style={{ marginLeft: '4px' }}>
+            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', margin: 0 }} text={q.questionText} />
+            {q.imageUrl && (
+                <div style={{ margin: '10px 0 6px', textAlign: 'center' }}>
+                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '180px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                </div>
+            )}
+            <div style={{ marginTop: '6px', fontSize: '0.9em', color: '#555', fontStyle: 'italic' }}>
+                [Numerical — write the answer in the space provided]
+            </div>
+        </div>
+    );
+
+    const renderBody = () => {
+        switch (q.type) {
+            case 'ASSERTION_REASON': return renderAssertionReason();
+            case 'MATCH_FOLLOWING': return renderMatchFollowing();
+            case 'STATEMENT_BASED': return renderStatementBased();
+            case 'NUMERICAL': return renderNumerical();
+            case 'MCQ':
+            case 'DIAGRAM_BASED':
+            default: return renderMCQ();
+        }
+    };
+
+    return (
+        <div key={q._id} style={{ color: '#111', breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '12px' }}>
+                    <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.05em', minWidth: '24px' }}>{idx + 1}.</span>
+                    <div style={{ flex: 1 }}>{renderBody()}</div>
+                </div>
+                {showMarks && (
+                    <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.88em', marginLeft: '4px' }}>
+                        [{formatMarks(q.type, classes)}]
+                    </span>
+                )}
+            </div>
+            {showAnswerKey && (
+                <div className="no-print" style={{
+                    marginTop: '12px', marginLeft: '28px',
+                    padding: '14px',
+                    background: '#f5f7ff',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: '10px',
+                    fontSize: '13px'
+                }}>
+                    <div style={{ fontWeight: 800, color: '#312e81', marginBottom: '6px' }}>💡 Answer & Hint</div>
+                    {q.answer && (
+                        <div style={{ marginBottom: '8px' }}>
+                            <strong>Correct Key:</strong>{' '}
+                            <MathRenderer inline style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '1px 7px', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-block' }} text={q.answer} />
+                        </div>
+                    )}
+                    {q.solutionText ? (
+                        <MathRenderer style={{ color: '#1e1b4b', whiteSpace: 'pre-wrap', lineHeight: '1.6', background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #e0e7ff', fontSize: '13px' }} text={q.solutionText} />
+                    ) : (
+                        <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '12px' }}>No solution added yet.</span>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {questions.map((q, idx) => (
+            <QuestionItem key={q._id} q={q} idx={idx} showMarks={showMarks} classes={classes} showAnswerKey={showAnswerKey} />
         ))}
     </div>
 );
