@@ -6,8 +6,16 @@ const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
     const containerRef = useRef(null);
     const safeText = typeof text === 'string' ? text : (text ? String(text) : '');
 
+    // Parse inline image blocks {{IMG::...}}
+    let htmlToRender = safeText;
+    if (htmlToRender.includes('{{IMG::')) {
+        htmlToRender = htmlToRender.replace(/\{\{IMG::(.*?)\}\}/gi, (match, src) => {
+            return `<img src="${src}" alt="Question Diagram" class="max-w-full max-h-64 object-contain rounded-lg shadow-sm mx-auto my-3" style="display: block; margin: 12px auto;" />`;
+        });
+    }
+
     useEffect(() => {
-        if (containerRef.current && safeText) {
+        if (containerRef.current && htmlToRender) {
             try {
                 renderMathInElement(containerRef.current, {
                     delimiters: [
@@ -22,9 +30,9 @@ const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
                 console.error('KaTeX rendering error:', err);
             }
         }
-    }, [safeText]);
+    }, [htmlToRender]);
 
-    const sanitizedHtml = sanitize(safeText);
+    const sanitizedHtml = sanitize(htmlToRender);
 
     if (inline) {
         return (

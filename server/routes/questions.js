@@ -271,6 +271,51 @@ router.post('/update/:id', [auth, checkRole(['admin', 'teacher']), upload.fields
     }
 });
 
+// @route   POST /api/questions/convert-numerical/:id
+// @desc    Convert an MCQ question into a Numerical question (clear options, change type)
+// @access  Teacher / Admin
+router.post('/convert-numerical/:id', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            // MongoDB update
+            const question = await Question.findById(req.params.id);
+            if (!question) return res.status(404).json({ msg: 'Question not found in MongoDB.' });
+
+            if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
+                return res.status(403).json({ msg: 'Access denied: not authorized to edit this subject question.' });
+            }
+
+            question.type = 'numerical';
+            question.options = [];
+            question.optionsTranslation = [];
+            await question.save();
+            return res.json({ msg: 'Question converted to Numerical successfully.', question });
+        } else {
+            // Supabase update
+            const question = await supabaseQuestions.getQuestionById(req.params.id);
+            if (!question) return res.status(404).json({ msg: 'Question not found in Supabase.' });
+
+            if (req.user.role !== 'admin' && question.subject !== req.user.subject) {
+                return res.status(403).json({ msg: 'Access denied: not authorized to edit this subject question.' });
+            }
+
+            // Map and update in Supabase
+            const updatedData = {
+                type: 'numerical',
+                options: [],
+                optionsTranslation: [],
+                answer: question.answer // Keep the existing correct answer as numerical value
+            };
+
+            const updated = await supabaseQuestions.updateQuestion(req.params.id, updatedData, req.user.id, req.user.name || 'User');
+            return res.json({ msg: 'Question converted to Numerical successfully.', question: updated });
+        }
+    } catch (err) {
+        console.error('Convert numerical error:', err.message);
+        res.status(500).json({ msg: 'Server error converting question to numerical.', error: err.message });
+    }
+});
+
 // @route   POST /api/questions/:id/generate-variant
 // @desc    Use Gemini AI to create a similar variant of a question
 // @access  Teacher / Admin

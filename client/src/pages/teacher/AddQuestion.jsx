@@ -247,19 +247,13 @@ const AddQuestion = () => {
         }
     };
 
-    // AI numerical conversion trigger from UI
-    const handleAIConvert = async (q) => {
-        if (window.confirm('Are you sure you want to rephrase this MCQ into a Numerical question using Gemini AI?')) {
+    // Direct numerical conversion trigger from UI (clears options in-place)
+    const handleConvertNumerical = async (q) => {
+        if (window.confirm('Are you sure you want to convert this MCQ into a Numerical question? This will remove all options.')) {
             try {
-                const res = await api.post(`/api/questions/convert-numerical/${q._id}`);
-                const { convertedQuestion } = res.data;
-                const confirmMsg = `Gemini Proposed Conversion:\n\nQuestion: ${convertedQuestion.questionText}\nAnswer: ${convertedQuestion.answer}\nSolution: ${convertedQuestion.solutionText}\n\nDo you want to save this as a derived Numerical Question?`;
-                
-                if (window.confirm(confirmMsg)) {
-                    await api.post(`/api/questions/confirm-conversion/${q._id}`, convertedQuestion);
-                    alert('Derived Numerical question created successfully!');
-                    fetchQuestions();
-                }
+                await api.post(`/api/questions/convert-numerical/${q._id}`);
+                alert('Question converted to Numerical successfully!');
+                fetchQuestions();
             } catch (err) {
                 alert('Conversion failed: ' + (err.response?.data?.msg || err.message));
             }
@@ -749,7 +743,7 @@ const AddQuestion = () => {
                         <div key={q._id} className="border border-gray-200 p-5 rounded-lg shadow-sm bg-white relative group hover:shadow-md transition">
                             <div className="absolute top-4 right-4 hidden group-hover:flex space-x-3 z-10">
                                 {q.type === 'MCQ' && (
-                                    <button onClick={() => handleAIConvert(q)} className="text-green-700 hover:text-green-900 text-sm font-bold bg-green-50 px-3 py-1 rounded">Convert to Numerical via AI</button>
+                                    <button onClick={() => handleConvertNumerical(q)} className="text-green-700 hover:text-green-900 text-sm font-bold bg-green-50 px-3 py-1 rounded">Convert to Numerical</button>
                                 )}
                                 <button onClick={() => handleEdit(q)} className="text-blue-600 hover:text-blue-800 text-sm font-bold bg-blue-50 px-3 py-1 rounded">Edit</button>
                                 <button onClick={() => handleDelete(q._id)} className="text-red-600 hover:text-red-800 text-sm font-bold bg-red-50 px-3 py-1 rounded">Delete</button>

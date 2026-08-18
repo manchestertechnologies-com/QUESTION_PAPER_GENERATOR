@@ -12,9 +12,9 @@ const CONFIG = {
         'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody',
         'math', 'mrow', 'mi', 'mn', 'mo', 'mfrac', 'msup', 'msub', 'mspace',
         'mtext', 'mover', 'munder', 'munderover', 'msqrt', 'mroot', 'mfenced',
-        'annotation', 'semantics'
+        'annotation', 'semantics', 'img'
     ],
-    ALLOWED_ATTR: ['class', 'style', 'colspan', 'rowspan', 'mathvariant', 'display'],
+    ALLOWED_ATTR: ['class', 'style', 'colspan', 'rowspan', 'mathvariant', 'display', 'src', 'alt'],
     FORBID_TAGS: ['script', 'object', 'embed', 'link', 'iframe', 'form', 'input'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur'],
     FORCE_BODY: false,
