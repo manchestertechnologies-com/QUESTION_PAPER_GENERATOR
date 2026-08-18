@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 // ─── Small helper: toast notification ───────────────────────────────────────
@@ -868,7 +868,7 @@ const CreatePaper = () => {
                                     <ul className="space-y-3 text-sm text-gray-600 mb-6">
                                         {previewQuestion.options.map((opt, i) => (
                                             <li key={i} className="flex items-center gap-3 font-medium">
-                                                <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{String.fromCharCode(65 + i)}</span>
+                                                <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{optionLabel(i, previewQuestion.classes)}</span>
                                                 <MathRenderer inline={true} text={opt} />
                                             </li>
                                         ))}
