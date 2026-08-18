@@ -511,7 +511,7 @@ const AdminPaperPreview = () => {
                                                                 </div>
                                                                 {q.imageUrl && (
                                                                     <div className="mt-4 mb-3 flex justify-center w-full">
-                                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain rounded-lg shadow-sm" />
+                                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-[70%] max-h-36 object-contain" />
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -566,7 +566,7 @@ const AdminPaperPreview = () => {
                                                 </div>
                                                 {q.imageUrl && (
                                                     <div className="mt-4 mb-3 flex justify-center w-full">
-                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain rounded-lg shadow-sm" />
+                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-[70%] max-h-36 object-contain" />
                                                     </div>
                                                 )}
                                             </div>

@@ -10,7 +10,7 @@ const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
     let htmlToRender = safeText;
     if (htmlToRender.includes('{{IMG::')) {
         htmlToRender = htmlToRender.replace(/\{\{IMG::(.*?)\}\}/gi, (match, src) => {
-            return `<img src="${src}" alt="Question Diagram" class="max-w-full max-h-64 object-contain rounded-lg shadow-sm mx-auto my-3" style="display: block; margin: 12px auto;" />`;
+            return `<img src="${src}" alt="Question Diagram" class="max-w-[70%] max-h-32 object-contain mx-auto my-2" style="display: block; margin: 8px auto;" />`;
         });
     }
 

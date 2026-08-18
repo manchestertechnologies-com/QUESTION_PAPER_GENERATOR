@@ -652,7 +652,7 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                             <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', fontSize: '1em', margin: 0 }} text={q.questionText} />
                             {q.imageUrl && (
                                 <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
-                                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain', borderRadius: '8px' }} />
+                                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '130px', objectFit: 'contain' }} />
                                 </div>
                             )}
                         </div>

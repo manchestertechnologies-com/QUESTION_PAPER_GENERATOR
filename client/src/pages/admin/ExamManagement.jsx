@@ -560,7 +560,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                                     </div>
                                                     {q.imageUrl && (
                                                         <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
-                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain', borderRadius: '8px' }} />
+                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '130px', objectFit: 'contain' }} />
                                                         </div>
                                                     )}
                                                 </div>
