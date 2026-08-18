@@ -142,15 +142,15 @@ const AdminDashboard = () => {
             <div className="flex-1 p-10 max-w-7xl mx-auto w-full">
                 <Routes>
                     <Route path="/" element={<DashboardHome />} />
-                    <Route path="/upload-template" element={<UploadTemplate />} />
-                    <Route path="/create-teacher" element={<CreateTeacher />} />
-                    <Route path="/subject/:subject" element={<SubjectDetails />} />
-                    <Route path="/preview/:paperId" element={<AdminPaperPreview />} />
-                    <Route path="/exams" element={<ExamManagement />} />
-                    <Route path="/results" element={<AdminResults />} />
-                    <Route path="/grand-tests" element={<GrandTestList />} />
-                    <Route path="/previous-year-papers" element={<PreviousYearPapers />} />
-                    <Route path="/exam-blueprints" element={<ExamBlueprints />} />
+                    <Route path="upload-template" element={<UploadTemplate />} />
+                    <Route path="create-teacher" element={<CreateTeacher />} />
+                    <Route path="subject/:subject" element={<SubjectDetails />} />
+                    <Route path="preview/:paperId" element={<AdminPaperPreview />} />
+                    <Route path="exams" element={<ExamManagement />} />
+                    <Route path="results" element={<AdminResults />} />
+                    <Route path="grand-tests" element={<GrandTestList />} />
+                    <Route path="previous-year-papers" element={<PreviousYearPapers />} />
+                    <Route path="exam-blueprints" element={<ExamBlueprints />} />
                 </Routes>
             </div>
         </div>
