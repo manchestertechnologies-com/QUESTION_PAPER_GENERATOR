@@ -37,3 +37,26 @@ export function sanitize(dirty) {
 export function safeHtml(dirty) {
     return { __html: sanitize(dirty) };
 }
+
+/**
+ * Returns the option label for a given index based on exam type.
+ * JEE → A, B, C, D   |   NEET / CET → 1, 2, 3, 4
+ * @param {number} idx - 0-based option index
+ * @param {string[]} classes - array of exam classes on the question (e.g. ['JEE'] or ['NEET'])
+ * @returns {string} - label string like 'A' or '1'
+ */
+export function optionLabel(idx, classes = []) {
+    const isJEE = Array.isArray(classes) && classes.some(c => c.toUpperCase() === 'JEE');
+    return isJEE ? String.fromCharCode(65 + idx) : String(idx + 1);
+}
+
+/**
+ * Strips QBP metadata tags from solution/answer text before display.
+ * Removes patterns like [QBP_DIFFICULTY:Medium], [QBP_TOPIC:...], etc.
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripQBPTags(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text.replace(/\[QBP_[A-Z_]+:[^\]]*\]/gi, '').trim();
+}

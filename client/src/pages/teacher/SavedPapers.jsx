@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 /* ─── Inline styles ─── */
@@ -663,7 +663,7 @@ const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey, 
                     <div style={getOptionsGridStyle(q.options)}>
                         {q.options.map((opt, i) => (
                             <div key={i} style={{ display: 'flex' }}>
-                                <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
+                                <span style={{ marginRight: '6px', fontWeight: 600 }}>{optionLabel(i, classes)})</span>
                                 <MathRenderer inline={true} text={opt} />
                             </div>
                         ))}

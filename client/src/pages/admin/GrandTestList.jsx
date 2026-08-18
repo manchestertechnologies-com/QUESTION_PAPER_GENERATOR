@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel, stripQBPTags } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 const GrandTestList = () => {
@@ -375,7 +375,7 @@ const GrandTestList = () => {
                                                 <p className="font-medium text-slate mb-2">{q.questionText}</p>
                                                 {q.options && q.options.length > 0 && (
                                                     <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mb-2">
-                                                        {q.options.map((o, oi) => <div key={oi}>{String.fromCharCode(65+oi)}) {o}</div>)}
+                                                        {q.options.map((o, oi) => <div key={oi}>{optionLabel(oi, selectedGT?.examType ? [selectedGT.examType] : [])}) {o}</div>)}
                                                     </div>
                                                 )}
                                                 <div className="font-bold text-navy">Answer: {q.answer}</div>
@@ -434,7 +434,7 @@ const GrandTestList = () => {
                                             <MathRenderer className="font-medium text-slate whitespace-pre-wrap mb-2" text={q.questionText} />
                                             {q.options && q.options.length > 0 && (
                                                 <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mb-2 border-t border-gray-100/50 pt-2 mt-2">
-                                                    {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <MathRenderer inline={true} text={o} /></div>)}
+                                                    {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{optionLabel(oi, q.classes || (selectedGT?.examType ? [selectedGT.examType] : []))}</span> <MathRenderer inline={true} text={o} /></div>)}
                                                 </div>
                                             )}
                                             {q.solutionText && (
@@ -706,7 +706,7 @@ const GrandTestList = () => {
                                         <MathRenderer className="font-medium text-slate mt-1" text={q.questionText || q.question} />
                                         {q.options && q.options.length > 0 && (
                                             <div className="grid grid-cols-2 gap-2 pl-4 text-slate/60 mt-1">
-                                                {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{String.fromCharCode(65+oi)})</span> <MathRenderer inline={true} text={o} /></div>)}
+                                                {q.options.map((o, oi) => <div key={oi} className="flex"><span className="mr-1">{optionLabel(oi, q.classes || (selectedGT?.examType ? [selectedGT.examType] : []))}</span> <MathRenderer inline={true} text={o} /></div>)}
                                             </div>
                                         )}
                                         <div className="font-bold text-green-700 mt-1">Correct Answer: <MathRenderer inline={true} text={q.answer || q.correct_option} /></div>

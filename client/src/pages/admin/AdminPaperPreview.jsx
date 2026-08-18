@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 const AdminPaperPreview = () => {
@@ -522,7 +522,7 @@ const AdminPaperPreview = () => {
                                                         <div className={`grid ${getOptionsGridClass(q.options)} mt-5 ml-8 text-base`}>
                                                             {q.options.map((opt, i) => (
                                                                 <div key={i} className="flex flex-wrap items-baseline">
-                                                                    <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>
+                                                                    <span className="mr-3 font-semibold">{optionLabel(i, q.classes)})</span>
                                                                     <MathRenderer inline={true} text={opt} />
                                                                     {bilingualMode && q.optionsTranslation?.[i] && (
                                                                         <span className="text-gray-500 font-sans text-xs ml-2 italic">
@@ -577,7 +577,7 @@ const AdminPaperPreview = () => {
                                         <div className={`grid ${getOptionsGridClass(q.options)} mt-5 ml-8 text-base`}>
                                             {q.options.map((opt, i) => (
                                                 <div key={i} className="flex flex-wrap items-baseline">
-                                                    <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>
+                                                    <span className="mr-3 font-semibold">{optionLabel(i, q.classes)})</span>
                                                     <MathRenderer inline={true} text={opt} />
                                                     {bilingualMode && q.optionsTranslation?.[i] && (
                                                         <span className="text-gray-500 font-sans text-xs ml-2 italic">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 const EXAM_TYPES = ['JEE', 'NEET', 'CET'];
@@ -571,7 +571,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                             <div style={getOptionsGridStyle(q.options)}>
                                                 {q.options.map((opt, i) => (
                                                     <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline' }}>
-                                                        <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>
+                                                        <span style={{ marginRight: '6px', fontWeight: 600 }}>{optionLabel(i, q.classes)})</span>
                                                         <MathRenderer inline={true} text={opt} />
                                                         {settings.bilingualMode && q.optionsTranslation?.[i] && (
                                                             <span style={{ color: '#6b7280', fontSize: '11px', fontFamily: 'sans-serif', fontStyle: 'italic', marginLeft: '6px' }}>

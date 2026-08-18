@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
-import { sanitize } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 
 
@@ -352,7 +352,7 @@ const AdminQuestionBank = () => {
                         {(q.type === 'MCQ' || q.type === 'DIAGRAM_BASED' || q.type === 'ASSERTION_REASON' || q.type === 'STATEMENT_BASED' || q.type === 'MATCH_FOLLOWING') && q.options && q.options.length > 0 && (
                             <div className="mt-4 grid grid-cols-2 gap-2 text-sm text-gray-700 bg-gray-50 p-3 rounded border border-gray-100">
                                 {q.options.map((opt, idx) => (
-                                    <div key={idx} className="flex"><strong className="mr-1">{String.fromCharCode(65+idx)})</strong> <MathRenderer inline={true} text={opt} /></div>
+                                    <div key={idx} className="flex"><strong className="mr-1">{optionLabel(idx, q.classes)})</strong> <MathRenderer inline={true} text={opt} /></div>
                                 ))}
                             </div>
                         )}
