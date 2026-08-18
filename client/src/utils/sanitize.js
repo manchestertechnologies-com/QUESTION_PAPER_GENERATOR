@@ -46,7 +46,7 @@ export function safeHtml(dirty) {
  * @returns {string} - label string like 'A' or '1'
  */
 export function optionLabel(idx, classes = []) {
-    const isJEE = Array.isArray(classes) && classes.some(c => c.toUpperCase() === 'JEE');
+    const isJEE = Array.isArray(classes) && classes.some(c => String(c).toUpperCase() === 'JEE');
     return isJEE ? String.fromCharCode(65 + idx) : String(idx + 1);
 }
 

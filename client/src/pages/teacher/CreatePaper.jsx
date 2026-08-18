@@ -864,16 +864,20 @@ const CreatePaper = () => {
                                     text={previewQuestion.questionText}
                                 />
                                 {previewQuestion.imageUrl && <div className="mb-6"><img src={previewQuestion.imageUrl} alt="Question Reference" className="max-w-full rounded border border-gray-200" /></div>}
-                                {previewQuestion.type === 'MCQ' && previewQuestion.options && (
-                                    <ul className="space-y-3 text-sm text-gray-600 mb-6">
-                                        {previewQuestion.options.map((opt, i) => (
-                                            <li key={i} className="flex items-center gap-3 font-medium">
-                                                <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{optionLabel(i, previewQuestion.classes)}</span>
-                                                <MathRenderer inline={true} text={opt} />
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                {previewQuestion.type === 'MCQ' && previewQuestion.options && (() => {
+                                    const bp = blueprints.find(b => b._id === selectedBlueprintId);
+                                    const bpExamType = bp?.examType ? [bp.examType] : previewQuestion.classes;
+                                    return (
+                                        <ul className="space-y-3 text-sm text-gray-600 mb-6">
+                                            {previewQuestion.options.map((opt, i) => (
+                                                <li key={i} className="flex items-center gap-3 font-medium">
+                                                    <span className="bg-gray-100 w-6 h-6 flex items-center justify-center rounded-full text-gray-500 font-bold text-xs">{optionLabel(i, bpExamType)}</span>
+                                                    <MathRenderer inline={true} text={opt} />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    );
+                                })()}
                                 {previewQuestion.answer && (
                                     <div className="mt-auto pt-4 border-t border-gray-100 text-sm bg-gray-50 p-4 rounded-xl">
                                         <span className="font-bold text-gray-700 block mb-1">Answer / Marking Scheme:</span>
