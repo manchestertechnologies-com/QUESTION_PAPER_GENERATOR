@@ -69,7 +69,13 @@ const ALLOWED_ORIGINS = [
 app.use(cors({
     origin: (origin, callback) => {
         // Allow no-origin (curl, Postman, server-to-server)
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+        const envOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [];
+        if (
+            !origin || 
+            ALLOWED_ORIGINS.includes(origin) || 
+            process.env.ALLOWED_ORIGINS === '*' || 
+            envOrigins.includes(origin)
+        ) {
             callback(null, true);
         } else {
             callback(new Error(`CORS: Origin ${origin} not allowed.`));
