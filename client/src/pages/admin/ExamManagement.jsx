@@ -11,6 +11,52 @@ const STATUS_COLORS = {
     ended: '#ef4444'
 };
 
+const getOptionsGridStyle = (options) => {
+    if (!options || options.length === 0) {
+        return {
+            display: 'grid',
+            gridTemplateColumns: '1fr',
+            gap: '8px 24px',
+            marginTop: '8px',
+            marginLeft: '24px',
+            fontSize: '0.95em'
+        };
+    }
+    
+    // Estimate clean text length of options (ignoring LaTeX commands for a better text length estimation)
+    const cleanLengths = options.map(opt => {
+        const cleanText = (opt || '')
+            .replace(/\\(text|mathrm|ce|begin|end){[^}]*}/g, '')
+            .replace(/\$\$?[^$]+\$\$?/g, '')
+            .replace(/[{}$_^[\]]/g, '')
+            .trim();
+        return cleanText.length;
+    });
+    
+    const maxLength = Math.max(...cleanLengths);
+    const totalLength = cleanLengths.reduce((a, b) => a + b, 0);
+    
+    let columns = '1fr';
+    let gap = '10px 24px';
+    
+    if (maxLength <= 15 && totalLength <= 60) {
+        columns = '1fr 1fr 1fr 1fr';
+        gap = '8px 16px';
+    } else if (maxLength <= 35 && totalLength <= 110) {
+        columns = '1fr 1fr';
+        gap = '8px 24px';
+    }
+    
+    return {
+        display: 'grid',
+        gridTemplateColumns: columns,
+        gap: gap,
+        marginTop: '8px',
+        marginLeft: '24px',
+        fontSize: '0.95em'
+    };
+};
+
 // ─── Exam Live Countdown Component ───
 function ExamCountdown({ startTime, endTime, status, onZero }) {
     const [timeLeft, setTimeLeft] = useState('');
@@ -513,8 +559,8 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                                         )}
                                                     </div>
                                                     {q.imageUrl && (
-                                                        <div style={{ marginTop: '12px', marginBottom: '8px' }}>
-                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain' }} />
+                                                        <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
+                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '100%', maxHeight: '250px', objectFit: 'contain', borderRadius: '8px' }} />
                                                         </div>
                                                     )}
                                                 </div>
@@ -522,14 +568,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                             {settings.showMarks && <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.9em' }}>[{formatMarks(q.type)}]</span>}
                                         </div>
                                         {q.options && q.options.length > 0 && (
-                                            <div style={{ 
-                                                display: 'grid', 
-                                                gridTemplateColumns: '1fr 1fr', 
-                                                gap: '8px 24px', 
-                                                marginTop: '8px', 
-                                                marginLeft: '24px', 
-                                                fontSize: '0.95em' 
-                                            }}>
+                                            <div style={getOptionsGridStyle(q.options)}>
                                                 {q.options.map((opt, i) => (
                                                     <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline' }}>
                                                         <span style={{ marginRight: '6px', fontWeight: 600 }}>{String.fromCharCode(65 + i)})</span>

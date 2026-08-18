@@ -88,11 +88,21 @@ async function textToRuns(text) {
 async function makeOptionsElement(options) {
     if (!options || options.length === 0) return [];
     
-    // Check if options can fit side-by-side (2x2 grid)
-    const isShort = options.every(opt => opt.length < 30);
+    // Estimate clean text length of options (ignoring LaTeX commands for a better text length estimation)
+    const cleanLengths = options.map(opt => {
+        const cleanText = (opt || '')
+            .replace(/\\(text|mathrm|ce|begin|end){[^}]*}/g, '')
+            .replace(/\$\$?[^$]+\$\$?/g, '')
+            .replace(/[{}$_^[\]]/g, '')
+            .trim();
+        return cleanText.length;
+    });
+    
+    const maxLength = Math.max(...cleanLengths);
+    const totalLength = cleanLengths.reduce((a, b) => a + b, 0);
     const labels = ['A', 'B', 'C', 'D', 'E'];
     
-    if (isShort && options.length === 4) {
+    if (options.length === 4) {
         const cellA = new TableCell({
             children: [new Paragraph({ children: [new TextRun({ text: 'A) ', bold: true }), ...(await textToRuns(options[0]))] })],
             borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }
@@ -109,31 +119,48 @@ async function makeOptionsElement(options) {
             children: [new Paragraph({ children: [new TextRun({ text: 'D) ', bold: true }), ...(await textToRuns(options[3]))] })],
             borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE } }
         });
-        
-        return [
-            new Table({
-                width: { size: 100, type: WidthType.PERCENTAGE },
-                rows: [
-                    new TableRow({ children: [cellA, cellB] }),
-                    new TableRow({ children: [cellC, cellD] })
-                ]
-            }),
-            new Paragraph({ text: '', spacing: { after: 120 } })
-        ];
-    } else {
-        const paragraphs = [];
-        for (let i = 0; i < options.length; i++) {
-            paragraphs.push(new Paragraph({
-                children: [
-                    new TextRun({ text: `${labels[i]}) `, bold: true }),
-                    ...(await textToRuns(options[i]))
-                ],
-                spacing: { after: 80 }
-            }));
+
+        // 1. If very short, fit all 4 side-by-side in a single row
+        if (maxLength <= 15 && totalLength <= 60) {
+            return [
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [
+                        new TableRow({ children: [cellA, cellB, cellC, cellD] })
+                    ]
+                }),
+                new Paragraph({ text: '', spacing: { after: 120 } })
+            ];
         }
-        paragraphs.push(new Paragraph({ text: '', spacing: { after: 120 } }));
-        return paragraphs;
+        
+        // 2. If moderately short, fit 2x2 grid (A B / C D)
+        if (maxLength <= 35 && totalLength <= 110) {
+            return [
+                new Table({
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                    rows: [
+                        new TableRow({ children: [cellA, cellB] }),
+                        new TableRow({ children: [cellC, cellD] })
+                    ]
+                }),
+                new Paragraph({ text: '', spacing: { after: 120 } })
+            ];
+        }
     }
+
+    // 3. Otherwise (or if not exactly 4 options), render one paragraph per option
+    const paragraphs = [];
+    for (let i = 0; i < options.length; i++) {
+        paragraphs.push(new Paragraph({
+            children: [
+                new TextRun({ text: `${labels[i]}) `, bold: true }),
+                ...(await textToRuns(options[i]))
+            ],
+            spacing: { after: 80 }
+        }));
+    }
+    paragraphs.push(new Paragraph({ text: '', spacing: { after: 120 } }));
+    return paragraphs;
 }
 
 /**

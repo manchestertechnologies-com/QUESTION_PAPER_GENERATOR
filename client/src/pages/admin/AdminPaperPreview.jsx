@@ -87,6 +87,31 @@ const AdminPaperPreview = () => {
         return type;
     };
 
+    const getOptionsGridClass = (options) => {
+        if (!options || options.length === 0) return 'grid-cols-1 gap-y-2';
+        
+        // Estimate clean text length of options (ignoring LaTeX commands for a better text length estimation)
+        const cleanLengths = options.map(opt => {
+            const cleanText = (opt || '')
+                .replace(/\\(text|mathrm|ce|begin|end){[^}]*}/g, '')
+                .replace(/\$\$?[^$]+\$\$?/g, '')
+                .replace(/[{}$_^[\]]/g, '')
+                .trim();
+            return cleanText.length;
+        });
+        
+        const maxLength = Math.max(...cleanLengths);
+        const totalLength = cleanLengths.reduce((a, b) => a + b, 0);
+        
+        if (maxLength <= 15 && totalLength <= 60) {
+            return 'grid-cols-4 gap-x-4 gap-y-2';
+        } else if (maxLength <= 35 && totalLength <= 110) {
+            return 'grid-cols-2 gap-x-8 gap-y-3';
+        } else {
+            return 'grid-cols-1 gap-y-2.5';
+        }
+    };
+
     if (loading) return <div className="p-8 text-center text-xl font-bold">Loading Paper Format...</div>;
     if (!selectedPaper) return <div className="p-8 text-center text-red-500 font-bold text-xl">Paper not found.</div>;
 
@@ -485,8 +510,8 @@ const AdminPaperPreview = () => {
                                                                     )}
                                                                 </div>
                                                                 {q.imageUrl && (
-                                                                    <div className="mt-4 mb-3">
-                                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain" />
+                                                                    <div className="mt-4 mb-3 flex justify-center w-full">
+                                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain rounded-lg shadow-sm" />
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -494,7 +519,7 @@ const AdminPaperPreview = () => {
                                                         <span className="font-bold whitespace-nowrap text-base">[{formatMarks(q.type)}]</span>
                                                     </div>
                                                     {q.type === 'MCQ' && q.options && (
-                                                        <div className="grid grid-cols-2 gap-x-8 gap-y-4 mt-5 ml-8 text-base">
+                                                        <div className={`grid ${getOptionsGridClass(q.options)} mt-5 ml-8 text-base`}>
                                                             {q.options.map((opt, i) => (
                                                                 <div key={i} className="flex flex-wrap items-baseline">
                                                                     <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>
@@ -540,8 +565,8 @@ const AdminPaperPreview = () => {
                                                     )}
                                                 </div>
                                                 {q.imageUrl && (
-                                                    <div className="mt-4 mb-3">
-                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain" />
+                                                    <div className="mt-4 mb-3 flex justify-center w-full">
+                                                        <img src={q.imageUrl} alt="Diagram" className="max-w-full max-h-64 object-contain rounded-lg shadow-sm" />
                                                     </div>
                                                 )}
                                             </div>
@@ -549,7 +574,7 @@ const AdminPaperPreview = () => {
                                         <span className="font-bold whitespace-nowrap text-base">[{formatMarks(q.type)}]</span>
                                     </div>
                                     {q.type === 'MCQ' && q.options && (
-                                        <div className="grid grid-cols-2 gap-x-8 gap-y-4 mt-5 ml-8 text-base">
+                                        <div className={`grid ${getOptionsGridClass(q.options)} mt-5 ml-8 text-base`}>
                                             {q.options.map((opt, i) => (
                                                 <div key={i} className="flex flex-wrap items-baseline">
                                                     <span className="mr-3 font-semibold">{String.fromCharCode(65+i)})</span>

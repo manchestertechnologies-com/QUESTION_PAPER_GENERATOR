@@ -78,18 +78,31 @@ router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
         const template = await Template.findById(req.params.id);
         if (!template) return res.status(404).json({ msg: 'Template not found' });
 
-        // Delete file from disk
-        const filePath = path.join(uploadsDir, template.filename);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+        // Delete file from Cloudinary or local disk
+        if (template.fileUrl && template.fileUrl.includes('cloudinary.com')) {
+            const { cloudinary } = require('../config/cloudinary');
+            if (template.filename) {
+                // If it is raw file (like PDF), Cloudinary sometimes requires resource_type: 'raw'
+                const isPdf = template.fileUrl.toLowerCase().endsWith('.pdf') || template.filename.toLowerCase().endsWith('.pdf');
+                await cloudinary.uploader.destroy(template.filename, {
+                    resource_type: isPdf ? 'raw' : 'image'
+                });
+            }
+        } else if (template.filename) {
+            const uploadsDir = path.resolve(__dirname, '../uploads');
+            const filePath = path.join(uploadsDir, template.filename);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
         }
 
         await Template.findByIdAndDelete(req.params.id);
         res.json({ msg: 'Template deleted' });
     } catch (err) {
-        console.error(err.message);
+        console.error('Template deletion error:', err.message);
         res.status(500).json({ msg: 'Server Error' });
     }
 });
 
 module.exports = router;
+
