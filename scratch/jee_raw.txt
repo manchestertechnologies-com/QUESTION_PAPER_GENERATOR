@@ -1,0 +1,444 @@
+
+--- PAGE 1 ---
+ 
+___________________________________________________________________________________________ 
+TOTAL MARKS – 300 MARKS              DURATION – 3.00 HOURS                              DATE – 16-07-2026 
+___________________________________________________________________________________________ 
+PART A - PHYSICS 
+Q1  The displacement of a charge Q in the electric field 𝐸 =  𝑒ଵ 𝚤̂ +  𝑒ଶ 𝚥̂ +  𝑒ଷ 𝑘෠ is 𝑟 =  𝑎 𝚤̂ +  𝑏 𝚥̂. The work done is 
+(A)  𝑄(𝑒ଵ𝑎 +  𝑒ଶ𝑏) (B)  𝑄ඥ(𝑒ଵ𝑎)ଶ +  (𝑒ଶ𝑏)ଶ  
+(C)  𝑄(𝑒ଵ +  𝑒ଶ)√𝑎ଶ +  𝑏ଶ (D)  𝑄൫ඥ𝑒ଵଶ −  𝑒ଶଶ൯ (𝑎 +  𝑏) 
+Q2   Given that a photon of light of wavelength 10,000 Å has an energy equal to 1.23 eV. When light of wavelength 5000 Å 
+and intensity 𝐼଴ falls on a photoelectric cell, the saturation current is 0.40 × 10⁻⁶ A and the stopping potential is 1.36 V. If the 
+cathode and the anode are kept at the same potential, the emitted electrons: 
+(A)  All have the same KE equal to 1.36 eV (B)  All have the average KE equal to ଵ.ଷ଺
+ଶ  𝑒𝑉  
+(C)  All have the maximum KE equal to 1.36 eV (D)  All have the minimum KE equal to 1.36 eV 
+Q3   The nuclear radius of a nucleus with nucleon number 16 is 3 × 10⁻¹⁵ m. Then, the nuclear radius of a nucleus with 
+nucleon number 128 is 
+(A)  3 × 10⁻¹⁵ m (B)  1.5 × 10⁻¹⁵ m (C)  6 × 10⁻¹⁵ m (D)  4.5 × 10⁻¹⁵ m 
+Q4   The angular momentum of an electron in hydrogen atom is 4h/2π. Kinetic energy of this electron is 
+(A)  4.35 eV (B)  1.51 eV (C)  0.85 eV (D)  13.6 eV 
+Q5   In a Young's double-slit experiment, 12 fringes are observed to be formed in a certain segment of the screen when light 
+of wavelength 600 nm is used. If the wavelength of light is changed to 400 nm, the number of fringes observed in the same 
+segment of the screen is given by 
+(A)  12 (B)  18 (C)  24 (D)  30 
+Q6   In a thick glass slab of thickness l, and refractive index 𝑛ଵ, a cuboidal cavity of thickness 'm' is carved as shown in the 
+figure and is filled with a liquid of R.I. 𝑛ଶ (𝑛ଵ >  𝑛ଶ). The ratio l/m, so that shift produced by this slab is zero when an 
+observer A observes an object B with paraxial rays is 
+ 
+ 
+ 
+ 
+(A)  ௡భ ି ௡మ
+௡మ ି ଵ (B)  ௡భ ି ௡మ
+௡మ(௡భ ି ଵ) (C)  ௡భ ି ௡మ
+௡భ ି ଵ (D)  ௡భ ି ௡మ
+௡భ(௡మ ି ଵ) 
+ 
+ 
+
+--- PAGE 2 ---
+Q7   The circuit given in the figure has a resistance less choke coil L and a resistance R. The voltages across R and L are 120 
+V and 160 V respectively as shown. The rms value of the applied AC source voltage is 
+ 
+ 
+ 
+ 
+(A)  100 V (B)  200 V (C)  300 V (D)  400 V 
+Q8   A horizontal ring of radius r = 1/2 m is kept in a vertical constant magnetic field of 1 T. The ring is collapsed from 
+maximum area to zero area in 1 s. Then the e.m.f. induced in the ring is 
+(A)  1 V (B)  ቀగ
+ସቁ𝑉 (C)  ቀగ
+ଶቁ𝑉 (D)  𝜋 𝑉 
+Q9   Two straight segments of wire ab and bc, each carrying current I, are placed as shown in the figure. The cube edge is 50 
+cm and the magnetic field is uniform along the Y-axis having magnitude 0.4 T. If I = 3 A, the force experienced by wire abc 
+in the presence of this magnetic field is 
+ 
+ 
+ 
+ 
+(A)  0.6 𝚤̂ (B)  1.2൫𝚤̂ +  𝑘෠൯ (C)  0.6൫√2 𝚤̂ +  𝚥̂ −  √2 𝑘෠൯ (D)  0.6൫√2 𝚤̂ −  𝑘෠൯ 
+Q10   Which of the two switches, S₁ and S₂, shown in the figure will produce short-circuiting? 
+ 
+ 
+ 
+ 
+(A)  S₁ (B)  S₂ (C)  Both S₁ and S₂ (D)  Neither S₁ nor S₂ 
+Q11   The quantity X = ఌబ௅௏
+௧ , where 𝜀଴ is the permittivity of free space, L is length, V is potential difference and t is time. The 
+dimensions of X are same as that of 
+(A)  Resistance (B)  Charge (C)  Voltage (D)  Current 
+Q12   A solid sphere of radius R has a charge Q distributed in its volume with a charge density 𝜌 =  𝑘𝑟௔, where k and a are 
+constants and r is the distance from its centre. If the electric field at r = R/2 is 1/8 times that at r = R, find the value of a. 
+(A)  2 (B)  3 (C)  2.5 (D)  0.2 
+Q13   Two tuning forks A and B give 4 beats/s when sounded together. The frequency of A is 320 Hz. When some wax is 
+added to B and it is sounded with A, 4 beats/s per second are again heard. The frequency of B is 
+(A)  312 Hz (B)  316 Hz (C)  324 Hz (D)  328 Hz 
+Q14   A body of mass m is released from a height h onto a scale pan hung from a spring. The spring constant of the spring is 
+k, the mass of the scale pan is negligible and the body does not bounce relative to the pan; then the amplitude of vibration is 
+(A)  ௠௚
+௞ ට1 −ଶ௛௞
+௠௚ (B)  ௠௚
+௞  (C)  ௠௚
+௞  +  ௠௚
+௞ ට1 +ଶ௛௞
+௠௚ (D)  ௠௚
+௞  −  ௠௚
+௞ ට1 −ଶ௛
+௠௚ 
+Q15   Two moles of ideal helium gas are in a rubber balloon at 30°C. The balloon is fully expandable and can be assumed to 
+require no energy for its expansion. The temperature of the gas in the balloon is slowly changed to 35°C. The amount of heat 
+required in raising the temperature is nearly (take R = 8.31 J/mol.K) 
+
+--- PAGE 3 ---
+(A)  62 J (B)  104 J (C)  124 J (D)  208 J 
+Q16   If g is the acceleration due to gravity on the earth's surface, the gain in the potential energy of an object of mass m 
+raised from the surface of the earth to a height equal to the radius R of the earth is 
+(A)  ½ 𝑚𝑔𝑅 (B)  2mgR (C)  mgR (D)  ¼ 𝑚𝑔𝑅 
+Q17   In the pulley system shown, if the radii of the bigger and smaller pulley are 2 m and 1 m respectively, and the 
+acceleration of block A is 5 m/s² in the downward direction, the acceleration of block B will be 
+(A)  0௠
+௦మ 
+(B)  5௠
+௦మ 
+(C)  10௠
+௦మ 
+(D)  ହ
+ଶ
+௠
+௦మ 
+Q18   The potential energy of a particle is determined by the expression U = α(x² + y²), where α is a positive constant. The 
+particle begins to move from a point with coordinates (3, 3), only under the action of the potential field force. Then its kinetic 
+energy T at the instant when the particle is at a point with the coordinates (1, 1) is 
+(A)  8𝛼 (B)  24𝛼 (C)  16𝛼 (D)  Zero 
+Q19   A block is lying on a horizontal frictionless surface. One end of a uniform rope is fixed to the block, which is pulled in 
+the horizontal direction by applying a force F at the other end. If the mass of the rope is half the mass of the block, the tension 
+in the middle of the rope will be 
+(A)  F (B)  ଶி
+ଷ (C)  ଷி
+ହ (D)  ହி
+଺ 
+Q20   A body is projected horizontally from the top of a tower with initial velocity 18 m/s. It hits the ground at an angle of 
+45° to the horizontal. What is the vertical component of velocity when it strikes the ground? 
+ 
+(A)  9 𝑚𝑠ିଵ (B)  9√2 𝑚𝑠ିଵ (C)  18 𝑚𝑠ିଵ (D)  18√2 𝑚𝑠ିଵ 
+ 
+Section - B (Numerical Value Questions) 
+Q21   A block of mass 0.18 kg is attached to a spring of force-constant 2 N/m. The coefficient of friction between the block 
+and the floor is 0.1. Initially the block is at rest and the spring is un-stretched. An impulse is given to the block as shown in 
+the figure. The block slides a distance of 0.06 m and comes to rest for the first time. The initial velocity of the block in m/s is 
+V = N/10. Then N is 
+ 
+ 
+ 
+ 
+Q22  A frog sits on the end of a long board of length L = 5 m. The board rests on a frictionless horizontal table. The frog 
+wants to jump to the opposite end of the board. What is the minimum take-off speed (in m/s), i.e., relative to ground 'v', that 
+allows the frog to do the trick? The board and the frog have equal masses. 
+Q23   A solid sphere of radius R has a charge Q distributed in its volume with a charge density 𝜌 =  𝑘𝑟௔, where k and a are 
+constants and r is the distance from its centre. If the electric field at r = R/2 is 1/8 times that at r = R, find the value of a. 
+
+--- PAGE 4 ---
+Q24   In the infinite grid shown, if the value of each resistance is r = 2(√5 − 1) Ω. Find the equivalent resistance between the 
+points a and c (in Ω). 
+ 
+ 
+ 
+Q25   A Bohr hydrogen atom undergoes a transition n = 5 to n = 4 and emits a photon of frequency f. The frequency of 
+circular motion of the electron in the n = 4 orbit is 𝑓ସ. The ratio f/𝑓ସ is found to be 18/5m. State the value of m. 
+
+--- PAGE 5 ---
+PART B - CHEMISTRY 
+Section - A (Multiple Choice Questions) 
+Q26   The number of molecules in 200 mL of each of 𝑂ଶ, 𝑁𝐻ଷ and 𝐶𝑂ଶ at STP is 
+(A)  In the order 𝐶𝑂ଶ <  𝑂ଶ <  𝑁𝐻ଷ (B)  In the order 𝑁𝐻ଷ <  𝑂ଶ <  𝐶𝑂ଶ (C)  𝑁𝐻ଷ =
+ 𝐶𝑂ଶ <  𝑂ଶ (D)  Same 
+Q27   Which of the following pairs has both members from the same group of the periodic table? 
+(A)  𝑀𝑔 −  𝐵𝑎 (B)  𝑀𝑔 −  𝑁𝑎 (C)  𝑀𝑔 −  𝐶𝑢 (D)  𝑀𝑔 −  𝐾 
+Q28   Five moles of a gas is put through a series of changes as shown graphically in a cyclic process (Volume vs 
+Temperature graph with points A, B and C). The processes A→B, B→C and C→A respectively are 
+ 
+ 
+ 
+ 
+ 
+(A)  Isochoric, Isobaric, Isothermal (B)  Isobaric, Isochoric, Isothermal  
+(C)  Isothermal, Isobaric, Isochoric (D)  Isochoric, Isothermal, Isobaric 
+Q29   For the reaction, 2𝑁𝑂ଶ(𝑔) ⇌  2𝑁𝑂(𝑔)+  𝑂ଶ(𝑔) when Kp and Kc are compared at 184°C it is found that 
+(A)  whether Kp is greater than, less than or equal to Kc depends upon the total gas pressure  
+(B)  𝐾𝑝 =  𝐾𝑐  
+(C)  Kp is less than Kc  
+(D)  Kp is greater than Kc 
+Q30   The charge/size ratio of a cation determines its polarizing power. Which one of the following sequences represents the 
+increasing order of the polarizing power of the cationic species K+, Ca2+, Mg2+, Be2+? 
+(A)  Mg2+, Be2+, K+, Ca2+ (B)  Be2+, K+, Ca2+, Mg2+ (C)  K+, Ca2+, Mg2+, Be2+ (D)  Ca2+, Mg2+, Be2+, K+ 
+Q31   Ga is below Al in the periodic table, but the atomic radius of Ga is less than that of Al. It is because of 
+(A)  lanthanoid contraction (B)  greater screening effect (C)  inert pair effect (D)  none of these 
+Q32   Arrange in order of decreasing trend towards 𝑆ா (electrophilic substitution) reactions: (I) chlorobenzene (II) benzene 
+(III) anilinium chloride (IV) toluene 
+(A)  IV > II > I > III (B)  I > II > III > IV (C)  II > I > III > IV (D)  III > I > II > IV 
+Q33   Match List I with List II: 
+ List I Element 
+detected 
+ List II Reagent used/ Product 
+formed 
+A Nitrogen I Na2 [Fe(CN)5NO] 
+B Sulphur II AgNO3 
+C Phosphorous III Fe4[Fe(CN)6]3 
+D Halogen IV (NH4)2MoO4 
+ 
+(A)  A-II, B-IV, C-I, D-III (B)  A-IV, B-II, C-I, D-III (C)  A-II, B-I, C-IV, D-III (D)  A-III, B-I, C-IV, D-II 
+ 
+
+--- PAGE 6 ---
+ 
+Q34   Match List I with List II: 
+ LIST-I Name 
+of reaction 
+ LIST-II 
+Reagent used 
+A Hell-V olhard-Zelinsky 
+reaction 
+I NaOH + I 2 
+B Iodoform reaction II (i) CrO 2Cl2, CS2 (ii) H2O 
+C Etard reaction III (i) Br 2/ red phosphorus (ii) H2O 
+D Gatterman-Koch reaction IV CO, HCl, anhyd. AlCl3 
+ 
+(A)  A-III, B-II, C-I, D-IV (B)  A-III, B-I, C-IV, D-II (C)  A-I, B-II, C-III, D-IV (D)  A-III, B-I, C-II, D-IV 
+Q35   2 mole of an ideal gas at 27°C expands isothermally and reversibly from a volume of 4 litre to 40 litre. The work done 
+(in kJ) by the gas is: 
+(A)  w = −28.72 kJ (B)  w = −11.488 kJ (C)  w = −5.736 kJ (D)  w = −4.988 kJ 
+Q36   In an organic compound of molar mass 108 g mol⁻¹, C, H and N atoms are present in 9 : 1 : 3.5 by mass. The 
+molecular formula can be: 
+(A)  𝐶଺𝐻଼𝑁ଶ (B)  𝐶଻𝐻ଵ଴𝑁 (C)  𝐶ହ𝐻଺𝑁ଷ (D)  𝐶ସ𝐻ଵ଼𝑁ଷ 
+Q37   The major product obtained from the reaction is: 
+ 
+ 
+ 
+ 
+(A)    
+ 
+ 
+ 
+(B)   
+ 
+ 
+ 
+ 
+(C)    
+ 
+ 
+ 
+ 
+(D)   
+ 
+ 
+Q38   If x is the specific resistance (in S⁻¹cm) of the electrolyte solution and y is the molarity of the solution, then 𝛬௠ (in S 
+cm² mol⁻¹) is given by: 
+(A)  ଵ଴଴଴௫
+௬  (B)  1000 ௬
+௫ (C)  ଵ଴଴଴
+௫௬ (D)  ௫௬
+ଵ଴଴଴ 
+
+--- PAGE 7 ---
+ 
+Q39   In the given reaction: (X) will be: 
+ 
+ 
+ 
+ 
+ 
+(A)                                     (B)    
+ 
+ 
+(C)  (D)   
+ 
+ 
+ 
+ 
+Q40   Assertion: [Ni(CO)4] is diamagnetic in nature. 
+Reason: Ni atom undergoes 𝑑𝑠𝑝ଶ hybridisation. 
+(A)  Both assertion and reason are true, and reason is the correct explanation of assertion (B)  Both assertion and reason 
+are false  
+(C)  Assertion is false, reason is true (D)  Assertion is true, but reason is false 
+Q41   Which among the following named reactions results in a decrease in the number of carbons in the carbon chain? 
+(A)  Aldol condensation (B)  Wurtz reaction (C)  Hoffmann bromamide degradation (D)  Fittig 
+reaction 
+Q42   Given four compounds: (i) phenol, (ii) p-nitrophenol, (iii) p-cresol (p-methylphenol), (iv) p-methoxyphenol. The 
+correct order of acidity is 
+ 
+ 
+ 
+ 
+(A)  ii > iv > i > iii (B)  ii > i > iii > iv (C)  iv > ii > i > iii (D)  ii > iii > i > iv 
+Q43   The structure of β-D-glucopyranose is: 
+ 
+ 
+(A)  
+ 
+ 
+ 
+(B)  
+ 
+ 
+
+--- PAGE 8 ---
+ 
+(C)  
+ 
+ 
+ 
+(D)   
+ 
+ 
+ 
+ 
+Q44   Number of unpaired electrons in the 𝐵ଶ molecule is 
+(A)  2 (B)  6 (C)  8 (D)  10 
+Q45   Choose the correct statement: 
+(A)  𝐶𝐶𝑙ସ is non-polar because C–Cl bond is non-polar (B)  𝐶𝐶𝑙ସ is polar because C–Cl bond is polar  
+(C)  Though C–Cl bond is polar, 𝐶𝐶𝑙ସ is a non-polar molecule   (D) Though C–Cl bond is non-polar, 𝐶𝐶𝑙ସ is a polar 
+molecule 
+ 
+Section - B (Numerical Value Questions) 
+Q46   In infinite dilution, the equivalent conductance’s of 𝐵𝑎ଶା and 𝐶𝑙ି are 127 and 76 𝑜ℎ𝑚ିଵ𝑐𝑚ିଵ eqvt⁻¹. The equivalent 
+conductivity of 𝐵𝑎𝐶𝑙ଶ at indefinite dilution is [Nearest integer] 
+Q47   The wavelength of an electron of kinetic energy 4.50 × 10⁻²⁹ J is ...... × 10⁻⁵ m. (Nearest integer). Given: mass of 
+electron is 9 × 10⁻³¹ kg, h = 6.6 × 10⁻³⁴ J s 
+Q48   Find out the number of aromatic compounds or ions from the following 
+ 
+ 
+ 
+ 
+Q49   How many of the following compounds are polar? 𝐶𝐻3 𝐶𝑙,𝑁𝐻3,𝐶𝑂2 ,𝐻2𝑂,𝐶𝐻4,𝐵𝐹3 
+Q50   How many unpaired electrons are present in the central atom of [Fe(ox)3]3−? 
+
+--- PAGE 9 ---
+PART C - MATHEMATICS 
+Section - A (Multiple Choice Questions) 
+Q51   Let A = {x ∈ R : |x + 1| < 2} and B = {x ∈ R : |x − 1| ≥ 2}. Then which one of the following statements is NOT true? 
+(A)  𝐴 −  𝐵 =  (−1, 1) (B)  𝐵 −  𝐴 =  𝑅 −  (−3, 1) (C)  𝐴 ∩  𝐵 =  (−3, −1] (D)  𝐴 ∪  𝐵 =  𝑅 − [1, 3) 
+Q52   Let 𝑓(𝑛) =  ቂଵ
+ଷ + ଷ௡
+ଵ଴଴ቃ𝑛, where [n] denotes the greatest integer less than or equal to n. Then ∑ 𝑓(𝑛)ହ଺௡ୀଵ  is equal to: 
+(A)  56 (B)  689 (C)  1287 (D)  1399 
+Q53   The number of solutions of the equation cosቀ𝑥 + గ
+ଷቁcosቀగ
+ଷ −  𝑥ቁ =   ¼ 𝑐𝑜𝑠ଶ2𝑥 ∈ [−3π, 3π] is: 
+(A)  8 (B)  5 (C)  6 (D)  7 
+Q54   If non-zero real numbers b and c are such that min f(x) > max g(x), where 𝑓(𝑥) =  𝑥ଶ +  2𝑏𝑥 +  2𝑐ଶ and 𝑔(𝑥) =
+ −𝑥ଶ −  2𝑐𝑥 + 𝑏ଶ,(𝑥 ∈  𝑅); then |c/b| lies in the interval: 
+(A)  ቀ0,ଵ
+ଶቁ (B)  ቀଵ
+ଶ, ଵ
+√ଶቁ (C)  ቀଵ
+√ଶ,√2ቁ (D)  ൫√2, ∞൯ 
+Q55   If the domain of the function 𝑓(𝑥) =  𝑙𝑜𝑔௘(4𝑥ଶ +  11𝑥 +  6) +  𝑠𝑖𝑛ିଵ(4𝑥 +  3) +  𝑐𝑜𝑠ିଵቀଵ଴௫ା଺
+ଷ ቁ], then 36|α + β| is 
+equal to: 
+(A)  63 (B)  45 (C)  72 (D)  54 
+Q56   The sum ∑ ( 𝑟ଶ +  1) ×  (𝑟!)ଵ଴௥ୀଵ  is equal to: 
+(A)  (11!) (B)  10 ×  (11!) (C)  101 ×  (11!) (D)  11 ×  (11!) 
+Q57   In the expansion of ቀ ௫
+௖௢௦ఏ + ଵ
+௫ ௦௜௡ఏቁ
+ଵ଺
+_1 is the least value of the term independent of x when π/8 ≤ θ ≤ π/4, and 𝑙ଶ is the 
+least value of the term independent of x when π/16 ≤ θ ≤ π/8, then the ratio 𝑙ଶ ∶  𝑙ଵ is equal to: 
+(A)  16 : 1 (B)  8 : 1 (C)  1 : 8 (D)  1 : 16 
+Q58   Let 𝑆௡ =  1 ·(𝑛− 1)+  2 ·(𝑛− 2)+  3 ·(𝑛− 3)+  … +  (𝑛− 1)· 1,𝑛 ≥  4. The sum ∑ ቀଶௌ೙
+௡!  − ଵ
+(௡ିଶ)!ቁஶ௡ୀସ  is equal 
+to: 
+(A)  ௘ିଵ
+ଷ  (B)  ௘ିଶ
+଺  (C)  ௘
+ଷ (D)  ௘
+଺ 
+Q59   The equation of the straight line passing through the point of intersection of the family of lines x(3 + 4λ) + y(4 + 3λ) + 
+1 + 6λ = 0, which is at a minimum distance from the point (1, 1), can be expressed as x + by − c = 0, where b and c are 
+natural numbers. Then the value of (b + c) is 
+(A)  5 (B)  8 (C)  9 (D)  10 
+Q60   If a tangent to the circle 𝑥ଶ +  𝑦ଶ =  1 intersects the coordinate axes at distinct points P and Q, then the locus of the 
+midpoint of PQ is 
+(A)  𝑥ଶ +  𝑦ଶ −  2𝑥𝑦 =  0 (B)  𝑥ଶ +  𝑦ଶ −  16𝑥ଶ𝑦ଶ =  0 (C)  𝑥ଶ +  𝑦ଶ −  4𝑥ଶ𝑦ଶ =
+ 0 (D)  𝑥ଶ +  𝑦ଶ −  2𝑥ଶ𝑦ଶ =  0 
+Q61   A line makes the same angle θ with each of the x-axis and z-axis. If the angle β which it makes with the y-axis is 
+such that 𝑠𝑖𝑛ଶ𝛽 =  3𝑠𝑖𝑛ଶ𝜃 𝑐𝑜𝑠ଶ𝜃(A)  ଶ
+ଷ (B)  ଵ
+ହ (C)  ଷ
+ହ (D)  ଶ
+ହ 
+Q62   The value of cot[∑ 𝑐𝑜𝑡ିଵ(1 +  ∑ 2𝑘௡௞ୀଵ )ଶଷ௡ୀଵ ] 
+(A)  ଶଷ
+ଶହ (B)  ଶହ
+ଶଷ (C)  ଶଷ
+ଶସ (D)  ଶସ
+ଶଷ 
+Q63   Let A = ቂ଴
+ଶ
+ିଶ
+଴ቃ (a 2×2 matrix with rows [0, −2] and [2, 0]). If M and N are two matrices given by 𝑀 =  ∑ 𝐴ଶ௞ଵ଴௞ୀଵ  and 
+𝑁 =  ∑ 𝐴ଶ௞ିଵଵ଴௞ୀଵ  then 𝑀𝑁ଶ is 
+--- PAGE 10 ---
+(A)  a non-identity symmetric matrix (B)  a skew-symmetric matrix (C)  neither symmetric nor 
+skew-symmetric matrix (D)  an identity matrix 
+Q64   The number of values of k for which the system of linear equations, (k+2)x + 10y = k, kx + (k+3)y = k − 1 has no 
+solution, is: 
+(A)  1 (B)  2 (C)  3 (D)  infinitely many 
+Q65   Let f : [1, 3] → R be a function satisfying x/[x] ≤ f(x) ≤ √(6−x), for all x ≠ 2, and f(2) = 1, where R is the set of all real 
+numbers and [x] denotes the largest integer less than or equal to x. 
+Statement 1: 𝑓(𝑥)
+௫→ଶ
+ exists. 
+Statement 2: f is continuous at x = 2. 
+(A)  Statement 1 is true, Statement 2 is true, Statement 2 is a correct explanation for Statement 1 (B)  Statement 1 
+is false, Statement 2 is true (C)  Statement 1 is true, Statement 2 is true, Statement 2 is not a correct explanation for 
+Statement 1 (D)  Statement 1 is true, Statement 2 is false 
+Q66   Let S = {(λ, μ) ∈ R × R : f(t) = (|λ|𝑒|௧| − μ)·sin(2|t|), t ∈ R is a differentiable function}. Then S is a subset of: 
+(A)  𝑅 ×  [0, ∞) (B)  [0, ∞)×  𝑅 (C)  𝑅 ×  (−∞, 0) (D)  (−∞, 0)×  𝑅 
+Q67   The set of all real values of λ for which the function 𝑓(𝑥) =  (1 −  𝑐𝑜𝑠𝑥)ଶ(𝜆 +  𝑠𝑖𝑛𝑥), x ∈ (−π/2, π/2), has exactly 
+one maxima and exactly one minima, is: 
+(A)  ቀ−ଵ
+ଶ,ଵ
+ଶቁ −  {0} (B)  ቀଵ
+ଶ,ଵ
+ଶቁ (C)  ቀଷ
+ଶ,ଷ
+ଶቁ (D)  ቀ−ଷ
+ଶ,ଷ
+ଶቁ −  {0} 
+Q68   The area of the region {(𝑥,𝑦): 𝑥ଶ ≤  𝑦 ≤  8 −  𝑥ଶ,𝑦 ≤  7} is 
+(A)  21 (B)  18 (C)  24 (D)  20 
+Q69   If the components of 𝑎⃗ along and perpendicular to 𝑏ሬ⃗ =  3𝚤̂ +  𝚥̂ −  𝑘෠ respectively are ଵ଺
+ଵଵ൫3𝚤̂ +  𝚥̂ −  𝑘෠൯ and 
+ଵ
+ଵଵ൫−4𝚤̂ −  5𝚥̂ −  17𝑘෠൯, then 𝛼ଶ +  𝛽ଶ +  𝛾ଶ is equal to (where 𝑎⃗ =  𝛼𝚤̂ +  𝛽𝚥̂ +  𝛾𝑘෠): 
+(A)  23 (B)  18 (C)  16 (D)  26 
+Q70   If the shortest distance between the lines 𝐿ଵ ∶  𝑟⃗ =  (2 +  𝜆)𝚤̂ +  (1 −  3𝜆)𝚥̂ +  (3 +  4𝜆)𝑘෠,𝜆 ∈  𝑅 and 𝐿ଶ ∶  𝑟⃗ =
+ 2(1 +  𝜇)𝚤̂ +  3(1 +  𝜇)𝚥̂ +  (5 +  𝜇)𝑘෠,𝜇 ∈  𝑅 is ௠
+√௡, where gcd(m, n) = 1, then the value of m + n equals. 
+(A)  384 (B)  387 (C)  377 (D)  390 
+ 
+Section - B (Numerical Value Questions) 
+Q71   Let f(x) be continuous at x = 0. If f′′(0) exists and ଶ௙(௫)ି ଷ௔ (ଶ௫)ା ௕௙(଼௫)
+௦௜௡మ௫௫→଴
+ists, with f(0) ≠ 0, f′(0) ≠ 0, then the value of 
+3a/b is 
+Q72   Let the mean and variance of four numbers 3, 7, x and y (x > y) be 5 and 10 respectively. Then the mean of the four 
+numbers 3 + 2x, 7 + 2y, x + y and x − y is _______. 
+Q73   Let {x} and [x] denote the fractional part and the greatest integer respectively of a real number x. If ∫ {𝑥}𝑑𝑥௡
+଴ , ∫ [𝑥]𝑑𝑥௡
+଴  
+and 10
+೙మష೙
+మ  (n ∈ N, n > 1) are three consecutive terms of a G.P., then n is equal to_____ 
+Q74   Mr. A has two fair cubic dice: one with faces numbered from 2 to 7 and the second with faces numbered from 4 to 9. 
+Twice, he randomly picks one of the dice (each die is equally likely) and rolls. If it is known that the sum of the resulting two 
+rolls is 10, then the probability he rolled the same die twice is m/√n, gcd(m, n) = 1. Find the least value of (n − m). 
+Q75   Let y = y(x) be the solution of the differential equation ௗ௬
+ௗ௫ =  ସ௬యାଶ௬௫మ
+ଷ௫௬మା௫య, y(1) = 1. If y(2) ∈ [n−1, n) for some n ∈ N, 
+then n is equal to ______ 

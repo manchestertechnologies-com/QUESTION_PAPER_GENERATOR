@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import PaperRenderer, { DEFAULT_SETTINGS, SettingsPanel, formatMarks, calcTotal } from '../../components/PaperRenderer';
 
-/* ─── Inline styles ─── */
+/* â”€â”€â”€ Inline styles â”€â”€â”€ */
 const S = {
     page: { fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif" },
 
@@ -48,7 +49,7 @@ const S = {
         marginBottom: '10px',
     },
 
-    /* ── Filter bar ── */
+    /* â”€â”€ Filter bar â”€â”€ */
     filterBar: {
         display: 'flex',
         gap: '10px',
@@ -232,682 +233,77 @@ const S = {
     viewBtns: { display: 'flex', gap: '10px' },
 };
 
-/* ─── Helpers ─── */
-const formatMarks = (type, classes = []) => {
-    const isNeet = classes.includes('NEET');
-    if (type === 'MCQ' || type === '1m') return isNeet ? '4 Marks' : '1 Mark';
-    if (type === '2m') return '2 Marks';
-    if (type === '3m') return '3 Marks';
-    if (type === '4m') return '4 Marks';
-    if (type === '5m') return '5 Marks';
-    return type;
-};
-
-const calcTotal = (paper) => {
-    if (paper.pattern?.length) return paper.pattern.reduce((s, sec) => s + (sec.marks || 0), 0);
-    const isNeet = paper.classes?.includes('NEET');
-    return paper.questions.reduce((s, q) => {
-        if (q.type === 'MCQ' || q.type === '1m') return s + (isNeet ? 4 : 1);
-        if (q.type === '2m') return s + 2;
-        if (q.type === '3m') return s + 3;
-        if (q.type === '4m') return s + 4;
-        if (q.type === '5m') return s + 5;
-        return s;
-    }, 0);
-};
-
-/* ─── toDateStr: returns "YYYY-MM-DD" from a Date ─── */
+/* â”€â”€â”€ toDateStr â”€â”€â”€ */
 const toDateStr = (date) => {
     const d = new Date(date);
     return d.toISOString().split('T')[0];
 };
 
-/* ═══════════════════════════════════════════════════════════════════════ */
-/*  PAPER VIEW                                                            */
-/* ═══════════════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/*  PAPER VIEW â€” uses PaperRenderer engine                                */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const PaperView = ({ paper, activeTemplate, onBack }) => {
-    const totalMarks = calcTotal(paper);
-    const [paperData, setPaperData] = useState(paper);
-    const [showAnswerKey, setShowAnswerKey] = useState(false);
-    const [generatingSolutions, setGeneratingSolutions] = useState({});
-
-    useEffect(() => {
-        setPaperData(paper);
-    }, [paper]);
-
-    const handleGenerateSolution = async (qId) => {
-        setGeneratingSolutions(prev => ({ ...prev, [qId]: true }));
-        try {
-            const res = await api.post(`/api/questions/${qId}/solve`);
-            setPaperData(prev => {
-                const updatedQuestions = prev.questions.map(q => {
-                    if (q._id === qId) {
-                        return { ...q, solutionText: res.data.solutionText };
-                    }
-                    return q;
-                });
-                return { ...prev, questions: updatedQuestions };
-            });
-        } catch (err) {
-            console.error('Failed to generate solution:', err);
-            alert('Error generating solution. Please try again.');
-        } finally {
-            setGeneratingSolutions(prev => ({ ...prev, [qId]: false }));
-        }
-    };
-
-    // Word export removed — use Print / Save PDF instead
-    
-    // Paper Settings State
+    const [showSettings, setShowSettings] = useState(false);
     const [settings, setSettings] = useState({
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        fontSize: '14px',
-        lineHeight: '1.5',
-        columns: 1,
-        showMarks: true,
-        showSettings: false,
-        viewMode: 'qp' // 'qp', 'side-by-side', 'key'
+        ...DEFAULT_SETTINGS,
+        showMarks: false,        // OFF by default
+        showAnswerKey: false,
     });
 
-    const renderQuestions = () => {
-        if (paperData.pattern?.length) {
-            let pool = [...paperData.questions];
-            return paperData.pattern.map((sec, secIdx) => {
-                const num = sec.numQuestions || 0;
-                let secQs = sec.type
-                    ? pool.filter(q => q.type === sec.type).slice(0, num)
-                    : pool.slice(0, num);
-                const usedIds = new Set(secQs.map(q => q._id));
-                pool = pool.filter(q => !usedIds.has(q._id));
-                if (!secQs.length) return null;
-                return (
-                    <div key={secIdx} style={{ marginBottom: '28px', breakInside: 'avoid-column' }}>
-                        <div style={{ textAlign: 'center', margin: '28px 0 16px' }}>
-                            <div style={{ fontWeight: 700, fontSize: '17px', textDecoration: 'underline' }}>{sec.sectionName}</div>
-                            {sec.description && <div style={{ fontSize: '13px', color: '#555', fontStyle: 'italic', marginTop: '4px' }}>{sec.description}</div>}
-                        </div>
-                        <QuestionList 
-                            questions={secQs} 
-                            fontSize={settings.fontSize} 
-                            showMarks={settings.showMarks} 
-                            classes={paperData.classes} 
-                            showAnswerKey={showAnswerKey}
-                            onGenerateSolution={handleGenerateSolution}
-                            generatingSolutions={generatingSolutions}
-                        />
-                    </div>
-                );
-            });
-        }
-        return (
-            <QuestionList 
-                questions={paperData.questions} 
-                fontSize={settings.fontSize} 
-                showMarks={settings.showMarks} 
-                classes={paperData.classes} 
-                showAnswerKey={showAnswerKey}
-                onGenerateSolution={handleGenerateSolution}
-                generatingSolutions={generatingSolutions}
-            />
-        );
-    };
+    const isApproved = paper?.status?.toLowerCase() === 'approved';
 
     return (
         <div style={S.page}>
-            <div style={{ ...S.viewToolbar, flexDirection: 'column', gap: '16px', alignItems: 'stretch' }} className="no-print">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button style={S.btnBack} onClick={onBack}>← Back to Papers</button>
+            {/* â”€â”€ Toolbar â”€â”€ */}
+            <div style={{ ...S.viewToolbar, flexDirection: 'column', gap: '12px', alignItems: 'stretch' }} className="no-print">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                    <button style={S.btnBack} onClick={onBack}>â† Back to Papers</button>
                     <div style={S.viewBtns}>
-                        <button 
-                            style={{ ...S.btnBack, background: showAnswerKey ? '#4f46e5' : '#f1f5f9', color: showAnswerKey ? '#fff' : '#001f6d' }} 
-                            onClick={() => setShowAnswerKey(!showAnswerKey)}
+                        <button
+                            style={{ ...S.btnBack, background: showSettings ? '#001f6d' : '#f1f5f9', color: showSettings ? '#fff' : '#001f6d' }}
+                            onClick={() => setShowSettings(s => !s)}
                         >
-                            💡 {showAnswerKey ? 'Hide Answer Key' : 'Show Answer Key'}
+                            âš™ï¸ Paper Settings
                         </button>
-                        <button 
-                            style={{ ...S.btnBack, background: settings.showSettings ? '#001f6d' : '#f1f5f9', color: settings.showSettings ? '#fff' : '#001f6d' }} 
-                            onClick={() => setSettings(s => ({ ...s, showSettings: !s.showSettings }))}
-                        >
-                            ⚙️ Paper Settings
-                        </button>
-                        {paperData.status?.toLowerCase() === 'approved' ? (
-                            <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
+                        {isApproved ? (
+                            <button style={S.btnPrint} onClick={() => window.print()}>ðŸ–¨ Print / Save PDF</button>
                         ) : (
-                            <span style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', padding: '0 10px' }}>
-                                Paper must be approved by admin to print or export.
+                            <span style={{ color: '#dc2626', fontSize: '12px', fontWeight: 600, padding: '0 10px' }}>
+                                Paper must be approved by admin to print.
                             </span>
                         )}
                     </div>
                 </div>
 
-                {settings.showSettings && (
-                    <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>Font Style</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.fontFamily}
-                                onChange={e => setSettings(s => ({ ...s, fontFamily: e.target.value }))}
-                            >
-                                <option value='Georgia, serif'>Classic Serif (Georgia)</option>
-                                <option value='"Times New Roman", Times, serif'>Times New Roman</option>
-                                <option value='Cambria, Georgia, serif'>Cambria</option>
-                                <option value='Calibri, Candara, Segoe, sans-serif'>Calibri</option>
-                                <option value='Arial, Helvetica, sans-serif'>Arial</option>
-                                <option value="'Inter', sans-serif">Modern Sans (Inter)</option>
-                                <option value="'JetBrains Mono', monospace">Technical Mono</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>Font Size</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.fontSize}
-                                onChange={e => setSettings(s => ({ ...s, fontSize: e.target.value }))}
-                            >
-                                <option value="12px">Small (12px)</option>
-                                <option value="14px">Standard (14px)</option>
-                                <option value="16px">Large (16px)</option>
-                                <option value="18px">X-Large (18px)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>Line Spacing</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.lineHeight}
-                                onChange={e => setSettings(s => ({ ...s, lineHeight: e.target.value }))}
-                            >
-                                <option value="1.2">Compact (1.2)</option>
-                                <option value="1.5">Standard (1.5)</option>
-                                <option value="2.0">Double (2.0)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>Page Layout</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.columns}
-                                onChange={e => setSettings(s => ({ ...s, columns: parseInt(e.target.value) }))}
-                            >
-                                <option value={1}>Single Column</option>
-                                <option value={2}>Two Columns (1x2)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>Show Marks</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.showMarks ? 'yes' : 'no'}
-                                onChange={e => setSettings(s => ({ ...s, showMarks: e.target.value === 'yes' }))}
-                            >
-                                <option value="yes">Yes (Show)</option>
-                                <option value="no">No (Hide)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style={{ ...S.filterLabel, display: 'block', marginBottom: '8px' }}>View Mode</label>
-                            <select 
-                                style={S.filterSelect} 
-                                value={settings.viewMode}
-                                onChange={e => setSettings(s => ({ ...s, viewMode: e.target.value }))}
-                            >
-                                <option value="qp">Question Paper Only</option>
-                                <option value="side-by-side">Side-by-Side (QP + Key)</option>
-                                <option value="key">Answer Key Sheet Only</option>
-                            </select>
-                        </div>
-                    </div>
+                {showSettings && (
+                    <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={paper?.questions?.length || 0} />
                 )}
             </div>
 
-            {/* Print View Renderers depending on View Mode */}
-            {settings.viewMode === 'qp' && (
-                <div id="qp-print-area" className="print-area" style={{
-                    background: '#fff', padding: '48px 56px',
-                    maxWidth: '1000px', margin: '0 auto',
-                    border: '1px solid #e2e8f0', borderRadius: '12px',
-                    fontFamily: settings.fontFamily, fontSize: settings.fontSize,
-                    lineHeight: settings.lineHeight,
-                    boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-                    boxSizing: 'border-box'
-                }}>
-                    {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                        <div style={{ marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '8px', textAlign: 'center' }}>
-                            <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '90px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                        </div>
-                    )}
-
-                    <div style={{ marginBottom: '12px' }}>
-                        <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-                            <h1 style={{ fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>{paper.title}</h1>
-                            <p style={{ margin: '2px 0', color: '#333', fontWeight: 500, fontSize: '13px' }}>Subject: {paper.subject} | Class: {paper.classes?.join(', ')}</p>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '14px', marginTop: '4px' }}>
-                            <span>Time: 3 Hours</span>
-                            <span>Max. Marks: {totalMarks}</span>
-                        </div>
-                    </div>
-
-                    <div style={{ 
-                        columnCount: settings.columns, 
-                        columnGap: '40px', 
-                        columnRule: settings.columns > 1 ? '1px solid #eee' : 'none' 
-                    }}>
-                        {renderQuestions()}
-                    </div>
-
-                    <div style={{ textAlign: 'center', fontWeight: 700, borderTop: '2px solid #000', paddingTop: '16px', marginTop: '48px', fontSize: '13px' }}>
-                        *** End of Paper ***
-                    </div>
-                </div>
-            )}
-
-            {settings.viewMode === 'key' && (
-                <AnswerKeySheet paper={paperData} settings={settings} onGenerateSolution={handleGenerateSolution} generatingSolutions={generatingSolutions} />
-            )}
-
-            {settings.viewMode === 'side-by-side' && (
-                <div style={{ display: 'flex', gap: '30px', justifyContent: 'center', alignItems: 'flex-start', flexWrap: 'wrap', width: '100%', maxWidth: '2100px', margin: '0 auto' }}>
-                    <div style={{ flex: '1', minWidth: '450px', maxWidth: '1000px' }}>
-                        <div id="qp-print-area" className="print-area" style={{
-                            background: '#fff', padding: '48px 56px',
-                            border: '1px solid #e2e8f0', borderRadius: '12px',
-                            fontFamily: settings.fontFamily, fontSize: settings.fontSize,
-                            lineHeight: settings.lineHeight,
-                            boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-                            boxSizing: 'border-box'
-                        }}>
-                            {activeTemplate?.fileUrl?.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                                <div style={{ marginBottom: '8px', borderBottom: '2px solid #000', paddingBottom: '8px', textAlign: 'center' }}>
-                                    <img src={activeTemplate.fileUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '90px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                                </div>
-                            )}
-
-                            <div style={{ marginBottom: '12px' }}>
-                                <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-                                    <h1 style={{ fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>{paper.title}</h1>
-                                    <p style={{ margin: '2px 0', color: '#333', fontWeight: 500, fontSize: '13px' }}>Subject: {paper.subject} | Class: {paper.classes?.join(', ')}</p>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '14px', marginTop: '4px' }}>
-                                    <span>Time: 3 Hours</span>
-                                    <span>Max. Marks: {totalMarks}</span>
-                                </div>
-                            </div>
-
-                            <div style={{ 
-                                columnCount: settings.columns, 
-                                columnGap: '40px', 
-                                columnRule: settings.columns > 1 ? '1px solid #eee' : 'none' 
-                            }}>
-                                {renderQuestions()}
-                            </div>
-
-                            <div style={{ textAlign: 'center', fontWeight: 700, borderTop: '2px solid #000', paddingTop: '16px', marginTop: '48px', fontSize: '13px' }}>
-                                *** End of Paper ***
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ flex: '1', minWidth: '450px', maxWidth: '1000px' }}>
-                        <AnswerKeySheet paper={paperData} settings={settings} onGenerateSolution={handleGenerateSolution} generatingSolutions={generatingSolutions} />
-                    </div>
-                </div>
-            )}
-
-            <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print-area, .print-area *, .print-area-key, .print-area-key * { visibility: visible; }
-          .print-area { 
-            position: relative !important; 
-            width: 100% !important; 
-            box-shadow: none !important; 
-            border: none !important; 
-            border-radius: 0 !important; 
-            padding: 0 !important; 
-            margin: 0 0 50px 0 !important; 
-            page-break-after: always;
-            break-after: page;
-          }
-          .print-area-key { 
-            position: relative !important; 
-            width: 100% !important; 
-            box-shadow: none !important; 
-            border: none !important; 
-            border-radius: 0 !important; 
-            padding: 0 !important; 
-            margin: 0 !important; 
-            page-break-before: always;
-            break-before: page;
-          }
-          .no-print { display: none !important; }
-          @page { margin: 15mm; size: A4; }
-        }
-      `}</style>
+            {/* â”€â”€ PaperRenderer â”€â”€ */}
+            <PaperRenderer
+                paper={paper}
+                activeTemplate={activeTemplate}
+                isAssignment={false}
+                settings={settings}
+                setSettings={setSettings}
+                showSettingsPanel={false}
+                printAreaId="qp-print-area"
+            />
         </div>
     );
 };
 
-const getOptionsGridStyle = (options) => {
-    if (!options || options.length === 0) {
-        return {
-            display: 'grid',
-            gridTemplateColumns: '1fr',
-            gap: '8px 24px',
-            marginTop: '8px',
-            marginLeft: '24px',
-            fontSize: '0.95em'
-        };
-    }
-    
-    // Estimate clean text length of options (ignoring LaTeX commands for a better text length estimation)
-    const cleanLengths = options.map(opt => {
-        const cleanText = (opt || '')
-            .replace(/\\(text|mathrm|ce|begin|end){[^}]*}/g, '')
-            .replace(/\$\$?[^$]+\$\$?/g, '')
-            .replace(/[{}$_^[\]]/g, '')
-            .trim();
-        return cleanText.length;
-    });
-    
-    const maxLength = Math.max(...cleanLengths);
-    const totalLength = cleanLengths.reduce((a, b) => a + b, 0);
-    
-    let columns = '1fr';
-    let gap = '10px 24px';
-    
-    if (maxLength <= 15 && totalLength <= 60) {
-        columns = '1fr 1fr 1fr 1fr';
-        gap = '8px 16px';
-    } else if (maxLength <= 35 && totalLength <= 110) {
-        columns = '1fr 1fr';
-        gap = '8px 24px';
-    }
-    
-    return {
-        display: 'grid',
-        gridTemplateColumns: columns,
-        gap: gap,
-        marginTop: '8px',
-        marginLeft: '24px',
-        fontSize: '0.95em'
-    };
-};
-
-/* ── Renders a single question with full type support ── */
-const QuestionItem = ({ q, idx, showMarks, classes, showAnswerKey }) => {
-    const qLabel = optionLabel(0, classes) === 'A' ? 'alpha' : 'numeric';
-    const optLbl = (i) => optionLabel(i, classes);
-
-    // ── ASSERTION_REASON ──────────────────────────────────────────────────
-    const renderAssertionReason = () => {
-        const text = q.questionText || '';
-        // Try to split on Assertion/Reason prefixes
-        const assertMatch = text.match(/Assertion\s*(?:\(A\))?\s*[:\-]?\s*(.*?)(?=Reason\s*(?:\(R\))?|$)/si);
-        const reasonMatch = text.match(/Reason\s*(?:\(R\))?\s*[:\-]?\s*(.*?)$/si);
-        const assertion = assertMatch ? assertMatch[1].trim() : text;
-        const reason = reasonMatch ? reasonMatch[1].trim() : '';
-        return (
-            <div style={{ marginLeft: '4px' }}>
-                <div style={{ marginBottom: '4px' }}>
-                    <strong>Assertion (A):</strong> <MathRenderer inline text={assertion} />
-                </div>
-                {reason && (
-                    <div style={{ marginBottom: '8px' }}>
-                        <strong>Reason (R):</strong> <MathRenderer inline text={reason} />
-                    </div>
-                )}
-                {q.imageUrl && (
-                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
-                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                    </div>
-                )}
-                <div style={{ marginTop: '8px', fontSize: '0.93em', color: '#444', marginLeft: '0' }}>
-                    {['Both (A) and (R) are true, and (R) is the correct explanation of (A)',
-                      'Both (A) and (R) are true, but (R) is not the correct explanation of (A)',
-                      '(A) is true, but (R) is false',
-                      '(A) is false, but (R) is true'
-                    ].map((opt, i) => (
-                        <div key={i} style={{ display: 'flex', marginBottom: '3px' }}>
-                            <span style={{ fontWeight: 600, marginRight: '6px', minWidth: '18px' }}>{optLbl(i)})</span>
-                            <span>{opt}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    };
-
-    // ── MATCH_FOLLOWING ───────────────────────────────────────────────────
-    const renderMatchFollowing = () => {
-        const pairs = q.matchPairs || [];
-        const colA = pairs.map(p => p.left || '');
-        const colB = [...pairs].sort(() => 0).map((p, i) => ({ label: String(i + 1), val: p.right || '' }));
-        return (
-            <div style={{ marginLeft: '4px' }}>
-                <MathRenderer style={{ marginBottom: '6px' }} text={q.questionText} />
-                {q.imageUrl && (
-                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
-                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                    </div>
-                )}
-                <table style={{ borderCollapse: 'collapse', width: '90%', margin: '8px 0 10px', fontSize: '0.95em' }}>
-                    <thead>
-                        <tr>
-                            <th style={{ border: '1px solid #ccc', padding: '5px 10px', background: '#f5f5f5', textAlign: 'left', fontWeight: 700 }}>Column I</th>
-                            <th style={{ border: '1px solid #ccc', padding: '5px 10px', background: '#f5f5f5', textAlign: 'left', fontWeight: 700 }}>Column II</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {pairs.map((pair, pi) => (
-                            <tr key={pi}>
-                                <td style={{ border: '1px solid #ccc', padding: '5px 10px', verticalAlign: 'top' }}>
-                                    <strong>({String.fromCharCode(65 + pi)})</strong>&nbsp;<MathRenderer inline text={pair.left || ''} />
-                                </td>
-                                <td style={{ border: '1px solid #ccc', padding: '5px 10px', verticalAlign: 'top' }}>
-                                    <strong>({pi + 1})</strong>&nbsp;<MathRenderer inline text={pair.right || ''} />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                {q.options && q.options.length > 0 && (
-                    <div style={getOptionsGridStyle(q.options)}>
-                        {q.options.map((opt, i) => (
-                            <div key={i} style={{ display: 'flex' }}>
-                                <span style={{ fontWeight: 600, marginRight: '6px' }}>{optLbl(i)})</span>
-                                <MathRenderer inline text={opt} />
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // ── STATEMENT_BASED ───────────────────────────────────────────────────
-    const renderStatementBased = () => {
-        const stmts = q.statements || [];
-        return (
-            <div style={{ marginLeft: '4px' }}>
-                <MathRenderer style={{ marginBottom: '6px' }} text={q.questionText} />
-                {stmts.length > 0 && (
-                    <div style={{ margin: '6px 0 8px 12px', borderLeft: '3px solid #ccc', paddingLeft: '10px' }}>
-                        {stmts.map((s, i) => (
-                            <div key={i} style={{ marginBottom: '3px' }}>
-                                <strong>Statement {i + 1}:</strong> <MathRenderer inline text={s} />
-                            </div>
-                        ))}
-                    </div>
-                )}
-                {q.imageUrl && (
-                    <div style={{ margin: '8px 0', textAlign: 'center' }}>
-                        <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '65%', maxHeight: '160px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                    </div>
-                )}
-                {q.options && q.options.length > 0 && (
-                    <div style={getOptionsGridStyle(q.options)}>
-                        {q.options.map((opt, i) => (
-                            <div key={i} style={{ display: 'flex' }}>
-                                <span style={{ fontWeight: 600, marginRight: '6px' }}>{optLbl(i)})</span>
-                                <MathRenderer inline text={opt} />
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    // ── MCQ / DIAGRAM_BASED / default ────────────────────────────────────
-    const renderMCQ = () => (
-        <div style={{ marginLeft: '4px' }}>
-            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', margin: 0 }} text={q.questionText} />
-            {q.imageUrl && (
-                <div style={{ margin: '10px 0 6px', textAlign: 'center' }}>
-                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '180px', objectFit: 'contain', display: 'block', margin: '0 auto', pageBreakInside: 'avoid' }} />
-                </div>
-            )}
-            {q.options && q.options.length > 0 && (
-                <div style={getOptionsGridStyle(q.options)}>
-                    {q.options.map((opt, i) => (
-                        <div key={i} style={{ display: 'flex' }}>
-                            <span style={{ marginRight: '6px', fontWeight: 600 }}>{optLbl(i)})</span>
-                            <MathRenderer inline text={opt} />
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-
-    // ── NUMERICAL ─────────────────────────────────────────────────────────
-    const renderNumerical = () => (
-        <div style={{ marginLeft: '4px' }}>
-            <MathRenderer style={{ whiteSpace: 'pre-wrap', textAlign: 'justify', margin: 0 }} text={q.questionText} />
-            {q.imageUrl && (
-                <div style={{ margin: '10px 0 6px', textAlign: 'center' }}>
-                    <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '180px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
-                </div>
-            )}
-            <div style={{ marginTop: '6px', fontSize: '0.9em', color: '#555', fontStyle: 'italic' }}>
-                [Numerical — write the answer in the space provided]
-            </div>
-        </div>
-    );
-
-    const renderBody = () => {
-        switch (q.type) {
-            case 'ASSERTION_REASON': return renderAssertionReason();
-            case 'MATCH_FOLLOWING': return renderMatchFollowing();
-            case 'STATEMENT_BASED': return renderStatementBased();
-            case 'NUMERICAL': return renderNumerical();
-            case 'MCQ':
-            case 'DIAGRAM_BASED':
-            default: return renderMCQ();
-        }
-    };
-
-    return (
-        <div key={q._id} style={{ color: '#111', breakInside: 'avoid', pageBreakInside: 'avoid', marginBottom: '18px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '12px' }}>
-                    <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.05em', minWidth: '24px' }}>{idx + 1}.</span>
-                    <div style={{ flex: 1 }}>{renderBody()}</div>
-                </div>
-                {showMarks && (
-                    <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.88em', marginLeft: '4px' }}>
-                        [{formatMarks(q.type, classes)}]
-                    </span>
-                )}
-            </div>
-            {showAnswerKey && (
-                <div className="no-print" style={{
-                    marginTop: '12px', marginLeft: '28px',
-                    padding: '14px',
-                    background: '#f5f7ff',
-                    border: '1px solid #c7d2fe',
-                    borderRadius: '10px',
-                    fontSize: '13px'
-                }}>
-                    <div style={{ fontWeight: 800, color: '#312e81', marginBottom: '6px' }}>💡 Answer & Hint</div>
-                    {q.answer && (
-                        <div style={{ marginBottom: '8px' }}>
-                            <strong>Correct Key:</strong>{' '}
-                            <MathRenderer inline style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '1px 7px', borderRadius: '4px', border: '1px solid #bbf7d0', display: 'inline-block' }} text={q.answer} />
-                        </div>
-                    )}
-                    {q.solutionText ? (
-                        <MathRenderer style={{ color: '#1e1b4b', whiteSpace: 'pre-wrap', lineHeight: '1.6', background: '#fff', padding: '10px', borderRadius: '6px', border: '1px solid #e0e7ff', fontSize: '13px' }} text={q.solutionText} />
-                    ) : (
-                        <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '12px' }}>No solution added yet.</span>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const QuestionList = ({ questions, fontSize, showMarks, classes, showAnswerKey }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        {questions.map((q, idx) => (
-            <QuestionItem key={q._id} q={q} idx={idx} showMarks={showMarks} classes={classes} showAnswerKey={showAnswerKey} />
-        ))}
-    </div>
-);
-
-/* ═══════════════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 /*  MAIN COMPONENT                                                        */
-/* ═══════════════════════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-const AnswerKeySheet = ({ paper, settings, onGenerateSolution, generatingSolutions }) => {
-    return (
-        <div id="key-print-area" className="print-area-key" style={{
-            background: '#fff', padding: '48px 56px',
-            maxWidth: '1000px', margin: '0 auto',
-            border: '1px solid #e2e8f0', borderRadius: '12px',
-            fontFamily: settings.fontFamily, fontSize: settings.fontSize,
-            lineHeight: settings.lineHeight,
-            boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-            boxSizing: 'border-box'
-        }}>
-            <div style={{ marginBottom: '24px', textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '16px' }}>
-                <h1 style={{ fontSize: '20px', fontWeight: 800, textTransform: 'uppercase', margin: 0, letterSpacing: '0.05em' }}>SCHEME OF EVALUATION & ANSWER KEY</h1>
-                <h2 style={{ fontSize: '15px', fontWeight: 600, marginTop: '6px', color: '#4b5563' }}>{paper.title}</h2>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#6b7280' }}>Subject: {paper.subject} &nbsp;|&nbsp; Class: {paper.classes?.join(', ')}</p>
-            </div>
 
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
-                <thead>
-                    <tr style={{ borderBottom: '2px solid #111' }}>
-                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700, width: '10%', fontSize: '13px' }}>Q.No</th>
-                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700, width: '20%', fontSize: '13px' }}>Type</th>
-                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700, width: '25%', fontSize: '13px' }}>Correct Key</th>
-                        <th style={{ textAlign: 'left', padding: '10px 8px', fontWeight: 700, width: '45%', fontSize: '13px' }}>Detailed Solution</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {paper.questions?.map((q, idx) => (
-                        <tr key={q._id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                            <td style={{ padding: '12px 8px', fontWeight: 700, verticalAlign: 'top', fontSize: '13px' }}>{idx + 1}</td>
-                            <td style={{ padding: '12px 8px', verticalAlign: 'top', textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, color: '#4f46e5' }}>{q.type || 'MCQ'}</td>
-                            <td style={{ padding: '12px 8px', verticalAlign: 'top' }}>
-                                <MathRenderer inline={true} style={{ color: '#15803d', fontWeight: 800, background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', border: '1px solid #bbf7d0', fontSize: '12px', display: 'inline-block' }} text={q.answer || '—'} />
-                            </td>
-                            <td style={{ padding: '12px 8px', verticalAlign: 'top', fontSize: '13px', color: '#1f2937' }}>
-                                {q.solutionText ? (
-                                    <div style={{ whiteSpace: 'pre-wrap' }}>{q.solutionText}</div>
-                                ) : (
-                                    <span style={{ color: '#6b7280', fontStyle: 'italic', fontSize: '12px' }}>No detailed solution has been added for this question yet.</span>
-                                )}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-};
+
+
+
+
+
 
 const SavedPapers = () => {
     const [papers, setPapers] = useState([]);
@@ -915,7 +311,7 @@ const SavedPapers = () => {
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [hoveredRow, setHoveredRow] = useState(null);
 
-    /* ── Filter state ── */
+    /* â”€â”€ Filter state â”€â”€ */
     const [filterClass, setFilterClass] = useState('');
     const [filterDate, setFilterDate] = useState('');
 
@@ -946,12 +342,12 @@ const SavedPapers = () => {
         }
     };
 
-    /* ── Unique class options from all papers ── */
+    /* â”€â”€ Unique class options from all papers â”€â”€ */
     const classOptions = [...new Set(
         papers.flatMap(p => p.classes || [])
     )].sort();
 
-    /* ── Filtered papers ── */
+    /* â”€â”€ Filtered papers â”€â”€ */
     const filteredPapers = papers.filter(p => {
         const matchClass = filterClass
             ? (p.classes || []).includes(filterClass)
@@ -969,7 +365,7 @@ const SavedPapers = () => {
         setFilterDate('');
     };
 
-    /* ── Paper view ── */
+    /* â”€â”€ Paper view â”€â”€ */
     if (selectedPaper) {
         return (
             <PaperView
@@ -980,12 +376,12 @@ const SavedPapers = () => {
         );
     }
 
-    /* ── Summary values (based on ALL papers, not filtered) ── */
+    /* â”€â”€ Summary values (based on ALL papers, not filtered) â”€â”€ */
     const lastDate = papers.length
         ? new Date(Math.max(...papers.map(p => new Date(p.createdAt)))).toLocaleDateString()
-        : '—';
+        : 'â€”';
 
-    /* ── List view ── */
+    /* â”€â”€ List view â”€â”€ */
     return (
         <div style={S.page}>
 
@@ -1006,7 +402,7 @@ const SavedPapers = () => {
                 </div>
             </div>
 
-            {/* Summary cards — 2 cards only (Total Questions removed) */}
+            {/* Summary cards â€” 2 cards only (Total Questions removed) */}
             <div style={S.summaryGrid}>
                 <div style={S.summaryCard}>
                     <div style={S.summaryLabel}>Total Papers</div>
@@ -1024,7 +420,7 @@ const SavedPapers = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
                 <div style={S.sectionLabel}>All Papers</div>
 
-                {/* ── Filters ── */}
+                {/* â”€â”€ Filters â”€â”€ */}
                 <div style={S.filterBar}>
                     {/* Class filter */}
                     <span style={S.filterLabel}>Class:</span>
@@ -1048,7 +444,7 @@ const SavedPapers = () => {
                         onChange={e => setFilterDate(e.target.value)}
                     />
 
-                    {/* Clear button — only shown when filters are active */}
+                    {/* Clear button â€” only shown when filters are active */}
                     {hasActiveFilters && (
                         <button
                             style={S.btnClearFilters}
@@ -1056,7 +452,7 @@ const SavedPapers = () => {
                             onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#374151'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
                         >
-                            ✕ Clear
+                            âœ• Clear
                         </button>
                     )}
                 </div>
@@ -1066,7 +462,7 @@ const SavedPapers = () => {
             <div style={S.tableWrap}>
                 {filteredPapers.length === 0 ? (
                     <div style={S.empty}>
-                        <div style={S.emptyIcon}>{papers.length === 0 ? '📄' : '🔍'}</div>
+                        <div style={S.emptyIcon}>{papers.length === 0 ? 'ðŸ“„' : 'ðŸ”'}</div>
                         <div style={S.emptyTitle}>{papers.length === 0 ? 'No saved papers yet' : 'No papers match your filters'}</div>
                         <div style={S.emptySub}>
                             {papers.length === 0
@@ -1101,7 +497,7 @@ const SavedPapers = () => {
                                     {/* Paper */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <div style={S.paperCell}>
-                                            <div style={S.paperIcon}>📝</div>
+                                            <div style={S.paperIcon}>ðŸ“</div>
                                             <div>
                                                 <div style={S.paperTitle}>{p.title}</div>
                                                 <div style={S.paperId}>#{String(i + 1).padStart(4, '0')}</div>

@@ -1,0 +1,1282 @@
+
+--- PAGE 1 ---
+  
+ 
+_______________________________________________________________ 
+TOTAL MARKS – 720 MARKS                               DURATION – 3.00 HOURS                              DATE – 16-07-2026 
+_______________________________________________________________________________________________________________________________ 
+ 
+PART A – PHYSICS 
+1. A body is thrown vertically upwards with a velocity u. Select the incorrect statements from the following. 
+ I. Both velocity and acceleration are zero at its highest point 
+ II. Velocity is maximum and acceleration is zero at the highest point. 
+ III. Velocity is maximum and acceleration is g downwards at its highest point. 
+ (1) I and II  (2) II and III  (3) I and III   (4) I, II and III 
+2. A ball is shot from the floor in a long hall having a roof at a height of 15 m. Initial velocity of the ball is 25 ms –1 at  
+ an angle of 53° with the floor. The ball lands on the floor at a distance x m from the point of projection. Assume    
+ collision with roof as elastic, if any, and find  
+ (1) 20 m 
+ (2) 40 m 
+ (3) 30 m 
+ (4) 15 m 
+3. In the arrangment as shown, tension T2 is (g = 10 m/s2) 
+ (1) 50 N 
+ (2) 100 N 
+ (3) 50√3 N 
+ (4) 100√3 N 
+ 
+4. The speed of travelling wave whose quantities is given by y = 2 / [(x – 3t)2 + 1], (all variables are in SI unit) is 
+ (1) 3 m/s  (2) 1/3 m/s  (3) 9 m/s  (4) 1/9 m/s 
+5. Two simple pendulums of lengths 9m and 25m, are both given small displacements in the same direction at the  
+ same instant. If they are in phase after the shorter pendulum has completed n oscillations, n is equal to :- 
+ (1) 5   (2) 5/2   (3) 3/2   (4) 3 
+6. A block of mass m is connected to three springs, each of spring constant k as shown in the block is pulled by x in  
+ the direction of C. Find resultant spring constant. 
+ 
+ (1) k 
+ (2) 2k 
+  
+ 
+ 
+-___ 
+ 
+
+--- PAGE 2 ---
+ (3) 3k 
+ (4) 3K/2 
+7. A stone projected with a velocity u at an angle θ with the horizontal reaches maximum height H1. When it is  
+ projected with velocity u at an angle (π/2 – θ) with the horizontal, it reaches maximum height H2. The relation  
+ between the horizontal range R of the projectile, H1 and H2 is. 
+ (1) R = 4√(H1H2) (2) R = 4(H1 – H2) (3) R = 4(H1 + H2) (4) R = H12 / H22 
+8. The ratio of the radii of gyration of a circular disc about a tangential axis in the plane of the disc and of a circular  
+ ring of the same radius about a tangential axis in the plane of the ring is 
+ (1) 2 : 3  (2) 2 : 1   (3) √5 : √6  (4) 1 : √2 
+ 
+9. The moment of inertia of two rotating bodies A and B are IA and IB (IA> IB). If their angular momentum are equal,  
+ then 
+ (1) Kinetic energy of A = Kinetic energy of B 
+ (2) Kinetic energy of A > Kinetic energy of B 
+ (3) Kinetic energy of A < Kinetic energy of B 
+ (4) Kinetic energy of the two bodies cannot be compared with the given data 
+10. A diatomic gas (γ = 1.4) does 200 J of work when it is expanded isobarically. Find the heat given to the gas in the  
+ process- 
+ (1) 400 J  (2) 500 J  (3) 700 J  (4) 300 J 
+11. A gas is compressed isothermally to half of its initial volume, The same gas is compressed separately through an  
+ adiabatic process until its volume is again reduced to half. Then- 
+ (1) Compressing the gas through adiabatic process will require more work to be done. 
+ (2) Compressing the gas isothermally or adiabatically will require the same amount of work. 
+ (3) Which of the case (Whether compression through isothermal or through adiabatic process) requires more     
+  work will depend upon the atomicity of the gas. 
+ (4) Compressing the gas isothermally will require more work to be done. 
+12. There are 100 divisions on the circular scale of a screw gauge of pitch 1 mm. With no measuring quantity in  
+ between the jaws, the zero of the circular scale lies 5 divisions below the reference line. The diameter of a wire is  
+ then measured using this screw gauge. It is found the 4 linear scale divisions are clearly visible while 60 divisions  
+ on circular scale coincide with the reference line. The diameter of the wire is : 
+ (1) 4.65 mm  (2) 4.55 mm  (3) 4.60 mm  (4) 3.35 mm 
+13. A silver wire has mass (0.6 ± 0.006) g, radius (0.5 ± 0.005) mm and length (4 ± 0.04) cm. The maximum percentage  
+ error in the measurement of its density will be 
+ (1) 4%  (2) 3%   (3) 6%   (4) 7% 
+14. A circular disc of radius R is removed from a bigger circular disc of radius 2R such that the circumference of the  
+ disc coincide. The center of mass of the new disc is αR from the center of the bigger disc. The value of α is :- 
+ (1) 1/3  (2) ½   (3) 1/6   (4) 1/4 
+15. A stone is tied to a string of length L is whirled in a vertical circle with the other end of the string at the centre. At  
+ a certain instant of time, the stone is at its lowest position and has a speed u. The magnitude of the change in its  
+ velocity as it reaches a position where the string is horizontal is :- 
+ (1) √(u2 – 2gL) (2) √(2gL)  (3) √(u2 – gL)  (4) √(2(u2 – gL)) 
+16. A uniform chain (mass M, length L) is released from rest from a smooth horizontal surface as shown in the figure.  
+ Velocity of the chain at the instant it completely comes out of the table will be:- 
+--- PAGE 3 ---
+ 
+ (1) v = √(gL) 
+ (2) v = √(3gL/4) 
+ (3) v = √(8gL/9) 
+  
+(1) v = √(gL)      (2) v = √(3gL/4)         (3) v = √(8gL/9)         (4) v = √(7gL/8) 
+17. The escape velocity from a planet is Ve. A tunnel is dug along a diameter of the planet and a small body is  
+ dropped into it at the surface. When the body reaches the centre of the planet, its speed will be 
+ (1) ve  (2) ve/√2  (3) ve/2   (4) Zero 
+ 
+18. Consider two solid spheres of radii R1 = 1m, R2 = 2m and masses M1 and M2, respXectively. The gravitational field  
+ due to sphere (1) and (2) are shown. The value of M1/M2 is: 
+  
+ (1) 1/2 
+ (2) 2/3 
+ (3) 1/3 
+ (4) 1/6 
+19. Two wires, one of steel and the other of brass having same lengths and radii in the ratio 1:2 are suspended from  
+ the same roof. What should be the ratio of weights suspended from steel and brass wires so that the lower ends  
+ of both the wires are at the same level ? (Given Ysteel = 2Ybrass) 
+ (1) 2 : 1  (2) 4 : 1   (3) 1 : 2   (4) 1 : 4 
+20. A large number of liquid drops each of radius a coalese to form a single spherical drop of radius b. The energy  
+ released in the process is converted into kinetic energy of the big drop formed. The speed of big drop will be :- 
+ (T = surface tension, d = density of liquid) 
+ (1) √[(6T/d)(1/a – 1/b)]   (2) √[(4T/d)(1/a – 1/b)] 
+ (3) √[(8T/d)(1/a – 1/b)]   (4) √[(5T/d)(1/a – 1/b)] 
+21. A stone tied to the end of a 80 cm long string is whirled in a horizontal circle with a constant speed. If the stone  
+ makes 14 revolutions in 25 s, the magnitude of its acceleration is. 
+ (1) 20 m/s2  (2) 12 m/s2  (3) 9.9 m/s2  (4) 8 m/s2 
+22. A point initially at rest moves along x-axis. Its acceleration varies with time as a = (6t + 5) m/s2. If it starts from  
+ origin, the distance covered in 2 s is 
+ (1) 20 m  (2) 18 m  (3) 16 m  (4) 25 m 
+23. A block of mass m is placed on a surface with a vertical cross section given by y = x3/6. If the coefficient of friction  
+ is 0.5, the maximum height above the ground at which the block can be placed without slipping is: 
+ (1) 1/6 m  (2) 2/3 m  (3) 1/3 m  (4) 1/2 m 
+24. In a series resonant circuit, having L, C and R as its elements, the resonant current is i. The power dissipated in  
+ circuit at resonance is: 
+ (1) i2R / (ωL – 1/ωC) (2) Zero   (3) i2Ωl   (4) i2R 
+25. A circular wire of radius r rotates about its own axis with angular speed ω in a magnetic field B perpendicular to  
+ its plane, then the induced e.m.f. is : 
+ (1) ½Brω2  (2) Br2   (3) 2Brω2  (4) Zero 
+26. Select the wrong statement. EM waves : 
+ (1) Are transverse in nature. 
+
+--- PAGE 4 ---
+ (2) Travel in free space at a speed of light. 
+ (3) Are produced by accelerating charges 
+ (4) Travel in all media with same speed. 
+27. An electric charge +q moves with velocity v⃗ = 3î + 4ĵ + k̂ in an electromagnetic field given by E⃗ = 3î + ĵ + 2k̂ and  
+ B⃗ = î + ĵ – 3k̂. They-component of the force experienced by +qis : 
+ (1) 11q  (2) 5q   (3) 3q   (4) 2q 
+28. A charged particle moves with velocity v⃗ = aî + dĵ in a magnetic field B⃗ = Aî + Dĵ. The force acting on the  
+ particle has magnitude F. Then : 
+ (1) F=0, if a D=d A (2) F=0, if a D=-d A (3) F=0, if Aa =-dD (4) F ∝ (a2 + b2)1/2 × (A2 + D2)1/2 
+ 
+29. A conducting circular loop of radius r carries a constant current i. It is placed in a uniform magnetic field B such  
+ that B is perpendicular to the plane of the loop. The magnetic force acting on the loop is: 
+ (1) irB  (2) 2nriB  (3) Zero   (4) nriB 
+30. Three rays of light, namely red (R), green (G) and blue (B) are incident on the face PQ of a right angled isosceles  
+ prism PQR as shown in figure. 
+  
+ 
+ 
+ The refractive indices of the material of the prism for red, green and blue wavelength are 1.27, 1.42 and 1.49  
+ respectively. The colour of the ray(s) emerging out of the face PR is : 
+ (1) Green  (2) Red   (3) Blue and green (4) Blue 
+31. An object is placed a distance of 40 cm from a concave mirror of focal length 15 cm . If the object is displaced  
+ through a distance of 20 cm towards the mirror, the displacement of the image will be- 
+ (1) 30 cm away from the mirror  (2) 36 cm away from the mirror 
+ (3) 30 cm towards the mirror   (4) 36 cm towards the mirror 
+32.  
+ 
+ The logic circuit shown above is equivalent to: 
+ (1)   (2)  
+ (3)   (4)  
+33. A Zener diode having Zener voltage 8 V and power dissipation rating of 0.5 W is connected across a potential  
+ divider arranged with maximum potential drop across Zener diode is as shown in the diagram. The value of  
+ protective resistance Rp is ____ Ω 
+ (1) 19.2 
+ (2) 192 
+ (3) 1920 
+ (4) 1.92 
+34. An X-ray tube is operated at 1.24 million volt. The shortest wavelength of the produced photon will be : 
+ (1) 10−3 nm  (2) 10−1 nm  (3) 10−2 nm  (4) 10−4 nm 
+35. Consider the following statements: 
+
+--- PAGE 5 ---
+ A. Atoms of each element emit characteristics spectrum. 
+ B. According to Bohr's Postulate, an electron in a hydrogen atom, revolves in a certain stationary orbit. 
+ C. The density of nuclear matter depends on the size of the nucleus. 
+ D. A free neutron is stable but a free proton decay is possible. 
+ E. Radioactivity is an indication of the instability of nuclei. 
+ Choose the correct answer from the options given below : 
+ (1) A, B, C, D and E    (2) A, B and E only 
+ (3) B and D only    (4) A, C and E only 
+ 
+ 
+36. Light is incident on a glass block as shown in figure. 
+  
+ 
+ 
+ 
+ If θ1 is increased slightly then what happens to θ2 
+ (1) θ2 also increases slightly 
+ (2) θ2 unchanged 
+ (3) θ2 decreases slightly 
+ (4) θ2 changes abruptly since the ray experiences total internal reflection. 
+37. Two polaroids are crossed to each other. When one of them is rotated through 60o then what percentage of the  
+ incident unpolarised light will be transmitted by the polaroids ? 
+ (1) 50%  (2) 75%   (3) 62.5%  (4) 37.5% 
+38. The objective lens of a compound microscope produces magnification of 10. In order to get an overall  
+ magnification of 100 when image is formed at 25 cm from the eye, the focal length of the eye lens should be 
+ (1) 4 cm  (2) 10 cm  (3) 25/9 cm  (4) 9 cm 
+39. Which one of the following statement is false? 
+ (1) Pure Si doped with trivalent impurities gives a p-type semiconductor. 
+ (2) Majority carriers in a n-type semiconductor are holes. 
+ (3) Minority carriers in a p-type semiconductor are electrons. 
+ (4) The resistance of intrinisic semiconductor decreases with increase of temperature. 
+40. An electric dipole is placed along x axis in an electric field E⃗ = x2î, the dipole will 
+ (1) Undergo rotational motion only  (2) Translate only along x axis 
+ (3) Rotate and translate along z axis  (4) Rotate and translate along x axis 
+41. A charge Q is distributed over two concentric hollow spheres of radii R and r(R > r) such that their surface  
+ densities are equal. The common potential at the centre is (in cgs system) 
+ (1) ZERO     (2) 2kQ[(r + R)/(r2 + R2)]  
+ (3) kQ[(r + R)/(r2 + R2)]   (4) ½kQ[(r + R)/(r2 + R2)] 
+42. If the plates of a parallel plate capacitor connected to a battery are moved close to each other, then 
+ A. The charge stored in it, increases. 
+ B. The energy stored in it, decreases. 
+ C. Its capacitance increases. 
+ D. The ratio of charge to its potential remains the same. 
+ E. The product of charge and voltage increases. 
+ Choose the most appropriate answer from the options given below: 
+
+--- PAGE 6 ---
+ (1) B, D and E only (2) A, B and C only (3) A, B and E only (4) A, C and E only 
+43. A voltmeter consists of a 25Ω coil connected in series with a 575 Ω resistor. The coil takes 10 mA for full scale  
+ deflection. What maximum potential difference can be measured on this voltmeter? 
+ (1) 3V  (2) 6V   (3) 0.6V   (4) 0.3V 
+44. In the given network, the equivalent resistance between A and B is 
+(1) 6 Ω 
+ (2) 16 Ω 
+ (3) 7 Ω 
+ (4) 5 Ω 
+45. As the switch S is closed in the circuit shown in figure, current passed through it is: 
+ (1) 4.5 A 
+ (2) 6.0 A 
+ (3) 3.0 A 
+ (4) Zero 
+ 
+PART B – CHEMISTRY 
+46. Which of the following statement is incorrect. 
+ (i) Octet expansion of 2nd period elements is not possible. 
+ (ii) Octet rule dictates that atoms are most stable when their valence shells are filled with 8 electrons. 
+ (iii) BeCl2 dimer does not follow octet rule. 
+ (iv) Formal charge can be calculated with the help of octet rule, for 2nd period elements. 
+ (v) Hydrogen can never obey octet rule. 
+ (vi) SF4, PCl5 and IF7 are example of octet expansion. 
+ (vii) Duplet rule is followed by hydrogen and helium. 
+ (viii)F2 is an example of incomplete octet. 
+ (1) Statement number (ii)   (2) Statement number (iv) 
+ (3) Statement number (vi)   (4) Statement number (viii) 
+47. Statement I : The bond order of helium molecule (He2) is zero. 
+ Statement II : The number of electrons in bonding molecular orbital and antibonding molecular orbital are equal. 
+ (1) If both statement I and statement II are true and the statement II is the correct explanation of the statement I. 
+ (2) If both statement I and statement II are true but statement II is not the correct explanation of the statement I. 
+ (3) If statement I is true but statement II is false. 
+ (4) If the statement I and statement II both are false. 
+48. A 5.6 g sample of an organic compound containing only C, H and O gave 8.8 g CO2 and 3.6 g H2O on complete  
+ combustion. If the molar mass of the compound is 56 g/mol, the number of oxygen atoms per molecule is: 
+ (1) 1   (2) 2   (3) 3   (4) 0 
+49. When 1.0 L of 0.2 M K2Cr2O7 reacts completely with excess FeSO4 in acidic medium, the mass of Fe3+ formed (in g)  
+ is: (Fe = 56) 
+ (1) 67.2  (2) 33.6   (3) 44.8   (4) 22.4 
+50. Which of the following statement is wrong. 
+ (1) Aldehydes react with one equivalent of monohydric alcohol in presence of dry hydrogen chlorides to yield  
+  alkoxyalcohol intermediate, known as acetals. 
+ (2) NaHSO3 are useful for separation and purification of aldehyde. 
+
+--- PAGE 7 ---
+ (3) Cyanohydrins are useful synthetic intermediates. 
+ (4) Lucas test can be used for distinguishes of primary, secondary and tertiary alcohol. 
+51. Which of the following is incorrect? 
+ (1)        (2) 
+  
+ (3)        (4)  
+ 
+ 
+ 
+ 
+52. The magnetic moment of a certain complex (A) of Co was found to be 4.89 B.M. and the EAN as 36. Co also forms  
+ complex (B) with magnetic moment 3.87 B.M. and EAN 37, and complex (C) with EAN as 36 but diamagnetic.  
+ Which of the following statements is true regarding the above observation? 
+ (1) The oxidation states of Co in (A), (B), and (C) are +3, +2, and +3, respectively 
+ (2) Complexes (A) and (B) have sp3d2 hybridization state while (C) has dsp3 hybridization state 
+ (3) The spin multiplicities of Co in (A), (B), and (C) are 4, 3, and 1, respectively 
+ (4) The oxidation states of Co in (A), (B), and (C) are +6, +8, and + 1, respectively 
+53. Pick the incorrect statement 
+ (1) Actinoids have higher tendency of complex formation as compared to lanthanoids 
+ (2) All actinoids are radioactive whereas all lanthanides except promethium are nonradioactive 
+ (3) Oxides and hydroxides of actinoids are more basic than that of lanthanoids 
+ (4) Highest oxidation state exhibited by actinoids is lower than that of lanthanoids 
+54. The wavelength of the radiation emitted when an electron in a hydrogen atom transitions from the orbit whose  
+ angular momentum is 3h/2π to the orbit with angular momentum h/π is: (RH = 1.097 × 107 m−1) 
+ (1) 6563 Å  (2) 4861 Å  (3) 1025 Å  (4) 1216 Å 
+55. Which of the following sets of quantum numbers is NOT permissible? 
+ (1) n=3, l=2, ml=−1, ms=+½   (2) n=4, l=3, ml=+3, ms=−½ 
+ (3) n=2, l=2, ml=O, ms=+½   (4) n=5, l=O, ml=O, ms=−½ 
+56. The major product 'X' formed in the following reaction is 
+ 
+ 
+ 
+ 
+ 
+ (1)      (2)  
+ 
+ 
+ 
+ 
+ (3)       (4)  
+ 
+ 
+ 
+57. Arrange in correct basic strength order 
+ (a)    (b) 
+
+--- PAGE 8 ---
+ 
+ 
+ 
+ (1) d > c > b > a (2) a > b > c > d  (3) c > b > d > a  (4) c > d > b > a 
+58. Which is not correct statement about the chemistry of 3d and 4f series elements 
+ (1) 3d-elements show more oxidation states than 4f-series elements 
+ (2) The energy difference between 3d and 4s orbitals is very little 
+ (3) Eurpium(II) is more stable than Ce(II) 
+ (4) The paramagnetic character in 3d-series elements increases from scandium to copper 
+ 
+59. Identify the correct statement? 
+ (1) B < C < N <O : First ionization enthalpy (2) S2–> Cl–> K+> Ca2+ : Ionization enthalpy 
+ (3) Al3+< Mg2+< Na+< F– : Ionic size  (4) F > Cl > Br >I : E.A 
+60. For the reaction N2(g) + O2(g) ⇌ 2NO(g), Kc = 4 × 10−4 at temperature T. If 1 mol N2 and 1 mol O2 are placed in a 1 L  
+ vessel, the equilibrium concentration of NO (in M) is approximately: 
+ (1) 0.02  (2) 0.04   (3) 0.01   (4) 0.2 
+61. The pH of a 0.01 M solution of a weak acid HA (Ka = 4 × 10−5) is closest to: 
+ (1) 2.7  (2) 3.2   (3) 4.4   (4) 2.0 
+62. Identify products A and B : 
+ 
+ 
+ 
+ 
+(1)       (2)  
+ 
+ 
+ 
+ 
+  (4) 
+ 
+ 
+ 
+63. What is the IUPAC name of the organic compound formed in the following chemical reaction? 
+ 
+ 
+ (1) 2-Methylpropan-2-ol   (2) Pentan-2-ol 
+ (3) Pentan-3-ol    (4) 2-Methylbutan-2-ol 
+64. Consider the following orders: 
+ (i) N2O3> N2O4> N2O5 : Acidic character 
+ (ii) CH4< CCl4< CF4 : Electronegativity of central ‘C’-atom 
+ (iii) Ca2+< Na+< S2–< Se2– : Ionic radius 
+ (iv) Ni > Pd >Pt : Ionisation energy 
+ (v) As5+> Sb5+> Bi5+ : Stability of oxidation state 
+ (vi) LiF > NaF > KF >RbF : Lattice energy 
+ (vii) Cl > Br > F >I : Electron affinity 
+
+--- PAGE 9 ---
+ Number of correct orders are :- 
+ (1) 3   (2) 4   (3) 5   (4) 6 
+65. The correct order of bond enthalpy (kJ mol–1) is___. 
+ (1) Si–Si > C–C > Sn–Sn > Ge–Ge  (2) Si–Si > C–C > Ge–Ge > Sn–Sn 
+ (3) C–C > Si–Si > Sn–Sn > Ge–Ge  (4) C–C > Si–Si > Ge–Ge > Sn–Sn 
+66. Equal volumes of 0.1 M CH3COOH and 0.05 M NaOH are mixed. If Ka for CH3COOH = 1.8 × 10−5, the resulting  
+ solution is: 
+ (1) An acidic buffer with pH < 4.74  (2) An acidic buffer with pH = 4.74 
+ (3) A basic buffer with pH > 4.74  (4) A neutral solution 
+ 
+67. Assertion (A): The common ion effect reduces the solubility of a sparingly soluble salt. 
+ Reason (R): Addition of a common ion shifts the dissolution equilibrium towards the undissolved salt as per Le  
+   Chatelier's principle. 
+ (1) Both A and R are true; R is the correct explanation of A 
+ (2) Both A and R are true; R is NOT the correct explanation of A 
+ (3) A is true but R is false 
+ (4) A is false but R is true 
+68. The major product of the following reaction is : 
+ 
+ 
+ 
+ 
+ 
+ (1)      (2)  
+ 
+ 
+ 
+ (3)       (4) 
+ 
+ 
+ 
+69. Match List I with List II 
+List I – Natural amino acid List II – One letter code 
+ a  Aspartic acid i    Y 
+b  Arginine ii   R 
+c  Tyrosine iii  F 
+d  Phenylalanine iv   D 
+ (1) a-iv, b-ii, c-i, d-iii    (2) a-i, b-ii, c-iv, d-iii 
+ (3) a-ii, b-I, c-iii, d-iv    (4) a-I, b-ii, c-iii, d-iv 
+70. The correct statement about oxy acids of chlorine 
+ (1) All the oxy acids have same number of un protonated oxygens 
+ (2) In all the oxy acids oxidation state of chlorine is same 
+ (3) All the oxy acids have different number of Cl–OH bonds 
+
+--- PAGE 10 ---
+ (4) Have different number of Cl=O bonds 
+71. Identify the correct order of wavelength of light absorbed for the following complex ions. 
+ (I) [Co(H2O)6]3+      (II) [Co(CN)6]3–   
+ (III) [Co(Cl)6]3–      (IV) [Co(en)3]3+ 
+ (1) III > I > IV > II (2) II > IV > I > III  (3) III > I > II > IV  (4) I > III > IV > II 
+72. For a reaction at 300 K: ΔH = −60 kJ/mol and ΔS = −180 J/(mol·K). At what temperature (in K) does the reaction  
+ become non-spontaneous? 
+ (1) Above 333 K (2) Above 500 K  (3) Below 333 K  (4) At all temperatures 
+73. Heat of formation of Al2O3(s) is (–x) Kcal/mol. Calculate heat of combustion of Al(s)is ? 
+ (1) (–x) Kcal/mol (2) (–2x) Kcal/mol (3) (–x/2) Kcal/mol (4) Can not be calculated 
+74. Assertion : (CH3)3C+ is more stable than CH3C+H2 and C+H3 is the least stable cation. 
+Reason : Hyperconjugation interaction in (CH3)3C+ is greater than in CH3C+H2 as the (CH3)3C+ has nine C-H bonds. In  
+         C+H3, vacant p orbital is perpendicular to the plane in which C–H bonds lie; hence cannot overlap  
+          with it. Thus, C+H3 lacks hyperconjugative stability 
+ The correct answer will be :- 
+ (1) Both Assertion and Reason are true and Reason is the correct explanation of Assertion 
+ (2) Both Assertion and Reason are true and Reason is not the correct explanation of Assertion 
+ (3) Assertion is true and Reason is false 
+ (4) Assertion is false and Reason is true 
+75. Which of the following statements is/are correct? 
+ (A) Wurtz reaction is used for the preparation of higher alkanes containing even number of carbon atoms. 
+ (B)  
+ (C) Ozonolysis reaction is highly useful in detecting the position of the double bond in alkenes or other 
+unsaturated compound 
+ (D) Alkenes on reaction with cold. dilute, aqueous solution of potassium permanganate (Baeyer’s reagent) 
+produce vicinal glycols. 
+ (1) Only a, d  (2) Only a, b, c  (3) Only a, c, d  (4) a, b, c, d 
+76. Among the following metal carbonyl species, the one with the highest metal-carbon back bonding is 
+ (1) [Ti(CO)6]2– (2) [V(CO)6]–  (3) Cr(CO)6  (4) [Mn(CO)6]+ 
+77. The compounds which on complete hydrolysis forms XeO3 
+ (P) XeF4     (Q) XeF6  (R) XeF2 
+ (1) P, R  (2) P, Q   (3) Q, R   (4) P, Q, R 
+78. The osmotic pressure of a 0.1 M solution of a substance that dimerises to 50% extent in solution is: (T = 300 K, R =  
+ 0.082 L atm K−1 mol−1) 
+ (1) 1.845 atm (2) 2.46 atm  (3) 1.23 atm  (4) 3.69 atm 
+79. Assertion (A): A solution of 6 g urea in 100 g water shows the same freezing point depression as a solution of 9 g  
+     glucose in 100 g water. 
+ Reason (R): The colligative property depends on the number of moles of solute, not on its nature. (Urea = 60,  
+              Glucose = 180) 
+ (1) Both A and R are true; R is the correct explanation of A 
+ (2) Both A and R are true; R is NOT the correct explanation of A 
+ (3) A is true but R is false 
+ (4) A is false but R is true 
+
+--- PAGE 11 ---
+80. Using the provided information in the following paper chromatogram :- 
+ 
+ 
+ 
+ 
+ 
+ Fig : paper chromatography for compound A and B calculate Rf value of B 
+ (1) 0.4  (2) 2.5   (3) 1.25   (4) 0.8 
+ 
+ 
+81. Match the List-I with List-II. 
+List-I (Compound) List-II B.P.(K) 
+A  Propanal i    370 
+B  Acetone ii   322 
+C  Propan-1-ol iii  329 
+D  Methoxyethane iv   281 
+E  n–Butane v    273 
+ (1) A-ii, B-iii, C-i, D-iv, E-v   (2) A-iii, B-ii, C-i, D-iv, E-v 
+ (3) A-i, B-ii, C-iii, D-iv, E-v   (4) A-ii, B-i, C-iii, D-v, E-iv 
+82. The three lanthanoids which exhibit +2 oxidaiotn state are 
+ (1) Sm, Tb, Gd (2) Sm, Eu, Yb  (3) La, Gd, Lu  (4) Yb, Pm, Sm 
+83. Identify the number of correct statements:- 
+ (a) NaNO3& KNO3 are known as Indian salt-petre and chile-salt petre respectivley 
+ (b) There is a considerable increase in covalent radius from N to P. 
+ (c) Bismuth hardly forms any compound in -3 oxidation state 
+ (d) Except nitrogen, all the elements show allotropy in group 15. 
+ (e) Single N-N bond is weaker than the single P-P bond 
+ (f) Magnesium can combine with bismuth to form magnesium bismuthide 
+ (g) In oxy acids of phosphorus, P-H bonds are not ionisable to give H+ and do not play any role in basicity 
+ (h) For group 16, Bonding in +4 and +6 oxidation states are primarily covalent 
+ (i) Atomic radius of aluminium is 143 pm. 
+ (j) Due to property of catenation and pπ- pπ bond formation, carbon is able to show allotropic forms. 
+ (1) 6   (2) 7   (3) 8   (4) 9 
+84. A first-order reaction is 75% complete in 40 minutes. The time required for it to be 99.9% complete (in minutes) is  
+ closest to: (log 2 = 0.301) 
+ (1) 120  (2) 200   (3) 100   (4) 160 
+85. Assertion (A): For a zero-order reaction, the half-life is directly proportional to the initial concentration. 
+ Reason (R): For a zero-order reaction, t½ = [A]0/2k. 
+ (1) Both A and R are true; R is the correct explanation of A 
+ (2) Both A and R are true; R is NOT the correct explanation of A 
+ (3) A is true but R is false 
+ (4) A is false but R is true 
+86. The number of aromatic compounds form following are:- 
+
+--- PAGE 12 ---
+ 
+ 
+(1) 6   (2) 5   (3) 4   (4) 8 
+ 
+ 
+87. Match the column I with column II and mark the appropriate choice. 
+Column I Column II 
+A  Carbon tetrachloride (i)    Paint remover 
+B  Methylene chloride (ii)   Refrigerators and air conditioners 
+C  DDT (iii)  Fire-extinguisher 
+D  Freons (iv)   Non-biodegradable insecticide 
+ (1) A – (i),   B – (iii),   C – (iv),   D – (ii)  (2) A – (iv),  B – (iii),   C – (ii),   D – (i) 
+ (3) A – (i),   B – (ii),    C – (iii),  D – (iv)  (4) A – (iii), B – (i),     C – (iv),   D – (ii) 
+88. In Group-II B analysis of As3+, which of the following observations are correct? 
+ (A) As2S3 dissolves in yellow ammonium sulphide 
+ (B) Yellow ppt of As2S5 is formed on adding dil. HCl 
+ (C) Yellow ppt with ammonium molybdate confirms as arsino ammonium molybdate. 
+ (D) As2S5 is insoluble in dilute HNO3 
+ (1) only A & B (2) A, B & C  (3) A, B, C, D  (4) A, C, D 
+89. During electrolysis of aqueous CuSO4 using platinum electrodes, 2.5 A current is passed for 3860 s. The mass of  
+ copper deposited at the cathode (in g) is: (Cu = 63.5, F = 96500 C/mol) 
+ (1) 3.175  (2) 6.35   (3) 1.5875  (4) 0.635 
+90. Match the following compound with their pKa value 
+Compound pKa Value 
+a  Ethanol i    10.2 
+b  Phenol ii   8.3 
+c  o-Cresol iii  15.9 
+d  m-Nitrophenol iv   10.0 
+ (1) a-ii; b-i; c-iv; d-iii    (2) a-iii; b-iv; c-i; d-ii 
+ (3) a-ii; b-iv; c-i; d-iii    (4) a-i; b-iv; c-iii; d-ii 
+
+--- PAGE 13 ---
+PART C – BIOLOGY 
+91. Read the following term carefully :- 
+ Algin, Carrageen, Mannitol, Starch, Polysiphonia, Dictyota, Fucus, Pear shaped Zoospore, Oogamous, Volvox,  
+ Chlorophyll 'd', Fucoxanthin, ribbon shaped chloroplast, holdfast 
+ How many terms are related with brown algae 
+ (1) 10  (2) 12   (3) 9   (4) 8 
+92. Read the following statements and find out how many are correct. 
+ (1) In roots the parenchymatous cells which lie between xylem and phloem are called conjuctive tissue. 
+ (2) All the tissues on the inner side of endodermis such as pericycle, vascular bundles and pith constitute the 
+stele. 
+ (3) When the xylem and phloem are situated at the same radius of vascular bundles it is called conjoint vascular 
+bundle. 
+ (4) In leaves pericycle & endodermis is present 
+ (1) Three  (2) One   (3) Four   (4) Two 
+93. Mendel's work remain unrecognised for long time due to :- 
+ I. Communication was not easy. 
+ II. Concept of factors which did not blend was not accepted 
+ III. Use of mathematics to explain biological problem was unacceptable 
+ IV. He could not provide any physical proof for the existance of factors. 
+ Choose the right combinations 
+ (1) I and II  (2) II and III  (3) III and IV  (4) All of these 
+94. Find the incorrect statement: 
+ (1) In bundle sheath cells of C4 plants, first product of CO2 fixation is 3C compound. 
+ (2) In photorespiration both chloroplast and peroxisome utilize O2. 
+ (3) PEP carboxylase plays important role in synthesis of sugar in mesophyll cells of C4 plants. 
+ (4) ATP requirement of C4 plants is higher as compared to C3 plants to produce one molecule of sugar. 
+95. A plant with genotype TtRrEE produce 400 gametes. Find out number of gamets which contain tRE genotype? 
+ (1) 300  (2) 200   (3) 100   (4) 0 
+96. Match the following:- 
+Column-I Column-II 
+(a) Sickle cell anaemia (i) Deletion 
+(b) Thalassemia (ii) Translocation 
+(c) CML (iii) Lethal genetic disorder 
+(d) Cry du chat (iv) Substitution 
+ (1) a-iv, b-iii, c-ii, d-I    (2) a-iii, b-iv, c-ii, d-i 
+ (3) a-ii, b-iii, c-i, d-iv    (4) a-iii, b-iv, c-i, d-ii 
+97. FIll in the blanks :- 
+ (i) The human genome project was completed in ..a.. and the sequence of chromosome 1 was completed in ..b.... 
+ (ii) Chromosome 1 has ....c.... and chromosome Y has ...d... genes. 
+ (1) a-1990, b-2006, c-231, d-2968  (2) a-2006, b-2003, c-231, d-2968 
+ (3) a-1990, b-2006, c-2968, d-231  (4) a-2003, b-2006, c-2968, d-231 
+ 
+--- PAGE 14 ---
+98. Following predigree repressnts the inheritance of a rare disorder in an extended family. What is the most likely  
+ mode of inheritance for this disease? 
+ (1) Autosomal recessive 
+ (2) X-linked recessive 
+ (3) X-linked dominant 
+ (4) Y-linked 
+ 
+ 
+ 
+99. Which of the following statements are correct regarding the type of growth represented by the given diagram ? 
+ (a) It is observed at early stage of zygotic division 
+ (b) Number of dividing cells remain same 
+ (c) It represents root growth at tip 
+ (d) Represented by expression W1 = Woert 
+ (1) a and c 
+ (2) b, c and d 
+ (3) a, b and d 
+ (4) b and c 
+100.Which one of the following statement is not correct? 
+ (1) In a monohybrid cross of Mendel F1 always resembled either one of the parents. 
+ (2) Self pollination of tall F1 plant produces only tall plant. 
+ (3) Punnett square is a graphical representation to calculate the probability of all possible genotypes of offspring  
+  in a genetic cross. 
+ (4) The contrasting traits did not show any blending at either F1 or F2 stage in monohybrid cross. 
+101.Match the Column-I, Column-II and Column-III 
+ 
+ 
+ (1) A-IV-2; B-III-1; C-II-3; D-I-4  (2) 2-A-IV; B-III-2; C-II-3; D-I-4 
+ (3) 3-A-IV-2; B-III-1; C-II-4; D-I-3  (4) A-IV-2; B-III-3; C-II-1; D-I-4 
+ 
+102. The given figure shown some types of phyllotaxy select the option that correctly match them. 
+
+--- PAGE 15 ---
+ 
+ A B C 
+(1) Opposite eg. 
+Calotropis, Guava 
+Alternate eg. Mustard, 
+Chinarose 
+Whorled eg. 
+Alstonia 
+(2) Alternate eg. 
+Calotropis, Guava 
+Opposite eg. 
+Chinarose, Mango 
+Whorled eg. 
+Mustard 
+(3) Alternate eg. Mustard, 
+Chinarose 
+Opposite eg. 
+Calotropis, Guava 
+Whorled eg. 
+Alstonia 
+(4) Opposite eg. 
+Chinarose, Guava 
+Alternate eg. 
+Calotropis, Mustard 
+Whorled eg. 
+Sunflower 
+103. How many statements are correct: 
+(a) VNTR belong to class of a minisatellite. 
+(b) Satellite DNA do not code for proteins. 
+(c) DNA from every cell or tissue from an individual show different degree of polymorphism. 
+(d) 99.9 percent DNA of all humans are same 
+(1) All statements 
+(2) Only one statement 
+(3) 2 statements 
+(4) 3 statements 
+104. What is it that forms the basis of DNA Fingerprinting? 
+(1) The relative amount of DNA in the ridges and grooves of the fingerprints. 
+(2) Satellite DNA occurring as highly repeated short DNA segments 
+(3) The relative proportions of purines and pyrimidines in DNA 
+(4) The relative difference in the DNA occurence in blood, skin and saliva 
+105. a. Number of common characteristic increases from kingdom to species in taxonomic hierachy 
+b. Order being a higher category exhibits many similar characters than family. 
+Choose the correct option. 
+(1) Both a & b are correct 
+(2) Only b is correct 
+(3) Only a is correct 
+(4) Both a & b are incorrect 
+106. Read the following statements w.r.t double fertilisation. 
+
+--- PAGE 16 ---
+a. PEN develops into endosperm 
+b. One male gamete fuse with haploid secondary nucleus 
+c. It is an event unique to gymnosperms and angiosperms 
+d. One of the male gamete fuses with the diploid secondary nucleus to produce PEN 
+Mark the option representing incorrect statements 
+(1) a, d 
+(2) a, b 
+(3) c, d 
+(4) b, c 
+107. Angiospermic family including colchicine producing plant 
+(1) Bears non-endospermous seeds 
+(2) Has tricarpellary syncarpous gynoecium with axile placentation 
+(3) Lacks cymose inflorescence 
+(4) Is characterised by presence of zygomorphic flowers 
+108. Meristems which appear early in life of higher plants and are responsible for the formation of the primary 
+plant body are 
+a. Interfascicular cambium 
+b. Intercalary meristem 
+c. Lateral meristem 
+d. Phellogen 
+e. Apical meristem 
+(1) a and b 
+(2) b and e 
+(3) c and d 
+(4) a, c and d 
+109. a. Bulliform cells 
+b. Presence of cuticle 
+c. Piliferous layer 
+d. Bean-shaped guard cells 
+Which of the above feature(s) belong(s) to dicot leaves? 
+(1) Only d 
+(2) a and c 
+(3) b and c 
+(4) b and d 
+110. Choose the incorrect match w.r.t. elements of phloem and their features. 
+ Feature 
+(1) Sieve tube element Peripheral cytoplasm, large central vacuole but 
+lacks a nucleus 
+(2) Companion cells Maintain pressure gradient in sieve tubes 
+(3) Phloem parenchyma Storage of resins, latex mucilage and food 
+materials 
+--- PAGE 17 ---
+ Feature 
+(4) Phloem fibers Generally absent in secondary phloem 
+111. In the given representation of Krebs cycle, Identify A, B, C and D 
+ 
+ A B C D 
+(1) OAA Acetyl CoA CO2 α-keto-glutaric acid 
+(2) OAA Acetyl CoA CoA α-keto glutaric acid 
+(3) Acetyl CoA OAA CoA CO2 
+(4) Acetyl CoA α-keto-glutaric 
+acid 
+CO2 COA 
+112. Which of the following graph correctly represents the variation in value of RQ when initially respiratory 
+substrate was carbohydrate, then fats and after that proteins ? 
+ 
+113. A man with blood group B marries a female with blood group A and their first child is having blood group B. 
+What is the genotype of child :- 
+(1) IAIB 
+(2) IAIO 
+(3) IBIO 
+(4) IBIB 
+114. Match the Column-I with Column-II. 
+Column-I Column-II 
+(I) Co-dominance (A) ABO blood group in human being 
+(II) Multiple Allele (B) Colour of human being 
+(III) Incomplete dominance (C) AB Blood group 
+
+--- PAGE 18 ---
+Column-I Column-II 
+(iv) Polygenic inheritance (D) Size of starch grain in pea seeds 
+(1) I- (D); II - (A); III - (C); IV - (B) 
+(2) I- (D); II - (B); III - (C); IV - (A) 
+(3) I- (C); II - (A); III - (D); IV - (B) 
+(4) I- (A); II - (C); III - (B); IV - (D) 
+115. (I) Fertilization 
+(II) Liberation of spores 
+(III) Prothallus formation 
+(IV) Embryo formation 
+Arrange the above events in a correct sequence in the life cycle of Pteridophytes :- 
+(1) II. III. I, IV 
+(2) IV, III, II, I 
+(3) I, II, III, IV 
+(4) I, IV, III, II 
+116. Match the column-I with column-II and select the correct option from options given below 
+Column-I Column-II 
+(i) Dinoflagellates (a) Pellicle 
+(ii) Diatoms (b) Saprotrophic 
+(iii) Slime moulds (c) Cellulosic cell wall 
+(iv) Euglenoids (d) Cellulosic cell wall with Silica 
+(1) i-d, ii-c, iii-b, iv-a 
+(2) i-c, ii-d, iii-b, iv-a 
+(3) i-c, ii-d, iii-a, iv-b 
+(4) i-d, ii-c, iii-a, iv-b 
+117. A. Sexual reproduction occurs without sex organ 
+B. Sexual spores are exogenously formed 
+C. Perfect stage is already discovered 
+D. Mycelium is branched and septate 
+Above characters are true for members of 
+(1) Deuteromycetes 
+(2) Ascomycetes 
+(3) Basidiomycetes 
+(4) Phycomycetes 
+118. Select the correct option to fill up the blanks in the following statements. 
+a. The ….(I)….. reproduce by asexual spores called conidia but conidia as well as fruiting bodies are 
+found in ….(II)….. 
+b. Lichens are very good ….(III)….. indicators. 
+--- PAGE 19 ---
+c. The most notorious organism is ….(IV)….. that causes malaria which has a staggering effect on 
+human population. 
+ (I) (II) (III) (IV) 
+(1) Deuteromycetes Basidiomycetes Water 
+pollution 
+Plasmodium 
+(2) Phycomycetes Ascomycetes Water 
+pollution 
+Entamoeba 
+(3) Deuteromycetes Basidiomycetes Air pollution Entamoeba 
+(4) Deuteromycetes Ascomycetes Air pollution Plasmodium 
+119. Find out incorrect statement from given below :- 
+(1) The main plant body of bryophytes is gamete producing 
+(2) In bryophytes spores germinate to form gametophytes 
+(3) In gymnosperm the pollen tube release the male gametes in ovule 
+(4) After fertilization male gametes develop into embryo and zygote develops in seed 
+ 
+120. Read the following statements :- 
+(A) Selaginella and Salvinia are the heterospores pteridophytes because they produce two different 
+kinds of spores. 
+(B) The gametophytes of homosporus pteridophytes bear male and female sex organs called antheridia 
+and archegonia respectively 
+(C) The female gametophytes in some pteridophytes are retained on the parent sporophytes, for 
+variable period this event is a precursor to seed habit. 
+(D) Pteridophytes are first terrestrial plants and they posses seeds 
+How many of the above statement(s) is/are not correct 
+(1) Four 
+(2) Three 
+(3) Two 
+(4) One 
+121. Complete the below given table by choosing correct option 
+Type of embryo Epiblast Coleorhiza Root cap 
+Dicot embryo A B Present 
+Monocot embryo Present Present C 
+ A B C 
+(1) Present Present Present 
+(2) Absent Present Absent 
+--- PAGE 20 ---
+Type of embryo Epiblast Coleorhiza Root cap 
+(3) Absent Absent Present 
+(4) Present Absent Absent 
+122. Which one of the following statements is incorrect? 
+(1) Humification leads to accumulation of a dark colored amorphous substance 
+(2) Humus is degraded by some microbes and releases the organic nutrients by the process called leaching 
+(3) Fragmentation is a process in which detritus is broken down into smaller particles 
+(4) Bacterial and fungal enzymes degrade detritus into simpler inorganic substances, by the process called 
+catabolism 
+123. Select the incorrect statement w.r.t. law of limiting factors. 
+(1) It was given by Blackman 
+(2) It is applicable when several factors affect any biochemical process 
+(3) It helps to identify the factor which directly affects the biochemical process when its quantity is changed 
+(4) It states that if a chemical process is affected by more than one factors, then its rate will be determined 
+by the factor which is nearest to its maximum value 
+124. Match the major causes of biodiversity losses given in column-I with the correct examples given in column-II. 
+Column-I Column-II 
+(a) Habitat loss and fragmentation (i) Extinction of Steller's sea cow 
+(b) Over-exploitation (ii) Carrot grass and Eicchornia 
+(c) Alien-species invasion (iii) Affects animal with migratory 
+habits 
+(d) Co-extinctions (iv) Coevolved plant-pollinator 
+mutualism 
+(1) a(i), b(ii), c(iii), d(iv) 
+(2) a(iii), b(i), c(ii), d(iv) 
+(3) a(iv), b(i), c(ii), d(iii) 
+(4) a(iii), b(i), c(iv), d(ii) 
+125. Select the statement which is incorrect w.r.t bacterial transcription 
+(1) mRNA does not require any processing to become active 
+(2) Transcription and translation take place in separate compartments 
+(3) Translation can begin much before the mRNA is fully transcribed 
+(4) Transcription and translation can be coupled 
+126. Match the following columns w.r.t translation and select the correct option 
+Column-I Column-II 
+(a) Charging of tRNA (i) Binding of amino acid wtih ATP 
+--- PAGE 21 ---
+Column-I Column-II 
+(b) Amino acid activation (ii) Binding of mRNA with smaller 
+subunit of ribosome 
+(c) Chain initiation (iii) Requires ribozymes 
+(d) Chain elongation (iv) Transferring of amino acid of 
+tRNA 
+(1) a(ii), b(i), c(iv), d(iii) 
+(2) a(iv), b(iii), c(i), d(ii) 
+(3) a(ii), b(iv), c(iii), d(i) 
+(4) a(iv), b(i), c(ii), d(iii) 
+127. In Rivet popper hypothesis, the rivets on the wings represents 
+(1) Key species that drive major ecosystem function 
+(2) Invasive species that drive major ecosystem function 
+(3) Ecosystem 
+(4) Extinct species of an ecosystem 
+128. Read the following statements and select the correct option. 
+Statement-I : According to Gause's 'Competitive Exclusion Principle', two closely related species competing 
+for the same resources can co-exist indefinitely. 
+Statement-II : Majority of parasites reduce the survival, growth and reproduction of the host and reduce its 
+population density. 
+(1) Only statement-I is correct 
+(2) Only statement-II is correct 
+(3) Both the statements are correct 
+(4) Both the statements are incorrect 
+129. Mark the incorrect statement w.r.t. predation 
+(1) Herbivores have a greater advantage since plants cannot run away to avoid predation 
+(2) If a predator is prudent, the prey population will become extinct 
+(3) Predators help in maintaining species diversity 
+(4) Predation keep prey population under control 
+130. Choose the correct type of ecological pyramid on the basis of following data of dry weights. 
+(i) Secondary consumer – 11 kg/m2 
+(ii) Tertiary consumer – 1.5 kg/m2 
+(iii) Primary producer – 809 kg/m2 
+(iv) Primary consumer – 37 kg/m2 
+(1) Upright pyramid of biomass 
+(2) Inverted pyramid of biomass 
+(3) Inverted pyramid of energy 
+(4) Upright pyramid of number 
+131. Which of the given statement is correct in the context of observing DNA separated by agarose gel 
+electrophoresis? 
+(1) DNA can be seen in visible light 
+(2) DNA can be seen without staining in visible light. 
+--- PAGE 22 ---
+(3) Ethidium bromide stained DNA can be seen in visible light. 
+(4) Ethidium bromide stained DNA can be seen under exposure to UV light. 
+132. The colonies of recombinant bacteria appear white in contrast to blue colonies of non-recombinant bacteria 
+because of 
+(1) insertional inactivation of beta galactosidase in recombinant bacteria. 
+(2) Activation of glycosidase enzyme in recombinant bacteria. 
+(3) recombinant bacteria containing beta galactosidase. 
+(4) Insertional inactivation of alpha galactosidase in non-recombinant bacteria. 
+133. Read the following statements and select the correct ones :- 
+(A) In gel electrophoresis, DNA fragments separate according to their size through sieving effect 
+provided by the agarose gel 
+(B) Smallest the fragment size, the farther it moves 
+(C) Unless one cuts the vector and the source DNA with the same restriction enzyme, the recombinant 
+vector molecule cannot be created. 
+(D) Now a days the most commonly used matrix is agrose which is a natural polymer extracted from sea 
+weeds 
+(1) A, B, C, D 
+(2) A, C 
+(3) B, D 
+(4) C, D 
+134. Read the following statement and choose correct one :- 
+(1) DNA is hydrophobic molecule, it can pass through cell membrane. 
+(2) By micro-injection, recombinant DNA is directly injected into the nucleus of an plant cell 
+(3) During DNA isolation we used chilled ethanol in final step 
+(4) Retoviruses have been use to deliver desirable gene into plant cells after disarming. 
+135. Match the following technique and the purpose they are used for 
+Column-I Column-II 
+(A) DNA probes (1) To identify cells that have been 
+transformed 
+(B) Genetic markers (2) To join DNA fragments together 
+(C) DNA ligase (3) Complementary DNA, synthesized 
+from mRNA with the help of the 
+enzyme reverse trancriptase 
+(D) cDNA (4) To identify and label a piece of 
+DNA containing a certain sequence 
+using Radioisotope 
+ A B C D 
+(1) 4 1 2 3 
+(2) 1 4 2 3 
+--- PAGE 23 ---
+Column-I Column-II 
+(3) 1 4 3 2 
+(4) 4 2 1 3 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+--- PAGE 24 ---
+PART D – ZOOLOGY 
+136. From the list of given characters, which of them represent Chondrichthyes &Osteichthyes ? 
+(a) Placoid scales 
+(b) Operculum present 
+(c) Air bladder present 
+(d) Mostly viviparous 
+(e) External fertilisation 
+(f) Notochord persistent throughout life. 
+ Chondrichthyes Osteichthyes 
+(1) a, b, d c, e, f 
+(2) a, d, f b, c, e 
+(3) b, c, d a, e, f 
+(4) b, c, e a, d, f 
+137. Metameric segmentation is present in : 
+(1) Platyhelminthes, Annelida, Mollusca 
+(2) Annelida, Arthropoda, Mollusca 
+(3) Annelida, Arthropoda, Chordata 
+(4) Enchinodermata, Hemichordata, Chordata 
+138. Exclusively marine urochordate among the following is 
+(1) Salamandra 
+(2) Ascidia 
+(3) Amphioxus 
+(4) Petromyzon 
+139. There are some features of animals are given :- 
+Organ system level, Coelomate, Open circulation, Triploblastic, Unsegmented, Intracellular digestion. How 
+many characters are present in the members of phylum arthropoda – 
+(1) 3 
+(2) 4 
+(3) 5 
+(4) 2 
+140. In a frog brain optic lobes are a part of 
+(1) Fore brain 
+(2) Mid brain 
+(3) Hind brain 
+(4) Cerebral hemispheres 
+141. Match column-I with column-II and select correct option :- 
+Column-I Column-II 
+--- PAGE 25 ---
+Column-I Column-II 
+(a) Sensory papillae (i) Well organised structure 
+(b) Nasal epithelium (ii) Cellular aggregation 
+(c) Eyes (iii) Smell 
+(d) Taste buds (iv) Organs of touch 
+(1) (a) - (iii), (b) - (i), (c) - (ii), (d) - (iv) 
+(2) (a) - (iv), (b) - (iii), (c) - (i), (d) - (ii) 
+(3) (a) - (iv), (b) - (iii), (c) - (ii), (d) - (i) 
+(4) (a) - (ii), (b) - (iii), (c) - (i), (d) - (iv) 
+142. Statement-I : The chloroplast contain chlorophyll and carotenoids which are responsible for trapping light 
+energy essential for photosynthesis. 
+Statement-II : The matrix of mitochondria possess single, circular DNA molecule, few RNA molecules, 
+ribosome and components required for protein synthesis. In the light of above statements, choose most 
+appropriate answer from the given options. 
+(1) Both Statements are correct. 
+(2) Both Statements are incorrect. 
+(3) Statement-I is correct and Statement-II are incorrect. 
+(4) Statement-I is incorrect and Statement-II are correct. 
+143. Which chromosome has centromere slightly away from the middle of the chromosome resulting into one 
+shorter arm and one longer arm ? 
+(1) Metacentric chromosome 
+(2) Sub-metacentric chromosome 
+(3) Acrocentric chromosome 
+(4) Telocentric chromosome 
+144. Which of the following phenomenon occurs during telophase ? 
+(1) Spindle fibres attach to kinetochores of chromosomes. 
+(2) Centromeres split and chromatids separate 
+(3) Chromatids move to opposite poles. 
+(4) Nucleolus, Golgi complex and ER reform. 
+145. The complete disintegration of __A__ marks the start of __B__ of mitosis, hence the chromosomes are 
+spread through the cytoplasm of the cell. Identify A and B. 
+(1) A–Cell membrane, B–Prophase 
+(2) A–Nuclear membrane, B–Prophase 
+(3) A–Nuclear membrane, B–Metaphase 
+(4) A–Cell membrane, B–Metaphase 
+146. Match the following- 
+Column-I Column-II 
+(a) Prophase-I (i) Bivalent chromosomes align on 
+equatorial plate 
+--- PAGE 26 ---
+Column-I Column-II 
+(b) Metaphase-I (ii) Homologous chromosome 
+separate 
+(c) Anaphase-I (iii) Synaptonemal complex formation 
+(d) Telophase-I (iv) Nuclear membrane reappear 
+(1) (a–i), (b–ii), (c–iii), (d-iv) 
+(2) (a–iii), (b–ii), (c–iv), (d-i) 
+(3) (a–iii), (b–i), (c–ii), (d-iv) 
+(4) (a–iv), (b–iii), (c–ii), (d-i) 
+147. Statement-I : All the elements present in a sample of earth crust are also present in a sample of living tissue. 
+Statement-II : Secondary metabolites have identifiable functions and play known roles in normal 
+physiological processes. Select the correct answer from given below options. 
+(1) Both Statement-I and Statement-II are correct. 
+(2) Both Statement-I and Statement-II are incorrect. 
+(3) Statement-I is correct and Statement-II is incorrect. 
+(4) Statement-I is incorrect and Statement-II is correct. 
+ 
+ 
+ 
+ 
+148. In the following diagram A and B is : 
+ 
+(1) (A) Activation energy without enzyme. (B) Activation energy with enzyme. 
+(2) (A) Activation energy with enzyme. (B) Activation energy without enzyme. 
+(3) (A) → Substrate (B) → Product 
+(4) (A) → Product (B) → Substrate 
+ 
+149. Which is the correct order of cell cycle ? 
+(1) G1 → S → G2 → Prophase → Metaphase → Anaphase → Telophase → Cytokinesis 
+(2) G2 → G1 → S → Prophase → Metaphase → Anaphase → Telophase → Cytokinesis 
+(3) S → G1 → G2 → Prophase → Metaphase → Anaphase → Telophase → Cytokinesis 
+(4) Prophase → Metaphase → Anaphase → Telophase → Cytokinesis → S → G2 → G1 
+150. Given below are two statements : one is labelled as Assertion (A) and the other is labelled as Reason (R). 
+
+--- PAGE 27 ---
+Assertion (A) : Anaphase-II begins with the simultaneous splitting of the centromere of each chromosome 
+allowing than to move toward opposite poles of the cell. 
+Reason (R) : The shortening of microtubules attached to kinetochore takes place during anaphase-II. Choose 
+the correct answer from the options given below : 
+(1) Both (A) and (R) are true but (R) is not the correct explaination of (A). 
+(2) (A) is true but (R) is false. 
+(3) (A) is false but (R) is true. 
+(4) Both (A) and (R) are true and (R) is correct explaination of (A). 
+151. Molecule whose molecular weight do not exceed 800 dalton and come under acid insoluble fraction. Above 
+statement is suitable for which biomolecule ? 
+(1) Protein 
+(2) Polysaccharide 
+(3) Lipid 
+(4) Nucleic acid 
+152. Telophase I results in the formation of – 
+(1) Two diploid cell 
+(2) Two haploid cell 
+(3) Four haploid cell 
+(4) Four diploid cell 
+153. In heavy smokers the alveoli of the lungs are enlarged and damaged which reduces the surface area of the 
+exchange of respiratory gases. This condition is called :- 
+(1) Asthma 
+(2) Silicosis 
+(3) Emphysema 
+(4) Insomnia 
+154. Read the following statements : 
+(A) Normal heart rate is 72 betas/min. 
+(B) Cardiac cycle is complete in 8 sec. 
+(C) We can diagnose abnormality of heart by ECG. 
+(D) Cholesterol can form stones in kidney. 
+(E) RAAS increases BP. 
+(F) Aldosterone is secreted by JG cells. 
+Which of the following is correct statement ? 
+(1) A, C and E 
+(2) A, B, C and E 
+(3) A, B, C, E and F 
+(4) B, D and F 
+155. Which layer of blood vessels is called endothelium ? 
+(1) Tunica intima 
+(2) Tunica media 
+(3) Tunica externa 
+(4) All of above 
+156. Assertion : A minute vessels vasa recta runs parallel to the Henle's loop. 
+Reason : It play important role in dilution of the urine. 
+(1) Both assertion and reason are true but reason is not the correct explanation of assertion. 
+--- PAGE 28 ---
+(2) Assertion is true but reason is false. 
+(3) Assertion is false but reason is true 
+(4) Both assertion and reason true and reason is the correct explanation of assertion. 
+157. Read the following statements 
+(a) The oviducts, uterus and vagina constitute the female accessory ducts. 
+(b) Each ovary is covered by a thin epithelium which encloses the ovarian stroma. 
+(c) The seminiferous tubules of the testis open into the rete testis through vasa efferentia. 
+(d) In testis, the immature male germ cells produce sperms. 
+(e) Secretion of epididymis, vas deference, seminal vesicle and prostate are essential for maturation and 
+motility of sperms. 
+Choose the option having all correct statements. 
+(1) a, b, c 
+(2) a, b, d, e 
+(3) b, c, e 
+(4) c, d, e 
+158. Meiosis-I of primary oocyte which takes place during oogenesis in human females is: 
+(1) Reductional division with unequal cytokinesis 
+(2) Equational division with unequal cytokinesis 
+(3) Reductional division with equal cytokinesis 
+(4) Equational division with equal cytokinesis 
+159. After implantation, chorionic villi and uterine tissue become interdigitated with each other to form : 
+(1) Chorion and amnion 
+(2) Umbilical cord 
+(3) Placenta 
+(4) Yolk sac 
+160. Vas deferens receives a duct from __ B __ and opens into urethra as the ejaculatory duct. 
+Fill in the blank (B) with suitable option. 
+(1) B = Seminal vesicle 
+(2) B = Bulbourethral gland 
+(3) B = Bartholin gland 
+(4) B = Prostate gland 
+161. Which of the following is not a natural contraceptive method? 
+(1) Periodic abstinence 
+(2) Coitus interruptus 
+(3) Lactational amenorrhea 
+(4) M.T.P. 
+162. The medical termination of pregnancy (amendment) act, 2017 was enacted by the government of India with 
+the intension of : 
+(1) Reducing the incidence of illegal abortion and consequent maternal mortality and morbidity 
+(2) Increasing number of couples with small families 
+(3) Better detection and cure of STD 
+(4) Increasing number of medically assisted deliveries and better post natal care leading to decreased 
+maternal and infant mortality rates. 
+163. Which structure is tracts of myelinated nerve fibres? 
+(1) Association areas 
+--- PAGE 29 ---
+(2) Hippocampus 
+(3) Corpus callosum 
+(4) Amygdala 
+164. Glucocorticoids stimulates :- 
+(A) Gluconeogenesis 
+(B) Lipolysis 
+(C) Proteolysis 
+(1) A only 
+(2) A, B and C 
+(3) B and C only 
+(4) B only 
+165. Statement-I : Prolonged hyperglycemia leads to a complex disorder diabetes mellitus. 
+Statement-II : Glucagon is a hypoglycemic hormone while insulin is a hyperglycemic hormone. 
+(1) Statement-I and II both are correct. 
+(2) Statement-I and II both are incorrect. 
+(3) Statement-I is correct but II is incorrect. 
+(4) Statement-II is correct but I is incorrect. 
+166. Match the List-I to List-II : 
+List-I List-II 
+(A) Myosin (I) Globular protein 
+(B) G-Actin (II) Sarcomere 
+(C) Two adjacent (III) Meromyosin 
+(D) Smooth mussels (IV) Fallopian tube 
+(1) A - iii, B - i, C - ii, D - iv 
+(2) A - iii, B - ii, C - i, D - iv 
+(3) A - ii, B - iii, C - i, D - iv 
+(4) A - iv, B - iii, C - ii, D - i 
+167. Enzymatic activity is destroyed at high temperature because : 
+(1) Enzymes are inorganic compounds. 
+(2) Proteins are denatured by heat. 
+(3) Enzyme becomes more active 
+(4) Enzyme permanently binds with substrate. 
+168. Which of the following is correct name of glycerol ? 
+(1) Substituted methane 
+(2) Trihydroxy propane 
+(3) Triglyceride 
+(4) Phosphatidyl choline 
+169. Read the following statements (A - D) 
+(A) Withdrawal syndrome is charactarised by anxiety, Shakiness, Nausea and Sweating. 
+--- PAGE 30 ---
+(B) Dependence leads the patient to ignore all social norms in order to get sufficient funds to satiate 
+his/her needs. 
+(C) Addiction is a psychological attachment to certain effects associated with drugs and alcohol. 
+(D) The immediate adverse effects of drugs and alcohol abuse are manifested in the form of respiratory 
+failure, facial acne, enlarged prostate, and vandalism. 
+How many of the above statements are true ? 
+(1) 3 
+(2) 1 
+(3) 4 
+(4) 2 
+170. Given below are two statements: 
+Statement-I : RNA interference takes place in all Eukaryotic organisms as method of cellular defense. 
+Statement-II : RNAi involves the silencing of a specific mRNA due to a complementary single stranded RNA 
+molecule that binds and prevents translation of mRNA . 
+In the light of the above statements, choose the correct answer from the options given below. 
+(1) Statement-I is true but Statement-II is false 
+(2) Statement-I is false but Statement-II is true 
+(3) Both Statement-I and Statement-II are true 
+(4) Both Statement-I and Statement-II are false 
+171. Select the correct statements. 
+A. In the 24 hour average duration of cell cycle of a human cell, cell division proper lasts for only about 
+an hour. 
+B. During the G2 phase, proteins are synthesised in preparation for mitosis while cell growth stops. 
+C. The chromosomal material becomes untangled during the process of chromatin condensation. 
+D. Cell-plate represents the middle lamella between the walls of two adjacent human cells. 
+E. Cell growth results in disturbing the ratio between the nucleus and the cytoplasm 
+(1) A, B, C, D & E 
+(2) A, C, D & E only 
+(3) A, D & E only 
+(4) A, C & E only 
+172. Read the following statements :- 
+(A) Cyclosporin A is used as a clot buster 
+(B) Whisky, brandy & rum are produced by distillation of fermented broth 
+(C) Baculoviruses are used as biological control agents 
+(D) The biogas production technology in India in developed by ICAR only 
+Which of the above statements are not incorrect? 
+(1) A & C 
+(2) B & C 
+(3) C & D 
+(4) A & D 
+173. In which type of natural selection two peaks are observed? 
+(1) Stabilizing selection 
+(2) Cyclic selection 
+(3) Directional selection 
+(4) Disruptive selection 
+ 
+--- PAGE 31 ---
+ 
+ 
+174. Match List-I with List-II 
+List-I List-II 
+(A) Genetically engineered Human 
+Insulin 
+(I) Gene therapy 
+(B) GM Cotton (II) E. coli 
+(C) ADA Deficiency (III) Antigen-antibody interaction 
+(D) ELISA (IV) Bacillus thuringiensis 
+Choose the answer from the options given below : 
+(1) A-III, B-II, C-IV, D-I 
+(2) A-II, B-I, C-IV, D-III 
+(3) A-IV, B-III, C-I, D-II 
+(4) A-II, B-IV, C-I, D-III 
+175. Assertion : Symptoms of amoebiasis include cramps, stool with excess mucous & blood clots. 
+Reason : Housefly act as mechanical carriers and serve to transmit parasite from faeces to food. 
+(1) Both Assertion and Reason are True and Reason is the correct explanation of Assertion. 
+(2) Both Assertion and Reason is True but Reason is not the correct explanation of Assertion. 
+(3) Assertion is True but Reason is False. 
+(4) Both Assertion and Reason are False. 
+176. Given below are two statements : 
+Statement-I : The Indian Government has set up GEAC which will make decisions regarding the validity of 
+GM research. 
+Statement-II : Biopiracy is the term used to refer to the use of bio-resources by indigenous or local people. 
+In the light of the above statements, choose the correct answer from the options given below : 
+(1) Statement I is true but Statement II is false 
+(2) Statement I is false but Statement II is true 
+(3) Both Statement I and Statement II are true 
+(4) Both Statement I and Statement II are false 
+177. A number of marsupials, each different from the other evolved from an ancestral stock but all within the 
+______ continent. 
+(1) African 
+(2) Indian 
+(3) Australian 
+(4) South America 
+178. Assertion (A) : Thorax of cockroach is related with flight & walking of cockroach. 
+Reason (R) : Mid portion of cockroach body called thorax bears wings & legs. 
+(1) Both Assertion and Reason are correct and Reason is the correct explanation of Assertion 
+(2) Both Assertion and Reason are correct but Reason is NOT the correct explanation of Assertion 
+(3) Assertion is correct and Reason is incorrect 
+(4) Assertion is incorrect and Reason is correct 
+--- PAGE 32 ---
+179. Animals that have had their DNA manipulated to possess and express a extra (foreign) gene are called : 
+(1) Transgenic animals 
+(2) Somatic hybrids 
+(3) Somaclones 
+(4) Carrier animals 
+180. Two microbes found to be very useful in genetic engineering are 
+(1) crown gall bacterium and Caenorhabdtis elegans 
+(2) Escherichia coli and Agrobacterium tumefaciens 
+(3) Vibrio cholerae and a tailed bacteriophage 
+(4) Diplococcus sp. and Psedomonas sp 
+ 

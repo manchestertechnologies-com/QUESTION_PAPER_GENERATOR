@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, Routes, Route, Link, useLocation } from 'react-router-dom';
 import UploadTemplate from './UploadTemplate';
@@ -11,6 +11,7 @@ import AdminQuestionBank from './AdminQuestionBank';
 import GrandTestList from './GrandTestList';
 import PreviousYearPapers from './PreviousYearPapers';
 import ExamBlueprints from './ExamBlueprints';
+import AssignmentGenerator from '../teacher/AssignmentGenerator';
 
 const DashboardHome = () => {
     const subjects = ['Physics', 'Chemistry', 'Biology', 'Maths', 'Computer Science', 'Kannada', 'English', 'Hindi'];
@@ -65,7 +66,22 @@ const DashboardHome = () => {
     );
 };
 
+/* Admin wrapper for AssignmentGenerator — gets subject from URL param */
+const AdminAssignmentWrapper = () => {
+    const navigate = useNavigate();
+    const subjectParam = window.location.pathname.split('/').pop();
+    const subject = decodeURIComponent(subjectParam || 'Physics');
+    return (
+        <AssignmentGenerator
+            onBack={() => navigate('/admin/dashboard')}
+            adminMode={true}
+            adminSubject={subject}
+        />
+    );
+};
+
 const AdminDashboard = () => {
+
     const { logout } = useContext(AuthContext);
     const navigate = useNavigate();
     const location = useLocation();
@@ -141,6 +157,7 @@ const AdminDashboard = () => {
 
             <div className="flex-1 p-10 max-w-7xl mx-auto w-full">
                 <Routes>
+
                     <Route path="/" element={<DashboardHome />} />
                     <Route path="upload-template" element={<UploadTemplate />} />
                     <Route path="create-teacher" element={<CreateTeacher />} />
@@ -151,6 +168,7 @@ const AdminDashboard = () => {
                     <Route path="grand-tests" element={<GrandTestList />} />
                     <Route path="previous-year-papers" element={<PreviousYearPapers />} />
                     <Route path="exam-blueprints" element={<ExamBlueprints />} />
+                    <Route path="assignments/:subject" element={<AdminAssignmentWrapper />} />
                 </Routes>
             </div>
         </div>
