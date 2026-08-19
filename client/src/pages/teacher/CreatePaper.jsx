@@ -1144,17 +1144,7 @@ const CreatePaper = () => {
                 />
             )}
 
-            {/* ── Generate Paper Modal ── */}
-            {showGenerateModal && (
-                <GeneratePaperModal
-                    onClose={() => setShowGenerateModal(false)}
-                    onGenerate={handleGeneratePaper}
-                    filters={filters}
-                    setFilters={setFilters}
-                    uniqueChapters={uniqueChapters}
-                    uniqueConcepts={uniqueConcepts}
-                />
-            )}
+
         </div>
     );
 };
