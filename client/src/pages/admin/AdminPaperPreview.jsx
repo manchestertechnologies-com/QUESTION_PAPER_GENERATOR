@@ -281,7 +281,6 @@ const AdminPaperPreview = () => {
                         <span>📊</span> Paper Analysis
                     </button>
                     <button onClick={handlePrint} className="bg-navy text-gold px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">🖨 Print / Save PDF</button>
-                    <button onClick={handleWordExport} className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">⬇️ Export Word</button>
                 </div>
             </div>
 

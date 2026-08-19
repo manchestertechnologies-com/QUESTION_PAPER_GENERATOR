@@ -158,7 +158,19 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
     }, [examType]);
 
-    // 1. Difficulty Level Breakdown
+    const matchSubject = (qSubject) => {
+        if (!qSubject) return subjects[0];
+        const qs = qSubject.toLowerCase().trim();
+        for (const s of subjects) {
+            const sl = s.toLowerCase();
+            if (qs.includes(sl) || sl.includes(qs)) return s;
+            if (sl.includes('math') && qs.includes('math')) return s;
+            if (sl.includes('bio') && (qs.includes('bio') || qs.includes('bot') || qs.includes('zoo'))) return s;
+        }
+        return subjects[0];
+    };
+
+    // 1. Difficulty Level Breakdown (100% genuine data, 0 fake fallback)
     const diffData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -166,7 +178,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         });
 
         questions.forEach(q => {
-            const sub = subjects.find(s => (q.subject || '').toLowerCase().includes(s.toLowerCase())) || subjects[0];
+            const sub = matchSubject(q.subject);
             const lvl = (q.level || 'medium').toLowerCase();
             if (result[sub]) {
                 if (lvl === 'easy') result[sub].easy += 1;
@@ -179,12 +191,6 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         const grand = { easy: 0, medium: 0, hard: 0, total: 0 };
         subjects.forEach(s => {
             const subObj = result[s];
-            if (subObj.total === 0) {
-                subObj.easy = s === 'Physics' ? 10 : s === 'Chemistry' ? 11 : s === 'Botany' ? 20 : 19;
-                subObj.medium = s === 'Physics' ? 19 : s === 'Chemistry' ? 19 : s === 'Botany' ? 16 : 15;
-                subObj.hard = s === 'Physics' ? 16 : s === 'Chemistry' ? 15 : s === 'Botany' ? 14 : 6;
-                subObj.total = subObj.easy + subObj.medium + subObj.hard;
-            }
             grand.easy += subObj.easy;
             grand.medium += subObj.medium;
             grand.hard += subObj.hard;
@@ -194,7 +200,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
-    // 2. Class-Wise Question Distribution
+    // 2. Class-Wise Question Distribution (100% genuine data)
     const classData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -202,11 +208,11 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         });
 
         questions.forEach(q => {
-            const sub = subjects.find(s => (q.subject || '').toLowerCase().includes(s.toLowerCase())) || subjects[0];
-            const cls = String(q.classes?.[0] || q.class || '11');
+            const sub = matchSubject(q.subject);
+            const cls = String(q.classes?.[0] || q.class || (Array.isArray(q.classes) ? q.classes.join(' ') : '') || '12');
             if (result[sub]) {
-                if (cls === '12' || cls.includes('12')) result[sub].class12 += 1;
-                else result[sub].class11 += 1;
+                if (cls.includes('11')) result[sub].class11 += 1;
+                else result[sub].class12 += 1;
                 result[sub].total += 1;
             }
         });
@@ -214,11 +220,6 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         const grand = { class11: 0, class12: 0, total: 0 };
         subjects.forEach(s => {
             const subObj = result[s];
-            if (subObj.total === 0) {
-                subObj.class11 = s === 'Physics' ? 23 : s === 'Chemistry' ? 23 : s === 'Botany' ? 23 : 20;
-                subObj.class12 = s === 'Physics' ? 22 : s === 'Chemistry' ? 22 : s === 'Botany' ? 27 : 20;
-                subObj.total = subObj.class11 + subObj.class12;
-            }
             grand.class11 += subObj.class11;
             grand.class12 += subObj.class12;
             grand.total += subObj.total;
@@ -227,7 +228,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
-    // 3. Question Type Breakdown
+    // 3. Question Type Breakdown (100% genuine data)
     const typeData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -235,13 +236,13 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         });
 
         questions.forEach(q => {
-            const sub = subjects.find(s => (q.subject || '').toLowerCase().includes(s.toLowerCase())) || subjects[0];
+            const sub = matchSubject(q.subject);
             const t = (q.type || 'MCQ').toUpperCase();
             if (result[sub]) {
                 if (t.includes('ASSERTION')) result[sub].assertion += 1;
                 else if (t.includes('MATCH')) result[sub].match += 1;
-                else if (t.includes('DIAGRAM') || t.includes('IMAGE')) result[sub].diagram += 1;
-                else if (t.includes('STATEMENT')) result[sub].stmt += 1;
+                else if (t.includes('DIAGRAM') || t.includes('IMAGE') || t.includes('NUMERICAL')) result[sub].diagram += 1;
+                else if (t.includes('STATEMENT') || t.includes('STMT')) result[sub].stmt += 1;
                 else result[sub].single += 1;
                 result[sub].total += 1;
             }
@@ -250,15 +251,6 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         const grand = { single: 0, stmt: 0, multi: 0, assertion: 0, match: 0, diagram: 0, total: 0 };
         subjects.forEach(s => {
             const subObj = result[s];
-            if (subObj.total === 0) {
-                subObj.single = s === 'Physics' ? 45 : s === 'Chemistry' ? 29 : s === 'Botany' ? 28 : 19;
-                subObj.stmt = s === 'Chemistry' ? 4 : s === 'Botany' ? 3 : s === 'Zoology' ? 4 : 0;
-                subObj.multi = s === 'Chemistry' ? 5 : s === 'Botany' ? 4 : s === 'Zoology' ? 10 : 0;
-                subObj.assertion = s === 'Chemistry' ? 1 : s === 'Botany' ? 1 : s === 'Zoology' ? 1 : 0;
-                subObj.match = s === 'Chemistry' ? 6 : s === 'Botany' ? 8 : s === 'Zoology' ? 7 : 0;
-                subObj.diagram = s === 'Botany' ? 1 : 0;
-                subObj.total = subObj.single + subObj.stmt + subObj.multi + subObj.assertion + subObj.match + subObj.diagram;
-            }
             grand.single += subObj.single;
             grand.stmt += subObj.stmt;
             grand.multi += subObj.multi;
@@ -283,7 +275,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
                         <span className="bg-navy text-gold w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow">📊</span>
                         <div>
                             <h2 className="text-xl font-black text-navy uppercase tracking-tight">Institutional Paper Analysis</h2>
-                            <p className="text-[11px] font-bold text-gray-500">{paperTitle}</p>
+                            <p className="text-[11px] font-bold text-gray-500">{paperTitle} • {questions.length} Total Questions</p>
                         </div>
                     </div>
 
@@ -312,9 +304,9 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
 
                         <button
                             onClick={() => window.print()}
-                            className="bg-gold text-navy px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition shadow"
+                            className="bg-gold text-navy px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition shadow flex items-center gap-1.5 cursor-pointer"
                         >
-                            🖨 Print Analysis
+                            <span>🖨</span> Download / Print PDF
                         </button>
                         <button
                             onClick={onClose}

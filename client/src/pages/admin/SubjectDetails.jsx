@@ -17,33 +17,13 @@ const SubjectDetails = () => {
     const [activeTab, setActiveTab] = useState('teachers');
     const [selectedViewPaper, setSelectedViewPaper] = useState(null);
     const [selectedAnalysisPaper, setSelectedAnalysisPaper] = useState(null);
-    const [showCommissionModal, setShowCommissionModal] = useState(false);
-
-    // Commission Form State
-    const [commissionForm, setCommissionForm] = useState({
-        title: '',
-        examType: 'CET',
-        classes: ['12'],
-        targetPerSubject: 60,
-        assignedTeachers: {
-            'Physics': '',
-            'Chemistry': '',
-            'Mathematics': '',
-            'Biology': '',
-            'Botany': '',
-            'Zoology': ''
-        }
-    });
 
     const logoMap = {
         'Physics': '/physicslogo.jpeg',
         'Chemistry': '/chemistrylogo.jpeg',
         'Biology': '/biologylogo.jpeg',
         'Maths': '/mathslogo.jpeg',
-        'Computer Science': '/computersciencelogo.png',
-        'Kannada': '/kannadalogo.jpg',
-        'English': '/englishlogo.jpg',
-        'Hindi': '/hindilogo.jpg'
+        'Mathematics': '/mathslogo.jpeg'
     };
 
     const fetchData = async () => {
@@ -54,17 +34,8 @@ const SubjectDetails = () => {
             ]);
             const allT = teachersRes.data || [];
             setAllTeachers(allT);
-            setTeachers(allT.filter(t => t.subject === subject));
-            setPapers(papersRes.data.filter(p => p.subject === subject));
-
-            // Fetch commissioned exams if endpoint available
-            try {
-                const commRes = await api.get('/api/exams/commissioned');
-                setCommissionedExams(commRes.data || []);
-            } catch {
-                // optional fallback
-            }
-
+            setTeachers(allT.filter(t => (t.subject || '').toLowerCase().includes(subject.toLowerCase()) || subject.toLowerCase().includes((t.subject || '').toLowerCase())));
+            setPapers((papersRes.data || []).filter(p => (p.subject || '').toLowerCase().includes(subject.toLowerCase()) || subject.toLowerCase().includes((p.subject || '').toLowerCase())));
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -78,59 +49,6 @@ const SubjectDetails = () => {
     useEffect(() => {
         fetchData();
     }, [subject]);
-
-    const handleCommissionSubmit = async (e) => {
-        e.preventDefault();
-        if (!commissionForm.title) return alert('Please enter an Exam Title');
-
-        try {
-            let subjectsNeeded = [];
-            if (commissionForm.examType === 'NEET') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
-            } else if (commissionForm.examType === 'CET') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-            } else if (commissionForm.examType === 'JEE') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics'];
-            } else {
-                subjectsNeeded = [subject];
-            }
-
-            const subjectAssignments = subjectsNeeded.map(subName => {
-                const assignedTeacherId = commissionForm.assignedTeachers[subName];
-                const teacherObj = allTeachers.find(t => t._id === assignedTeacherId) || allTeachers.find(t => t.subject?.toLowerCase() === subName.toLowerCase());
-                return {
-                    subject: subName,
-                    teacherId: teacherObj ? teacherObj._id : undefined,
-                    teacherName: teacherObj ? teacherObj.name : `Prof. ${subName} Faculty`,
-                    teacherEmail: teacherObj ? teacherObj.email : `${subName.toLowerCase()}@manchester.edu`,
-                    targetQuestions: commissionForm.targetPerSubject || 60,
-                    status: 'Pending'
-                };
-            });
-
-            await api.post('/api/exams/commission', {
-                title: commissionForm.title,
-                examType: commissionForm.examType,
-                classes: commissionForm.classes,
-                subjectAssignments,
-                duration_minutes: 180
-            });
-
-            alert(`✓ Exam "${commissionForm.title}" successfully commissioned! Access granted to assigned faculty.`);
-            setShowCommissionModal(false);
-            setCommissionForm({
-                title: '',
-                examType: 'CET',
-                classes: ['12'],
-                targetPerSubject: 60,
-                assignedTeachers: {}
-            });
-            fetchData();
-        } catch (err) {
-            console.error(err);
-            alert('Failed to commission exam. Please try again.');
-        }
-    };
 
     const handleDeleteTeacher = async (id) => {
         if(window.confirm('Are you sure you want to delete this teacher?')) {
@@ -170,12 +88,6 @@ const SubjectDetails = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={() => setShowCommissionModal(true)} 
-                        className="bg-navy text-gold px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow-lg flex items-center gap-2 border-2 border-gold"
-                    >
-                        <span>⚡</span> Commission Exam to Faculty
-                    </button>
                     <button onClick={() => navigate('/admin/dashboard')} className="bg-white border-2 border-gray-100 text-slate/40 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-navy hover:text-navy transition shadow-sm">← Back</button>
                 </div>
             </div>

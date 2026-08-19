@@ -203,10 +203,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                             ⚙️ Print Settings
                         </button>
                         <button style={{ ...styles.actionBtn, background: '#10b981' }} onClick={() => window.print()}>
-                            🖨️ Print Paper
-                        </button>
-                        <button style={{ ...styles.actionBtn, background: '#7c3aed' }} onClick={handleWordExport}>
-                            ⬇️ Export Word
+                            🖨️ Print / Save PDF
                         </button>
                     </div>
                 </div>

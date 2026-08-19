@@ -587,41 +587,54 @@ const CreatePaper = () => {
     const handleAutoGet = async (qty, dist = { easy: 40, medium: 40, hard: 20 }) => {
         try {
             showToast(`Fetching ${qty} questions with custom difficulty split...`, 'info');
-            const qs = buildQueryParams(1, Math.min(qty * 3, 500));
+            const qs = buildQueryParams(1, Math.max(qty * 5, 300));
             const res = await api.get(`/api/questions?${qs}`);
-            let pool = res.data?.questions || questions;
+            let pool = res.data?.questions || (Array.isArray(res.data) ? res.data : questions);
 
-            pool = pool.filter(q => !selectedQuestions.find(sq => sq._id === q._id));
+            if (!pool || pool.length === 0) {
+                const fallbackRes = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&limit=500&paginated=true`);
+                pool = fallbackRes.data?.questions || (Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+            }
 
-            const easyTarget = Math.round(qty * ((dist.easy || 40) / 100));
-            const medTarget = Math.round(qty * ((dist.medium || 40) / 100));
-            const hardTarget = Math.max(0, qty - easyTarget - medTarget);
+            const currentSelectedIds = new Set(selectedQuestions.map(sq => (sq._id || sq.id).toString()));
+            pool = pool.filter(q => !currentSelectedIds.has((q._id || q.id).toString()));
 
-            const easyPool = pool.filter(q => q.level === 'easy').sort(() => Math.random() - 0.5);
-            const medPool = pool.filter(q => q.level === 'medium').sort(() => Math.random() - 0.5);
-            const hardPool = pool.filter(q => q.level === 'hard').sort(() => Math.random() - 0.5);
+            if (pool.length === 0) {
+                showToast('No available questions remaining in the pool.', 'error');
+                return;
+            }
 
-            const pickedEasy = easyPool.slice(0, easyTarget);
-            const pickedMed = medPool.slice(0, medTarget);
-            const pickedHard = hardPool.slice(0, hardTarget);
+            const targetQty = Math.min(qty, pool.length);
+            const easyTarget = Math.round(targetQty * ((dist.easy || 40) / 100));
+            const medTarget = Math.round(targetQty * ((dist.medium || 40) / 100));
+            const hardTarget = Math.max(0, targetQty - easyTarget - medTarget);
 
-            const pickedIds = new Set([...pickedEasy, ...pickedMed, ...pickedHard].map(q => q._id));
+            const easyPool = pool.filter(q => (q.level || '').toLowerCase() === 'easy').sort(() => Math.random() - 0.5);
+            const medPool = pool.filter(q => (q.level || '').toLowerCase() === 'medium' || !q.level).sort(() => Math.random() - 0.5);
+            const hardPool = pool.filter(q => (q.level || '').toLowerCase() === 'hard').sort(() => Math.random() - 0.5);
+
+            let pickedEasy = easyPool.slice(0, easyTarget);
+            let pickedMed = medPool.slice(0, medTarget);
+            let pickedHard = hardPool.slice(0, hardTarget);
+
             let picked = [...pickedEasy, ...pickedMed, ...pickedHard];
+            const pickedIds = new Set(picked.map(q => (q._id || q.id).toString()));
 
             // If not enough in specific difficulty buckets, top up from remainder of pool
-            if (picked.length < qty) {
-                const remainingPool = pool.filter(q => !pickedIds.has(q._id)).sort(() => Math.random() - 0.5);
-                picked = [...picked, ...remainingPool.slice(0, qty - picked.length)];
+            if (picked.length < targetQty) {
+                const remainingPool = pool.filter(q => !pickedIds.has((q._id || q.id).toString())).sort(() => Math.random() - 0.5);
+                picked = [...picked, ...remainingPool.slice(0, targetQty - picked.length)];
             }
 
             setSelectedQuestions(prev => {
-                const newOnes = picked.filter(p => !prev.find(s => s._id === p._id));
+                const curIds = new Set(prev.map(s => (s._id || s.id).toString()));
+                const newOnes = picked.filter(p => !curIds.has((p._id || p.id).toString()));
                 return [...prev, ...newOnes];
             });
             setShowAutoGetModal(false);
-            showToast(`✓ Added ${picked.length} questions (Easy: ${pickedEasy.length}, Medium: ${pickedMed.length}, Hard: ${pickedHard.length})`, 'success');
+            showToast(`✓ Added ${picked.length} questions! (Total: ${selectedQuestions.length + picked.length} Qs)`, 'success');
         } catch (err) {
-            console.error(err);
+            console.error('Auto fetch error:', err);
             showToast('Error auto-fetching questions', 'error');
         }
     };
@@ -635,16 +648,18 @@ const CreatePaper = () => {
         try {
             await api.post('/api/papers', {
                 title: paperTitle,
+                subject: subject,
                 classes: filters.class ? [filters.class] : [],
-                questions: selectedQuestions.map(q => q._id),
-                pattern: (filters.class === '11' || filters.class === '12') ? pattern : []
+                questions: selectedQuestions.map(q => q._id || q.id),
+                pattern: (filters.class === '11' || filters.class === '12') ? pattern : [],
+                examId: selectedExamId || undefined
             });
             try {
                 localStorage.removeItem(DRAFT_KEY);
             } catch {
                 // ignore
             }
-            showToast('Paper saved successfully!', 'success');
+            showToast('Paper saved & synced successfully!', 'success');
             setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1500);
         } catch (err) {
             showToast('Failed to save paper', 'error');

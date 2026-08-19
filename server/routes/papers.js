@@ -21,17 +21,52 @@ async function populatePaperQuestions(paper) {
 
 // @route   POST /api/papers
 // @desc    Save a paper (stores Supabase question IDs and paper pattern)
-// @access  Teacher
+// @access  Teacher / Admin
 router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
+        const { examId, ...rest } = req.body;
         const paperData = {
-            ...req.body,
-            subject: req.user.subject || 'Mixed',
+            ...rest,
+            subject: req.user.role === 'admin' ? (req.body.subject || 'Physics') : (req.user.subject || 'Physics'),
             teacherId: req.user.id
         };
 
         const paper = new Paper(paperData);
         await paper.save();
+
+        // If linked to an exam via examId or matching title, update OnlineExam's subjectAssignment
+        const OnlineExam = require('../models/OnlineExam');
+        let exam = null;
+        if (examId) {
+            exam = await OnlineExam.findById(examId);
+        } else if (paper.title) {
+            // Find exam where title is part of paper.title
+            const exams = await OnlineExam.find({}).sort({ createdAt: -1 });
+            exam = exams.find(e => paper.title.toLowerCase().includes(e.title.toLowerCase()));
+        }
+
+        if (exam) {
+            const subName = (paper.subject || '').toLowerCase().trim();
+            const assignment = exam.subjectAssignments.find(sa => {
+                const saSub = (sa.subject || '').toLowerCase().trim();
+                return saSub === subName ||
+                       (subName.includes('math') && saSub.includes('math')) ||
+                       (subName.includes('bio') && saSub.includes('bio')) ||
+                       (subName.includes('physic') && saSub.includes('physic')) ||
+                       (subName.includes('chem') && saSub.includes('chem'));
+            });
+
+            if (assignment) {
+                assignment.submittedPaperId = paper._id;
+                assignment.teacherId = req.user.id;
+                assignment.teacherName = req.user.name || assignment.teacherName;
+                assignment.teacherEmail = req.user.email || assignment.teacherEmail;
+                const qCount = Array.isArray(paper.questions) ? paper.questions.length : 0;
+                assignment.status = qCount >= (assignment.targetQuestions || 60) ? 'Completed' : 'In Progress';
+                await exam.save();
+            }
+        }
+
         res.json(paper);
     } catch (err) {
         console.error('Save paper error:', err.message);

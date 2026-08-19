@@ -43,6 +43,10 @@ router.post('/commission', [auth, checkRole(['admin'])], async (req, res) => {
 // TEACHER / ADMIN: Get active exam assignments delegated to current user
 // GET /api/exams/my-assignments
 // ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// TEACHER / ADMIN: Get active exam assignments delegated to current user
+// GET /api/exams/my-assignments
+// ─────────────────────────────────────────────────────────────────
 router.get('/my-assignments', auth, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -56,7 +60,8 @@ router.get('/my-assignments', auth, async (req, res) => {
             query = {
                 $or: [
                     { 'subjectAssignments.teacherId': userId },
-                    { 'subjectAssignments.subject': new RegExp(`^${userSubject}$`, 'i') }
+                    { 'subjectAssignments.subject': new RegExp(`^${userSubject}$`, 'i') },
+                    { 'subjectAssignments.subject': new RegExp(userSubject || 'Physics', 'i') }
                 ]
             };
         }
@@ -74,7 +79,7 @@ router.get('/my-assignments', auth, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// ADMIN: Get all commissioned exams with real-time per-subject status
+// ADMIN: Get all commissioned exams with real-time per-subject status & full question hydration
 // GET /api/exams/commissioned
 // ─────────────────────────────────────────────────────────────────
 router.get('/commissioned', [auth, checkRole(['admin'])], async (req, res) => {
@@ -83,7 +88,79 @@ router.get('/commissioned', [auth, checkRole(['admin'])], async (req, res) => {
             .sort({ createdAt: -1 })
             .populate('subjectAssignments.submittedPaperId')
             .populate('createdBy', 'name email');
-        res.json(exams);
+
+        // Also resolve all questions for submitted papers to provide genuine real-time data
+        const allPapers = await Paper.find({}).sort({ createdAt: -1 });
+
+        const enrichedExams = await Promise.all(exams.map(async (exam) => {
+            const exObj = exam.toObject();
+            let allExamQuestions = [];
+
+            if (Array.isArray(exObj.subjectAssignments)) {
+                for (const sa of exObj.subjectAssignments) {
+                    let paper = sa.submittedPaperId;
+
+                    // Fallback: if not explicitly linked, match by exam title & subject
+                    if (!paper) {
+                        const matchedPaper = allPapers.find(p => 
+                            p.title && p.title.toLowerCase().includes(exObj.title.toLowerCase()) &&
+                            (p.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase())
+                        );
+                        if (matchedPaper) {
+                            paper = matchedPaper;
+                            // Auto link in background
+                            try {
+                                const dbExam = await OnlineExam.findById(exObj._id);
+                                if (dbExam) {
+                                    const dbSa = dbExam.subjectAssignments.id(sa._id);
+                                    if (dbSa) {
+                                        dbSa.submittedPaperId = matchedPaper._id;
+                                        await dbExam.save();
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Auto link error:', e);
+                            }
+                        }
+                    }
+
+                    if (paper && Array.isArray(paper.questions) && paper.questions.length > 0) {
+                        // If questions are string IDs, fetch from Supabase
+                        let resolvedQuestions = [];
+                        if (typeof paper.questions[0] === 'string') {
+                            resolvedQuestions = await supabaseQuestions.getQuestionsByIds(paper.questions);
+                        } else {
+                            resolvedQuestions = paper.questions;
+                        }
+
+                        // Attach resolved questions to paper
+                        paper.questions = resolvedQuestions;
+                        sa.submittedPaperId = paper;
+                        sa.questionsCount = resolvedQuestions.length;
+                        sa.status = resolvedQuestions.length >= (sa.targetQuestions || 60) ? 'Completed' : 'In Progress';
+
+                        // Ensure each question has subject assigned
+                        resolvedQuestions.forEach(q => {
+                            if (!q.subject) q.subject = sa.subject;
+                            allExamQuestions.push(q);
+                        });
+                    } else {
+                        sa.questionsCount = 0;
+                    }
+                }
+            }
+
+            // Include any questions directly in the exam
+            if (Array.isArray(exObj.questions) && exObj.questions.length > 0) {
+                exObj.questions.forEach(q => allExamQuestions.push(q));
+            }
+
+            exObj.allQuestions = allExamQuestions;
+            exObj.totalQuestionsAdded = allExamQuestions.length;
+            return exObj;
+        }));
+
+        res.json(enrichedExams);
     } catch (err) {
         console.error('Fetch Commissioned Error:', err);
         res.status(500).json({ msg: 'Server error fetching commissioned exams' });
