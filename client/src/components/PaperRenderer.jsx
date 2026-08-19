@@ -56,6 +56,7 @@ const DEFAULT_SETTINGS = {
     showMarks: false,         // OFF by default per requirements
     showAnswerKey: false,
     showDifficulty: false,
+    showCoverPage: true,      // Page 1 standard instructions cover
     startQNo: 1,
     endQNo: null,             // null = use all questions
     pageSize: 'A4',
@@ -120,6 +121,12 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                 <select style={selectStyle} value={settings.columns} onChange={e => update('columns', parseInt(e.target.value))}>
                     <option value={1}>Single Column</option>
                     <option value={2}>Two Columns</option>
+                </select>
+            </SettingField>
+            <SettingField label="Cover Page">
+                <select style={selectStyle} value={settings.showCoverPage !== false ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
+                    <option value="yes">Page 1 Instructions</option>
+                    <option value="no">Skip Cover Page</option>
                 </select>
             </SettingField>
             <SettingField label="Page Size">
@@ -194,6 +201,142 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                     <option value="yes">Show Answers</option>
                 </select>
             </SettingField>
+        </div>
+    );
+}
+
+// ─── Instruction Cover Page (Page 1 Standard / Merged Instructions) ─────────
+export function InstructionCoverPage({ paper, questions = [], duration, totalMarks, classes = [] }) {
+    // Collect distinct subjects and their chapters
+    const subjectMap = {};
+    questions.forEach(q => {
+        const sub = (q.subject || paper?.subject || 'General').toUpperCase();
+        if (!subjectMap[sub]) subjectMap[sub] = new Set();
+        if (q.chapter) subjectMap[sub].add(q.chapter);
+    });
+
+    const subjectEntries = Object.entries(subjectMap);
+    const totalQCount = questions.length || 60;
+
+    return (
+        <div style={{ pageBreakAfter: 'always', breakAfter: 'page', marginBottom: '28px', paddingBottom: '20px', borderBottom: '2px dashed #999' }}>
+            
+            {/* Candidate Name and Reg No Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 16px 0', fontSize: '13px', fontWeight: 800 }}>
+                <div style={{ flex: 1 }}>
+                    Name of the candidate: <span style={{ display: 'inline-block', borderBottom: '1.5px solid #000', width: '220px', marginLeft: '6px' }}>&nbsp;</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontWeight: 800 }}>Reg. No.</span>
+                    <div style={{ display: 'flex', border: '1.5px solid #000' }}>
+                        {[...Array(8)].map((_, i) => (
+                            <div key={i} style={{ width: '20px', height: '22px', borderRight: i < 7 ? '1.5px solid #000' : 'none' }}></div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Instructions Title */}
+            <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+                IMPORTANT INSTRUCTIONS TO CANDIDATES :
+            </div>
+
+            {/* Instructions Body */}
+            <div style={{ fontSize: '12px', lineHeight: '1.55', color: '#111' }}>
+                <p style={{ margin: '4px 0' }}>
+                    <strong>1)</strong> This question paper contains <strong>{totalQCount} questions</strong> and each question will have one statement and four distracters. (Four different options / choices).
+                </p>
+                <p style={{ margin: '4px 0' }}>
+                    <strong>2)</strong> During the subsequent <strong>{duration || '180 Minutes / 3 Hours'}</strong>:
+                    <br />• Read each question carefully.
+                    <br />• Choose the correct answer from out of the four available distracters (options / choices) given under each question / statement.
+                    <br />• Completely <strong>darken / shade</strong> the relevant circle with a <strong>blue or black ink ballpoint pen</strong> against the question number on the <strong>OMR answer sheet</strong>.
+                </p>
+
+                {/* OMR Demonstration Box */}
+                <div style={{ border: '1.5px solid #000', margin: '10px 0', padding: '8px', background: '#fafafa', borderRadius: '4px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', border: '1px solid #777', background: '#fff' }}>
+                        <div style={{ padding: '6px 10px', borderRight: '1px solid #777', textAlign: 'center' }}>
+                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '6px', color: '#111' }}>ಸರಿಯಾದ ಕ್ರಮ / CORRECT METHOD</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>A</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, background: '#000', color: '#fff' }}>B</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>C</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>D</span>
+                            </div>
+                        </div>
+                        <div style={{ padding: '6px 10px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '6px', color: '#111' }}>ತಪ್ಪು ಕ್ರಮಗಳು / WRONG METHODS</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                                <div style={{ display: 'flex', gap: '3px' }}>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: '#c00' }}>✖</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>B</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>C</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>D</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '3px' }}>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>A</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>B</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>C</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: '#090' }}>✔</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '3px' }}>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>A</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', background: '#000', color: '#fff' }}>B</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', background: '#000', color: '#fff' }}>C</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>D</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <p style={{ margin: '4px 0' }}>
+                    <strong>3)</strong> Please note that even a minute unintended ink dot on the OMR answer sheet will also be recognized and recorded by the scanner. Therefore, avoid multiple marking of any kind on the OMR answer sheet.
+                </p>
+                <p style={{ margin: '4px 0' }}>
+                    <strong>4)</strong> Hand over the <strong>OMR answer sheet</strong> to the room invigilator as it is.
+                </p>
+            </div>
+
+            {/* Syllabus / Subject Breakdown Table */}
+            <div style={{ marginTop: '14px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1.5px solid #000', fontSize: '11px' }}>
+                    <thead>
+                        <tr style={{ background: '#f0f0f0', borderBottom: '1.5px solid #000' }}>
+                            {subjectEntries.length > 0 ? (
+                                subjectEntries.map(([sub]) => (
+                                    <th key={sub} style={{ border: '1px solid #000', padding: '6px 8px', fontWeight: 800, textAlign: 'center', textTransform: 'uppercase' }}>
+                                        {sub}
+                                    </th>
+                                ))
+                            ) : (
+                                <th style={{ border: '1px solid #000', padding: '6px 8px', fontWeight: 800, textAlign: 'center', textTransform: 'uppercase' }}>
+                                    {paper?.subject || 'SYLLABUS'}
+                                </th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            {subjectEntries.length > 0 ? (
+                                subjectEntries.map(([sub, chaptersSet]) => {
+                                    const list = Array.from(chaptersSet);
+                                    return (
+                                        <td key={sub} style={{ border: '1px solid #000', padding: '8px', verticalAlign: 'top', fontSize: '11px', lineHeight: '1.4' }}>
+                                            {list.length > 0 ? list.join(' • ') : 'All Prescribed Syllabus'}
+                                        </td>
+                                    );
+                                })
+                            ) : (
+                                <td style={{ border: '1px solid #000', padding: '8px', verticalAlign: 'top', fontSize: '11px', lineHeight: '1.4' }}>
+                                    All Prescribed Syllabus & Concepts
+                                </td>
+                            )}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
@@ -459,6 +602,18 @@ const PaperRenderer = ({
 
             {/* Paper body */}
             <div id={printAreaId} style={pageStyle}>
+                
+                {/* ── Page 1: Standard / Merged Instructions Cover Page ── */}
+                {!isAssignment && settings.showCoverPage !== false && (
+                    <InstructionCoverPage
+                        paper={paper}
+                        questions={visibleQuestions}
+                        duration={paper?.duration}
+                        totalMarks={totalMarks}
+                        classes={classes}
+                    />
+                )}
+
                 <PaperHeader
                     title={paper?.title}
                     subject={paper?.subject}

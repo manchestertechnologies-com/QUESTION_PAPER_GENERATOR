@@ -29,11 +29,16 @@ const AddQuestion = () => {
     const [solutionImageFile, setSolutionImageFile] = useState(null);
     const [editId, setEditId] = useState(null);
     const [showForm, setShowForm] = useState(false);
+    const [expandedSolutions, setExpandedSolutions] = useState(new Set());
 
-    // Bulk Import Excel/CSV state
-    const [showImportModal, setShowImportModal] = useState(false);
-    const [importFile, setImportFile] = useState(null);
-    const [importing, setImporting] = useState(false);
+    const toggleSolution = (id) => {
+        setExpandedSolutions(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     const handleBulkExcelImport = async (e) => {
         e.preventDefault();
@@ -268,12 +273,6 @@ const AddQuestion = () => {
                     <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] ml-1">Academic Question Bank Management</p>
                 </div>
                 <div className="flex gap-3">
-                    <button 
-                        onClick={() => setShowImportModal(true)}
-                        className="px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-600 text-white hover:scale-105 active:scale-95 transition-all shadow-lg"
-                    >
-                        📤 Bulk Import (Excel/CSV)
-                    </button>
                     <button 
                         onClick={() => {
                             if (showForm) {
@@ -819,16 +818,29 @@ const AddQuestion = () => {
                             )}
 
                             {(q.solutionText || q.solutionImageUrl) && (
-                                <div className="mt-4 bg-green-50/50 p-4 rounded-lg border border-green-100">
-                                    <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2">
-                                        <span>💡</span> Detailed Solution
-                                    </h5>
-                                    {q.solutionText && (
-                                        <MathRenderer className="text-sm text-gray-700 whitespace-pre-wrap mb-2" text={stripQBPTags(q.solutionText)} />
-                                    )}
-                                    {q.solutionImageUrl && (
-                                        <div className="mt-2">
-                                            <img src={q.solutionImageUrl} alt="Solution Diagram" className="max-h-48 rounded border border-gray-200" />
+                                <div className="mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => toggleSolution(q._id)}
+                                        className="text-xs font-bold text-green-800 bg-green-50/80 border border-green-200 hover:bg-green-100 px-3.5 py-1.5 rounded-xl flex items-center gap-2 transition cursor-pointer shadow-sm"
+                                    >
+                                        <span>💡</span>
+                                        <span>{expandedSolutions.has(q._id) ? 'Hide Detailed Solution' : 'Show Detailed Solution'}</span>
+                                    </button>
+                                    
+                                    {expandedSolutions.has(q._id) && (
+                                        <div className="mt-3 bg-green-50/60 p-4 rounded-2xl border border-green-200 animate-fade-in-up">
+                                            <h5 className="font-bold text-green-800 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                <span>💡</span> Detailed Solution & Explanation
+                                            </h5>
+                                            {q.solutionText && (
+                                                <MathRenderer className="text-sm text-gray-700 whitespace-pre-wrap mb-2" text={stripQBPTags(q.solutionText)} />
+                                            )}
+                                            {q.solutionImageUrl && (
+                                                <div className="mt-2">
+                                                    <img src={q.solutionImageUrl} alt="Solution Diagram" className="max-h-48 rounded-xl border border-gray-200" />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -868,48 +880,6 @@ const AddQuestion = () => {
                             </button>
                         </div>
                     )}
-                </div>
-            )}
-
-            {/* Bulk Import Modal */}
-            {showImportModal && (
-                <div className="fixed inset-0 bg-navy/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl max-w-md w-full border border-gray-100 animate-fade-in-up flex flex-col gap-6 font-sans">
-                        <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-                            <div>
-                                <h3 className="font-black text-xl text-navy uppercase tracking-wide">Bulk Import Questions</h3>
-                                <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] mt-1">Upload XLSX / XLS / CSV sheet</p>
-                            </div>
-                            <button onClick={() => setShowImportModal(false)} className="text-slate/40 hover:text-red-500 font-bold text-xl">✕</button>
-                        </div>
-
-                        <form onSubmit={handleBulkExcelImport} className="space-y-4">
-                            <div>
-                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Select Spreadsheet File</label>
-                                <input 
-                                    type="file" required accept=".xlsx, .xls, .csv"
-                                    onChange={e => setImportFile(e.target.files[0])}
-                                    className="w-full border-2 border-gray-100 p-4 rounded-xl bg-gray-50/50 hover:bg-white focus:border-navy outline-none font-bold text-xs"
-                                />
-                            </div>
-
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-[11px] leading-relaxed text-slate/60 space-y-1">
-                                <p className="font-bold text-navy uppercase tracking-wider mb-1">Expected Spreadsheet Format:</p>
-                                <p>• <strong>questionText</strong> / <strong>question</strong> : Question text</p>
-                                <p>• <strong>type</strong>: MCQ, NUMERICAL, ASSERTION_REASON, etc.</p>
-                                <p>• <strong>a, b, c, d</strong> (or OptionA, OptionB, OptionC, OptionD): Options text</p>
-                                <p>• <strong>answer</strong>: Index/Value matching options or exact value</p>
-                                <p>• <strong>chapter</strong>, <strong>concept</strong>, <strong>level</strong> (easy/medium/hard)</p>
-                            </div>
-
-                            <button 
-                                type="submit" disabled={importing}
-                                className="w-full bg-navy text-gold py-4 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition shadow-lg disabled:opacity-50"
-                            >
-                                {importing ? 'Processing & Importing...' : 'Import Data'}
-                            </button>
-                        </form>
-                    </div>
                 </div>
             )}
         </div>

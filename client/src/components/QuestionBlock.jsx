@@ -41,30 +41,33 @@ const Q = {
         alignSelf: 'flex-start',
         marginLeft: '6px',
     },
-    optGrid: (count, singleCol) => ({
+    optGrid: (count, singleCol, hasImages = false) => ({
         display: 'grid',
-        gridTemplateColumns: singleCol ? '1fr' : (count <= 2 ? '1fr 1fr' : (count <= 4 ? 'repeat(auto-fit, minmax(120px, 1fr))' : '1fr')),
-        gap: '3px 16px',
+        gridTemplateColumns: singleCol ? '1fr' : (hasImages ? 'repeat(auto-fit, minmax(140px, 1fr))' : (count <= 2 ? '1fr 1fr' : (count <= 4 ? 'repeat(auto-fit, minmax(120px, 1fr))' : '1fr'))),
+        gap: hasImages ? '8px 16px' : '3px 16px',
         marginTop: '6px',
         marginLeft: '2px',
         maxWidth: '100%',
+        alignItems: 'center',
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
     }),
     optRow: {
         display: 'flex',
-        alignItems: 'flex-start',
-        gap: '4px',
+        alignItems: 'center',
+        gap: '6px',
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
         minWidth: 0,
     },
-    optLbl: { fontWeight: 600, whiteSpace: 'nowrap', minWidth: '20px', lineHeight: '1.5' },
+    optLbl: { fontWeight: 700, whiteSpace: 'nowrap', minWidth: '22px', lineHeight: '1.5' },
     img: {
         display: 'block',
-        maxWidth: '100%',
+        maxWidth: '95%',
+        maxHeight: '175px',
         objectFit: 'contain',
-        margin: '8px auto',
+        margin: '6px auto',
+        borderRadius: '4px',
     },
     assertLabel: { fontWeight: 700, minWidth: 0 },
     assertRow: {
@@ -116,9 +119,10 @@ const Q = {
 /** Smart option grid — forces single column in 2-col paper mode or when options are long */
 function optGridStyle(options, singleColMode = false) {
     if (!options || options.length === 0) return Q.optGrid(1, true);
+    const hasImages = options.some(o => typeof o === 'string' && (o.includes('<img') || o.includes('{{IMG::') || o.includes('data:image') || o.includes('.png') || o.includes('.jpg')));
     const avgLen = options.reduce((s, o) => s + (o || '').replace(/\$[^$]+\$/g, 'xxx').length, 0) / options.length;
-    const forceOne = singleColMode || avgLen > 30 || options.length > 4;
-    return Q.optGrid(options.length, forceOne);
+    const forceOne = singleColMode || (avgLen > 30 && !hasImages) || options.length > 4;
+    return Q.optGrid(options.length, forceOne, hasImages);
 }
 
 /** Parse assertion/reason from question text if stored as a single string */
