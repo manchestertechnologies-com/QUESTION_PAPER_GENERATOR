@@ -48,6 +48,21 @@ function mapSupabaseToQuestion(row) {
     }
     if (classesList.length === 0) classesList.push('JEE', 'NEET');
 
+    // Extract difficulty level from [QBP_DIFFICULTY:Easy] or [DIFFICULTY:Easy] tags
+    let level = 'medium';
+    let cleanSolution = row.solution_text || '';
+    let cleanQuestion = row.question || '';
+
+    const diffRegex = /\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/gi;
+    const match = (row.solution_text || '').match(/\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/i) ||
+                  (row.question || '').match(/\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/i);
+    if (match && match[1]) {
+        level = match[1].toLowerCase();
+    }
+    // Clean internal difficulty tags so they don't appear in user UI or printed papers
+    cleanSolution = cleanSolution.replace(diffRegex, '').trim();
+    cleanQuestion = cleanQuestion.replace(diffRegex, '').trim();
+
     return {
         _id: row.id,
         id: row.id,
@@ -57,15 +72,15 @@ function mapSupabaseToQuestion(row) {
         chapter: row.chapter || 'General',
         concept: row.topic || row.chapter || 'General',
         subConcept: '',
-        level: 'medium',
+        level: level,
         type: type,
         q_type: row.q_type,
-        questionText: row.question || '',
+        questionText: cleanQuestion,
         options: options,
         answer: answer,
         correct_option: row.correct_option,
         num_answer: row.num_answer,
-        solutionText: row.solution_text || '',
+        solutionText: cleanSolution,
         questionTextTranslation: row.question_text_translation || '',
         optionsTranslation: row.options_translation || [],
         assertion: row.assertion || '',
@@ -196,6 +211,21 @@ function applyFilters(query, filters = {}) {
         });
         if (qTypes.length > 0) {
             query = query.in('q_type', [...new Set(qTypes)]);
+        }
+    }
+
+    if (filters.level) {
+        const levelArr = Array.isArray(filters.level) ? filters.level : filters.level.split(',').map(l => l.trim()).filter(Boolean);
+        if (levelArr.length === 1) {
+            const l = levelArr[0].toLowerCase();
+            const cap = l.charAt(0).toUpperCase() + l.slice(1);
+            query = query.or(`solution_text.ilike.%DIFFICULTY:${cap}%,question.ilike.%DIFFICULTY:${cap}%`);
+        } else if (levelArr.length > 1) {
+            const orClauses = levelArr.map(lvl => {
+                const cap = lvl.charAt(0).toUpperCase() + lvl.slice(1).toLowerCase();
+                return `solution_text.ilike.%DIFFICULTY:${cap}%,question.ilike.%DIFFICULTY:${cap}%`;
+            }).join(',');
+            query = query.or(orClauses);
         }
     }
 
