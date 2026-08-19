@@ -40,49 +40,20 @@ const app = express();
 // SECURITY: Helmet — HTTP security headers
 // ─────────────────────────────────────────────────────────────────────────────
 app.use(helmet({
-    crossOriginEmbedderPolicy: false, // Needed for Puppeteer PDF generation
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
-            styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
-            fontSrc: ["'self'", 'fonts.gstatic.com'],
-            imgSrc: ["'self'", 'data:', 'res.cloudinary.com', '*.cloudinary.com'],
-            connectSrc: ["'self'"],
-            frameSrc: ["'none'"],
-            objectSrc: ["'none'"],
-        },
-    },
-    referrerPolicy: { policy: 'same-origin' },
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CORS — Only allow known origins
+// CORS — Permit all origins (Vercel deployments, custom domains, localhost)
 // ─────────────────────────────────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
-    'https://qestion-paper.vercel.app',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'http://localhost:4173'
-];
-
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow no-origin (curl, Postman, server-to-server)
-        const envOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [];
-        if (
-            !origin || 
-            ALLOWED_ORIGINS.includes(origin) || 
-            process.env.ALLOWED_ORIGINS === '*' || 
-            envOrigins.includes(origin)
-        ) {
-            callback(null, true);
-        } else {
-            callback(new Error(`CORS: Origin ${origin} not allowed.`));
-        }
+        // Always allow origin so Vercel preview/production URLs and custom domains connect smoothly
+        callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'Origin', 'Accept'],
     credentials: true,
     optionsSuccessStatus: 200
 }));
