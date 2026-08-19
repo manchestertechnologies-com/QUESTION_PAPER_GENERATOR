@@ -4,6 +4,7 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 
 const AdminPaperPreview = () => {
     const { paperId } = useParams();
@@ -13,6 +14,7 @@ const AdminPaperPreview = () => {
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showAnswerKey, setShowAnswerKey] = useState(false);
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
     const [printSolutionsBooklet, setPrintSolutionsBooklet] = useState(false);
     const [generatingSolutions, setGeneratingSolutions] = useState({});
     const [numSets, setNumSets] = useState(4);
@@ -272,10 +274,25 @@ const AdminPaperPreview = () => {
                     >
                         {showAnswerKey ? 'Hide Answers' : 'Show Answers'}
                     </button>
+                    <button 
+                        onClick={() => setShowAnalysisModal(true)} 
+                        className="bg-navy text-gold border-2 border-gold/40 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg flex items-center gap-2"
+                    >
+                        <span>📊</span> Paper Analysis
+                    </button>
                     <button onClick={handlePrint} className="bg-navy text-gold px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">🖨 Print / Save PDF</button>
                     <button onClick={handleWordExport} className="bg-purple-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg">⬇️ Export Word</button>
                 </div>
             </div>
+
+            {/* Paper Analysis Modal */}
+            <PaperAnalysisModal
+                isOpen={showAnalysisModal}
+                onClose={() => setShowAnalysisModal(false)}
+                paperTitle={selectedPaper?.title || 'NEET Question Paper'}
+                questions={selectedPaper?.questions || []}
+                examType={selectedPaper?.examType || (selectedPaper?.title?.toUpperCase().includes('CET') ? 'CET' : selectedPaper?.title?.toUpperCase().includes('JEE') ? 'JEE' : 'NEET')}
+            />
 
             <div className="bg-white p-20 shadow-2xl max-w-4xl mx-auto print-area border-t-8 border-navy font-serif text-sm mb-20 min-h-[1100px] rounded-b-[3rem]" style={{ position: 'relative' }}>
                 {/* Watermark */}

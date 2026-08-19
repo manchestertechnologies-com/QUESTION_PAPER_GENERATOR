@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
+import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 
 const SubjectDetails = () => {
     const { subject } = useParams();
@@ -15,6 +16,7 @@ const SubjectDetails = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('teachers');
     const [selectedViewPaper, setSelectedViewPaper] = useState(null);
+    const [selectedAnalysisPaper, setSelectedAnalysisPaper] = useState(null);
     const [showCommissionModal, setShowCommissionModal] = useState(false);
 
     // Commission Form State
@@ -261,11 +263,14 @@ const SubjectDetails = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-3 mt-auto relative">
-                                        <button onClick={() => handleStatusUpdate(p._id, 'Rejected')} className="bg-gray-50 text-red-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition shadow-sm">Reject</button>
-                                        <button onClick={() => handleStatusUpdate(p._id, 'Approved')} className="bg-navy text-gold py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition shadow-lg">Approve</button>
-                                        <button onClick={() => setSelectedViewPaper(p)} className="col-span-2 bg-white border-2 border-navy/20 text-navy hover:bg-navy hover:text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition shadow-sm flex items-center justify-center gap-2">
+                                    <div className="grid grid-cols-2 gap-2 mt-auto relative">
+                                        <button onClick={() => handleStatusUpdate(p._id, 'Rejected')} className="bg-gray-50 text-red-500 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition shadow-sm">Reject</button>
+                                        <button onClick={() => handleStatusUpdate(p._id, 'Approved')} className="bg-navy text-gold py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition shadow-lg">Approve</button>
+                                        <button onClick={() => setSelectedViewPaper(p)} className="bg-white border-2 border-navy/20 text-navy hover:bg-navy hover:text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-sm flex items-center justify-center gap-1">
                                             <span>👁</span> View
+                                        </button>
+                                        <button onClick={() => setSelectedAnalysisPaper(p)} className="bg-gold/10 border-2 border-gold/60 text-navy hover:bg-gold hover:text-navy py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition shadow-sm flex items-center justify-center gap-1">
+                                            <span>📊</span> Analysis
                                         </button>
                                     </div>
                                 </div>
@@ -549,6 +554,12 @@ const SubjectDetails = () => {
                                 Total Questions in This Subject Paper: <span className="text-blue-700">{selectedViewPaper.questions?.length} Questions</span>
                             </div>
                             <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setSelectedAnalysisPaper(selectedViewPaper)} 
+                                    className="px-6 py-2.5 rounded-xl bg-gold text-navy font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow flex items-center gap-1.5"
+                                >
+                                    <span>📊</span> Paper Analysis
+                                </button>
                                 <button onClick={() => setSelectedViewPaper(null)} className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-100 transition">
                                     Close
                                 </button>
@@ -560,6 +571,15 @@ const SubjectDetails = () => {
                     </div>
                 </div>
             )}
+
+            {/* Paper Analysis Modal */}
+            <PaperAnalysisModal
+                isOpen={!!selectedAnalysisPaper}
+                onClose={() => setSelectedAnalysisPaper(null)}
+                paperTitle={selectedAnalysisPaper?.title || 'NEET Question Paper'}
+                questions={selectedAnalysisPaper?.questions || []}
+                examType={selectedAnalysisPaper?.examType || (selectedAnalysisPaper?.title?.toUpperCase().includes('CET') ? 'CET' : selectedAnalysisPaper?.title?.toUpperCase().includes('JEE') ? 'JEE' : 'NEET')}
+            />
         </div>
     );
 };
