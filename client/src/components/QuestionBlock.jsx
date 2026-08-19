@@ -63,8 +63,8 @@ const Q = {
     optLbl: { fontWeight: 700, whiteSpace: 'nowrap', minWidth: '22px', lineHeight: '1.5' },
     img: {
         display: 'block',
-        maxWidth: '95%',
-        maxHeight: '175px',
+        maxWidth: '240px',
+        maxHeight: '120px',
         objectFit: 'contain',
         margin: '6px auto',
         borderRadius: '4px',

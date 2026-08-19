@@ -47,23 +47,23 @@ function processText(text, inline = false) {
 
     let result = text;
 
-    // 1) Handle {{IMG::...}} image blocks with adaptive sizing
+    // 1) Handle {{IMG::...}} image blocks with clean proportional sizing
     result = result.replace(/\{\{IMG::(.*?)\}\}/gi, (_match, src) => {
         if (inline) {
             // Compact sizing for options / inline structures
-            return `<img src="${src}" alt="Structure" style="max-height:68px;max-width:140px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
+            return `<img src="${src}" alt="Structure" style="max-height:48px;max-width:110px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
         } else {
-            // Full high-clarity sizing for question diagrams (multi-compound sets, biology graphs, etc.)
-            return `<img src="${src}" alt="Question Diagram" style="max-width:96%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:8px auto;border-radius:4px;" />`;
+            // Standard neat question diagram sizing (never oversized or blown up)
+            return `<img src="${src}" alt="Question Diagram" style="max-width:240px;max-height:120px;width:auto;height:auto;object-fit:contain;display:block;margin:6px auto;border-radius:4px;" />`;
         }
     });
 
     // 2) Handle standard markdown ![alt](src) images if present
     result = result.replace(/!\[(.*?)\]\((.*?)\)/gi, (_match, alt, src) => {
         if (inline) {
-            return `<img src="${src}" alt="${alt || 'Structure'}" style="max-height:68px;max-width:140px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
+            return `<img src="${src}" alt="${alt || 'Structure'}" style="max-height:48px;max-width:110px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
         } else {
-            return `<img src="${src}" alt="${alt || 'Question Diagram'}" style="max-width:96%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:8px auto;border-radius:4px;" />`;
+            return `<img src="${src}" alt="${alt || 'Question Diagram'}" style="max-width:240px;max-height:120px;width:auto;height:auto;object-fit:contain;display:block;margin:6px auto;border-radius:4px;" />`;
         }
     });
 
