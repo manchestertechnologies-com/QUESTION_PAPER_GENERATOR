@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../../api';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
@@ -254,19 +254,19 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
 
     return (
         <div style={S.page}>
-            {/* â”€â”€ Toolbar â”€â”€ */}
+            {/* --- Toolbar --- */}
             <div style={{ ...S.viewToolbar, flexDirection: 'column', gap: '12px', alignItems: 'stretch' }} className="no-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                    <button style={S.btnBack} onClick={onBack}>â† Back to Papers</button>
+                    <button style={S.btnBack} onClick={onBack}>← Back to Papers</button>
                     <div style={S.viewBtns}>
                         <button
                             style={{ ...S.btnBack, background: showSettings ? '#001f6d' : '#f1f5f9', color: showSettings ? '#fff' : '#001f6d' }}
                             onClick={() => setShowSettings(s => !s)}
                         >
-                            âš™ï¸ Paper Settings
+                            ⚙️ Paper Settings
                         </button>
                         {isApproved ? (
-                            <button style={S.btnPrint} onClick={() => window.print()}>ðŸ–¨ Print / Save PDF</button>
+                            <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
                         ) : (
                             <span style={{ color: '#dc2626', fontSize: '12px', fontWeight: 600, padding: '0 10px' }}>
                                 Paper must be approved by admin to print.
@@ -497,7 +497,7 @@ const SavedPapers = () => {
                                     {/* Paper */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <div style={S.paperCell}>
-                                            <div style={S.paperIcon}>ðŸ“</div>
+                                            <div style={S.paperIcon}>📄</div>
                                             <div>
                                                 <div style={S.paperTitle}>{p.title}</div>
                                                 <div style={S.paperId}>#{String(i + 1).padStart(4, '0')}</div>

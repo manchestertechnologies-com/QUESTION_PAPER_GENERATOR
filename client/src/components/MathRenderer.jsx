@@ -42,17 +42,32 @@ const KATEX_CONFIG = {
  * Converts a raw text string (with LaTeX delimiters) into rendered HTML.
  * Processes in order: $$...$$ → $...$ → \[...\] → \(...\) → {{IMG::...}}
  */
-function processText(text) {
+function processText(text, inline = false) {
     if (!text || typeof text !== 'string') return '';
 
     let result = text;
 
-    // 1) Handle {{IMG::...}} image blocks
+    // 1) Handle {{IMG::...}} image blocks with adaptive sizing
     result = result.replace(/\{\{IMG::(.*?)\}\}/gi, (_match, src) => {
-        return `<img src="${src}" alt="Question Diagram" style="max-width:70%;max-height:128px;object-fit:contain;display:block;margin:8px auto;" />`;
+        if (inline) {
+            // Compact sizing for options / inline structures
+            return `<img src="${src}" alt="Structure" style="max-height:68px;max-width:140px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
+        } else {
+            // Full high-clarity sizing for question diagrams (multi-compound sets, biology graphs, etc.)
+            return `<img src="${src}" alt="Question Diagram" style="max-width:96%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:8px auto;border-radius:4px;" />`;
+        }
     });
 
-    // 2) Render display math: $$...$$
+    // 2) Handle standard markdown ![alt](src) images if present
+    result = result.replace(/!\[(.*?)\]\((.*?)\)/gi, (_match, alt, src) => {
+        if (inline) {
+            return `<img src="${src}" alt="${alt || 'Structure'}" style="max-height:68px;max-width:140px;width:auto;height:auto;object-fit:contain;display:inline-block;vertical-align:middle;margin:2px 4px;" />`;
+        } else {
+            return `<img src="${src}" alt="${alt || 'Question Diagram'}" style="max-width:96%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:8px auto;border-radius:4px;" />`;
+        }
+    });
+
+    // 3) Render display math: $$...$$
     result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
         try {
             return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false, output: 'html' });
@@ -61,7 +76,7 @@ function processText(text) {
         }
     });
 
-    // 3) Render display math: \[...\]
+    // 4) Render display math: \[...\]
     result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => {
         try {
             return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false, output: 'html' });
@@ -70,7 +85,7 @@ function processText(text) {
         }
     });
 
-    // 4) Render inline math: $...$  (single dollar — careful not to match $$ again)
+    // 5) Render inline math: $...$  (single dollar — careful not to match $$ again)
     result = result.replace(/\$([^$\n]+?)\$/g, (_match, math) => {
         try {
             return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
@@ -79,7 +94,7 @@ function processText(text) {
         }
     });
 
-    // 5) Render inline math: \(...\)
+    // 6) Render inline math: \(...\)
     result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => {
         try {
             return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
@@ -96,9 +111,9 @@ const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
 
     // Pre-render math synchronously — no useEffect race condition
     const renderedHtml = useMemo(() => {
-        const processed = processText(safeText);
+        const processed = processText(safeText, inline);
         return DOMPurify.sanitize(processed, KATEX_CONFIG);
-    }, [safeText]);
+    }, [safeText, inline]);
 
     if (inline) {
         return (
