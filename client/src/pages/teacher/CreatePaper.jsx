@@ -788,10 +788,10 @@ const CreatePaper = () => {
         }
     };
 
-    // Assignment details
+    // Assignment details - ending question number is completely autodetected from starting number + total selected questions
     const actualStartQNo = startQNo || 1;
-    const actualEndQNo = endQNo ?? (actualStartQNo + selectedQuestions.length - 1);
-    const visibleAssignmentQuestions = selectedQuestions.slice(0, Math.max(1, actualEndQNo - actualStartQNo + 1));
+    const actualEndQNo = selectedQuestions.length > 0 ? (actualStartQNo + selectedQuestions.length - 1) : actualStartQNo;
+    const visibleAssignmentQuestions = selectedQuestions;
 
     const assignmentPaper = useMemo(() => ({
         title: assignmentTitle || `${subject.toUpperCase()} Assignment`,
@@ -810,7 +810,7 @@ const CreatePaper = () => {
             {/* ── Top Navigation Bar (Manchester Navy & Gold Header) ── */}
             <nav className="bg-navy p-4 text-white flex flex-wrap justify-between items-center z-10 border-b-4 border-gold mx-4 mt-4 shadow-2xl rounded-t-3xl gap-4">
                 
-                {/* Left Side: Brand, Title, Subject, and Mode Switcher */}
+                {/* Left Side: Brand, Title, Subject, and Paper Type Dropdown */}
                 <div className="flex items-center gap-4 ml-4">
                     <div className="bg-gold text-navy font-black rounded-xl w-10 h-10 flex items-center justify-center text-xl shadow-lg rotate-3">
                         {mode === 'assignment' ? 'A' : 'P'}
@@ -824,44 +824,43 @@ const CreatePaper = () => {
                         </span>
                     </div>
 
-                    {/* Mode Toggle Switcher */}
-                    <div className="ml-4 bg-navy-950/80 p-1 rounded-xl border border-gold/30 flex items-center shadow-inner">
-                        <button
-                            onClick={() => setMode('paper')}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition ${mode === 'paper' ? 'bg-gold text-navy shadow-md' : 'text-gold/60 hover:text-white'}`}
+                    {/* Paper Type Dropdown (Standard Paper vs Assignment) */}
+                    <div className="ml-4 flex items-center gap-2 bg-navy-950/90 border-2 border-gold/60 px-3 py-1.5 rounded-2xl shadow-lg">
+                        <span className="text-gold text-[10px] font-black uppercase tracking-wider">Format:</span>
+                        <select
+                            value={mode}
+                            onChange={e => setMode(e.target.value)}
+                            className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer pr-2 py-0.5"
                         >
-                            📄 Standard Paper
-                        </button>
-                        <button
-                            onClick={() => setMode('assignment')}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition ${mode === 'assignment' ? 'bg-gold text-navy shadow-md' : 'text-gold/60 hover:text-white'}`}
-                        >
-                            📋 Assignment Mode
-                        </button>
+                            <option value="paper" className="bg-navy text-white">📄 Standard Paper</option>
+                            <option value="assignment" className="bg-navy text-white">📋 Assignment</option>
+                        </select>
                     </div>
                 </div>
 
-                {/* Right Side: Golden Action Area with Blueprint, Auto Fetch, Generate, and Actions */}
+                {/* Right Side: Golden Action Area */}
                 <div className="flex items-center flex-wrap gap-3 mr-4">
                     
-                    {/* ── Blueprint Selector in Golden Area ── */}
-                    <div className="flex items-center gap-2 bg-gold/10 border-2 border-gold/50 px-3 py-2 rounded-xl shadow-md">
-                        <span className="text-gold font-black uppercase tracking-wider text-[10px] flex items-center gap-1">
-                            <span>📐</span> Blueprint:
-                        </span>
-                        <select
-                            value={selectedBlueprintId}
-                            onChange={e => handleBlueprintChange(e.target.value)}
-                            className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer rounded-lg px-2 py-1 border border-gold/30 hover:border-gold transition"
-                        >
-                            <option value="" className="bg-navy text-white">-- Apply Blueprint --</option>
-                            {blueprints.map(bp => (
-                                <option key={bp._id} value={bp._id} className="bg-navy text-white">
-                                    {bp.name} ({bp.examType})
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* ── Blueprint Selector (Only for Standard Paper mode, NOT in Assignment mode) ── */}
+                    {mode === 'paper' && (
+                        <div className="flex items-center gap-2 bg-gold/10 border-2 border-gold/50 px-3 py-2 rounded-xl shadow-md">
+                            <span className="text-gold font-black uppercase tracking-wider text-[10px] flex items-center gap-1">
+                                <span>📐</span> Blueprint:
+                            </span>
+                            <select
+                                value={selectedBlueprintId}
+                                onChange={e => handleBlueprintChange(e.target.value)}
+                                className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer rounded-lg px-2 py-1 border border-gold/30 hover:border-gold transition"
+                            >
+                                <option value="" className="bg-navy text-white">-- Apply Blueprint --</option>
+                                {blueprints.map(bp => (
+                                    <option key={bp._id} value={bp._id} className="bg-navy text-white">
+                                        {bp.name} ({bp.examType})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* Auto Fetch Button */}
                     <button
@@ -872,7 +871,7 @@ const CreatePaper = () => {
                         Auto Fetch
                     </button>
 
-                    {/* Generate Engine Button (Paper Mode) */}
+                    {/* Generate Engine Button (Standard Paper Mode only) */}
                     {mode === 'paper' && (
                         <button
                             onClick={() => setShowGenerateModal(true)}
@@ -915,7 +914,7 @@ const CreatePaper = () => {
             {/* ── Filter Bar ── */}
             <div className="px-6 py-3 bg-white border-b border-gray-200 flex flex-wrap gap-3 items-center relative z-30 mx-4 border-x shadow-sm">
                 
-                {/* Title Input depending on mode */}
+                {/* Title and Question Numbering Configuration */}
                 {mode === 'paper' ? (
                     <input
                         type="text"
@@ -933,8 +932,8 @@ const CreatePaper = () => {
                             onChange={e => setAssignmentTitle(e.target.value)}
                             className="border border-gray-300 p-2 rounded-lg font-medium w-52 text-sm focus:border-blue-500 outline-none"
                         />
-                        <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase">Q. Start</span>
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl">
+                            <span className="text-[10px] font-black text-navy uppercase tracking-wider">Q. Start:</span>
                             <input
                                 type="number"
                                 min={1}
@@ -944,8 +943,14 @@ const CreatePaper = () => {
                                     setStartQNo(val);
                                     setAssignmentSettings(s => ({ ...s, startQNo: val }));
                                 }}
-                                className="w-12 text-xs font-bold border border-gray-200 rounded p-1 text-center"
+                                className="w-14 text-xs font-black text-navy border border-gray-300 rounded-lg p-1 text-center bg-white"
                             />
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-blue-50/80 border border-blue-200 px-3 py-1.5 rounded-xl">
+                            <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Q. End (Auto):</span>
+                            <span className="text-xs font-black text-blue-700 bg-white px-2 py-0.5 rounded border border-blue-200">
+                                {selectedQuestions.length > 0 ? `Q${actualStartQNo + selectedQuestions.length - 1}` : '—'}
+                            </span>
                         </div>
                     </>
                 )}
@@ -1230,7 +1235,7 @@ const CreatePaper = () => {
                                 {mode === 'assignment' ? 'Assignment Questions' : 'Selected Questions'}
                             </h3>
                             <span className="text-[10px] text-gray-400 font-semibold">
-                                {mode === 'assignment' ? `Numbering: Q${actualStartQNo} to Q${actualEndQNo}` : 'No limit on selection'}
+                                {mode === 'assignment' ? (selectedQuestions.length > 0 ? `Numbering: Q${actualStartQNo} – Q${actualStartQNo + selectedQuestions.length - 1} (${selectedQuestions.length} Questions)` : `Starting from Q${actualStartQNo}`) : 'No limit on selection'}
                             </span>
                         </div>
                         <div className="flex items-center gap-2">
