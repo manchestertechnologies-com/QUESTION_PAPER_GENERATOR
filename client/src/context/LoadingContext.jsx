@@ -21,8 +21,21 @@ export const LoadingProvider = ({ children }) => {
     };
 
     return (
-        <LoadingContext.Provider value={{ showLoader, hideLoader }}>
-            {isLoading && <Loader fullPage={true} />}
+        <LoadingContext.Provider value={{ showLoader, hideLoader, isLoading }}>
+            {/* Sleek top progress indicator instead of full-screen blocking white overlay */}
+            {isLoading && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '3px',
+                    zIndex: 99999,
+                    background: 'linear-gradient(90deg, #001f6d 0%, #ffd700 50%, #001f6d 100%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'moveGradient 1.2s linear infinite'
+                }} />
+            )}
             {children}
         </LoadingContext.Provider>
     );
