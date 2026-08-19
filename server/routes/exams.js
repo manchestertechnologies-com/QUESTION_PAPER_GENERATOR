@@ -12,6 +12,85 @@ const { detectLabIp } = require('../middleware/labIp');
 const supabaseQuestions = require('../services/supabaseQuestions');
 
 // ─────────────────────────────────────────────────────────────────
+// ADMIN: Commission a new Exam Assignment to Faculty
+// POST /api/exams/commission
+// ─────────────────────────────────────────────────────────────────
+router.post('/commission', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const { title, examType, classes, subjectAssignments, instructions, duration_minutes } = req.body;
+        if (!title) return res.status(400).json({ msg: 'Exam title is required.' });
+
+        const newExam = new OnlineExam({
+            title,
+            examType: ['JEE', 'NEET', 'CET'].includes(examType) ? examType : 'CET',
+            classes: Array.isArray(classes) ? classes : [classes || '12'],
+            subjectAssignments: subjectAssignments || [],
+            instructions: instructions || '',
+            duration_minutes: duration_minutes || 180,
+            status: 'draft',
+            createdBy: req.user.id
+        });
+
+        await newExam.save();
+        res.json({ msg: 'Exam successfully commissioned and dispatched to teachers', exam: newExam });
+    } catch (err) {
+        console.error('Commission Error:', err);
+        res.status(500).json({ msg: 'Server error commissioning exam' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// TEACHER / ADMIN: Get active exam assignments delegated to current user
+// GET /api/exams/my-assignments
+// ─────────────────────────────────────────────────────────────────
+router.get('/my-assignments', auth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const userRole = req.user.role;
+        const userSubject = req.user.subject;
+
+        let query = {};
+        if (userRole === 'admin') {
+            query = {};
+        } else {
+            query = {
+                $or: [
+                    { 'subjectAssignments.teacherId': userId },
+                    { 'subjectAssignments.subject': new RegExp(`^${userSubject}$`, 'i') }
+                ]
+            };
+        }
+
+        const exams = await OnlineExam.find(query)
+            .sort({ createdAt: -1 })
+            .populate('subjectAssignments.submittedPaperId')
+            .populate('createdBy', 'name email');
+
+        res.json(exams);
+    } catch (err) {
+        console.error('Fetch Assignments Error:', err);
+        res.status(500).json({ msg: 'Server error fetching assignments' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Get all commissioned exams with real-time per-subject status
+// GET /api/exams/commissioned
+// ─────────────────────────────────────────────────────────────────
+router.get('/commissioned', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const exams = await OnlineExam.find({})
+            .sort({ createdAt: -1 })
+            .populate('subjectAssignments.submittedPaperId')
+            .populate('createdBy', 'name email');
+        res.json(exams);
+    } catch (err) {
+        console.error('Fetch Commissioned Error:', err);
+        res.status(500).json({ msg: 'Server error fetching commissioned exams' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ADMIN: Merge 3 papers into one OnlineExam
 // POST /api/exams/merge
 // ─────────────────────────────────────────────────────────────────

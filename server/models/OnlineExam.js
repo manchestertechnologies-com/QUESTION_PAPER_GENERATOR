@@ -37,6 +37,16 @@ const OnlineExamSchema = new mongoose.Schema({
             unattempted: Number
         }
     }],
+    subjectAssignments: [{
+        subject: { type: String, required: true },
+        teacherId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        teacherName: String,
+        teacherEmail: String,
+        targetQuestions: { type: Number, default: 60 },
+        submittedPaperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Paper' },
+        status: { type: String, enum: ['Pending', 'In Progress', 'Completed'], default: 'Pending' }
+    }],
+    classes: [{ type: String }],
     allowedStudents: { type: [String], default: [] },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },

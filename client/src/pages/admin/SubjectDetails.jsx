@@ -9,10 +9,29 @@ const SubjectDetails = () => {
     const navigate = useNavigate();
 
     const [teachers, setTeachers] = useState([]);
+    const [allTeachers, setAllTeachers] = useState([]);
     const [papers, setPapers] = useState([]);
+    const [commissionedExams, setCommissionedExams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('teachers');
     const [selectedViewPaper, setSelectedViewPaper] = useState(null);
+    const [showCommissionModal, setShowCommissionModal] = useState(false);
+
+    // Commission Form State
+    const [commissionForm, setCommissionForm] = useState({
+        title: '',
+        examType: 'CET',
+        classes: ['12'],
+        targetPerSubject: 60,
+        assignedTeachers: {
+            'Physics': '',
+            'Chemistry': '',
+            'Mathematics': '',
+            'Biology': '',
+            'Botany': '',
+            'Zoology': ''
+        }
+    });
 
     const logoMap = {
         'Physics': '/physicslogo.jpeg',
@@ -31,8 +50,19 @@ const SubjectDetails = () => {
                 api.get('/api/admin/teachers'),
                 api.get('/api/papers/admin/all')
             ]);
-            setTeachers(teachersRes.data.filter(t => t.subject === subject));
+            const allT = teachersRes.data || [];
+            setAllTeachers(allT);
+            setTeachers(allT.filter(t => t.subject === subject));
             setPapers(papersRes.data.filter(p => p.subject === subject));
+
+            // Fetch commissioned exams if endpoint available
+            try {
+                const commRes = await api.get('/api/exams/commissioned');
+                setCommissionedExams(commRes.data || []);
+            } catch {
+                // optional fallback
+            }
+
             setLoading(false);
         } catch (err) {
             console.error(err);
@@ -47,6 +77,59 @@ const SubjectDetails = () => {
         fetchData();
     }, [subject]);
 
+    const handleCommissionSubmit = async (e) => {
+        e.preventDefault();
+        if (!commissionForm.title) return alert('Please enter an Exam Title');
+
+        try {
+            let subjectsNeeded = [];
+            if (commissionForm.examType === 'NEET') {
+                subjectsNeeded = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
+            } else if (commissionForm.examType === 'CET') {
+                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+            } else if (commissionForm.examType === 'JEE') {
+                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics'];
+            } else {
+                subjectsNeeded = [subject];
+            }
+
+            const subjectAssignments = subjectsNeeded.map(subName => {
+                const assignedTeacherId = commissionForm.assignedTeachers[subName];
+                const teacherObj = allTeachers.find(t => t._id === assignedTeacherId) || allTeachers.find(t => t.subject?.toLowerCase() === subName.toLowerCase());
+                return {
+                    subject: subName,
+                    teacherId: teacherObj ? teacherObj._id : undefined,
+                    teacherName: teacherObj ? teacherObj.name : `Prof. ${subName} Faculty`,
+                    teacherEmail: teacherObj ? teacherObj.email : `${subName.toLowerCase()}@manchester.edu`,
+                    targetQuestions: commissionForm.targetPerSubject || 60,
+                    status: 'Pending'
+                };
+            });
+
+            await api.post('/api/exams/commission', {
+                title: commissionForm.title,
+                examType: commissionForm.examType,
+                classes: commissionForm.classes,
+                subjectAssignments,
+                duration_minutes: 180
+            });
+
+            alert(`✓ Exam "${commissionForm.title}" successfully commissioned! Access granted to assigned faculty.`);
+            setShowCommissionModal(false);
+            setCommissionForm({
+                title: '',
+                examType: 'CET',
+                classes: ['12'],
+                targetPerSubject: 60,
+                assignedTeachers: {}
+            });
+            fetchData();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to commission exam. Please try again.');
+        }
+    };
+
     const handleDeleteTeacher = async (id) => {
         if(window.confirm('Are you sure you want to delete this teacher?')) {
             try {
@@ -60,7 +143,7 @@ const SubjectDetails = () => {
 
     const handleStatusUpdate = async (id, status) => {
         try {
-        await api.put(`/api/papers/admin/${id}/status`, { status });
+            await api.put(`/api/papers/admin/${id}/status`, { status });
             fetchData();
         } catch (err) {
             console.error(err);
@@ -72,7 +155,7 @@ const SubjectDetails = () => {
 
     return (
         <div className="space-y-8 animate-fade-in-up px-4 py-8">
-            <div className="bg-surface p-10 rounded-[2.5rem] shadow-sm border border-gray-100 border-l-8 border-navy flex justify-between items-center">
+            <div className="bg-surface p-10 rounded-[2.5rem] shadow-sm border border-gray-100 border-l-8 border-navy flex justify-between items-center flex-wrap gap-4">
                 <div className="flex items-center gap-6">
                     {logoMap[subject] && (
                         <div className="w-20 h-20 bg-white p-3 rounded-3xl shadow-xl border border-gray-50 flex items-center justify-center transform -rotate-3 hover:rotate-0 transition-transform duration-300">
@@ -84,7 +167,15 @@ const SubjectDetails = () => {
                         <p className="text-[10px] font-black text-slate/40 uppercase tracking-[0.2em] ml-1">Departmental Asset & Faculty Control</p>
                     </div>
                 </div>
-                <button onClick={() => navigate('/admin/dashboard')} className="bg-white border-2 border-gray-100 text-slate/40 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-navy hover:text-navy transition shadow-sm">← Back</button>
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setShowCommissionModal(true)} 
+                        className="bg-navy text-gold px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow-lg flex items-center gap-2 border-2 border-gold"
+                    >
+                        <span>⚡</span> Commission Exam to Faculty
+                    </button>
+                    <button onClick={() => navigate('/admin/dashboard')} className="bg-white border-2 border-gray-100 text-slate/40 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-navy hover:text-navy transition shadow-sm">← Back</button>
+                </div>
             </div>
             
             {/* Tabs for switching views */}
@@ -147,7 +238,7 @@ const SubjectDetails = () => {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {papers.map(p => {
-                            const creator = teachers.find(t => t._id === p.teacherId);
+                            const creator = teachers.find(t => t._id === p.teacherId) || allTeachers.find(t => t._id === p.teacherId);
                             const creatorName = creator ? creator.name : 'Institutional Engine';
 
                             return (
@@ -181,6 +272,150 @@ const SubjectDetails = () => {
                             );
                         })}
                         {papers.length === 0 && <div className="col-span-full p-16 text-center text-slate/30 font-black uppercase tracking-widest text-sm border-2 border-dashed border-gray-100 rounded-[3rem] bg-gray-50/50">Zero assessment records found for this department.</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* Commission Exam Modal (Admin creates title, selects exam type, and assigns dedicated teachers) */}
+            {showCommissionModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                        <div className="flex justify-between items-center p-8 border-b border-gray-100 bg-gray-50/60">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Admin Commissioning Engine</span>
+                                <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Create & Delegate Exam Assignment</h2>
+                                <p className="text-xs text-gray-500 font-medium mt-1">Set the exam title and assign authorized teachers for each subject.</p>
+                            </div>
+                            <button onClick={() => setShowCommissionModal(false)} className="text-slate/30 hover:text-red-500 bg-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold border border-gray-100 shadow transition">✕</button>
+                        </div>
+
+                        <form onSubmit={handleCommissionSubmit} className="p-8 overflow-y-auto space-y-6">
+                            {/* Exam Title */}
+                            <div>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    Exam Title / Assessment Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    placeholder="e.g. CET MOCK TEST 1 or NEET GRAND TEST 2026"
+                                    value={commissionForm.title}
+                                    onChange={e => setCommissionForm({ ...commissionForm, title: e.target.value })}
+                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-5 py-3.5 text-base font-bold text-navy outline-none bg-gray-50/50"
+                                />
+                            </div>
+
+                            {/* Exam Type & Class */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Exam Preset</label>
+                                    <select
+                                        value={commissionForm.examType}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const defaultTarget = val === 'JEE' ? 30 : val === 'NEET' ? 50 : 60;
+                                            setCommissionForm({ ...commissionForm, examType: val, targetPerSubject: defaultTarget });
+                                        }}
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
+                                    >
+                                        <option value="CET">CET (4 Subjects: Physics, Chemistry, Maths, Biology)</option>
+                                        <option value="NEET">NEET (4 Subjects: Physics, Chemistry, Botany, Zoology)</option>
+                                        <option value="JEE">JEE (3 Subjects: Physics, Chemistry, Mathematics)</option>
+                                        <option value="SINGLE">Single Subject ({subject})</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Target Class</label>
+                                    <select
+                                        value={commissionForm.classes[0]}
+                                        onChange={e => setCommissionForm({ ...commissionForm, classes: [e.target.value] })}
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
+                                    >
+                                        <option value="12">Class 12</option>
+                                        <option value="11">Class 11</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Per-Subject Teacher Delegation */}
+                            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4">
+                                <h4 className="text-xs font-black text-navy uppercase tracking-widest flex items-center gap-2">
+                                    <span>👥</span> Assign Subject Faculty (Only Authorized Subject Teachers)
+                                </h4>
+
+                                {(() => {
+                                    let subs = [];
+                                    if (commissionForm.examType === 'NEET') subs = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
+                                    else if (commissionForm.examType === 'CET') subs = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+                                    else if (commissionForm.examType === 'JEE') subs = ['Physics', 'Chemistry', 'Mathematics'];
+                                    else subs = [subject];
+
+                                    return subs.map(subName => {
+                                        // Filter teachers of this exact subject
+                                        const subTeachers = allTeachers.filter(t => {
+                                            const tSub = (t.subject || '').toLowerCase();
+                                            const sName = subName.toLowerCase();
+                                            if (sName === 'mathematics' && tSub.includes('math')) return true;
+                                            if ((sName === 'botany' || sName === 'zoology') && (tSub.includes('bio') || tSub.includes(sName))) return true;
+                                            return tSub.includes(sName);
+                                        });
+
+                                        return (
+                                            <div key={subName} className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                <div className="flex items-center gap-3 min-w-[140px]">
+                                                    <span className="w-8 h-8 bg-navy text-gold rounded-xl flex items-center justify-center font-black text-xs">
+                                                        {subName.charAt(0)}
+                                                    </span>
+                                                    <span className="font-black text-sm text-navy uppercase">{subName}</span>
+                                                </div>
+
+                                                <div className="flex-1">
+                                                    <select
+                                                        value={commissionForm.assignedTeachers[subName] || ''}
+                                                        onChange={e => setCommissionForm({
+                                                            ...commissionForm,
+                                                            assignedTeachers: { ...commissionForm.assignedTeachers, [subName]: e.target.value }
+                                                        })}
+                                                        className="w-full border border-gray-200 focus:border-navy rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-gray-50/50 cursor-pointer"
+                                                    >
+                                                        <option value="">-- Choose {subName} Teacher --</option>
+                                                        {subTeachers.map(t => (
+                                                            <option key={t._id} value={t._id}>
+                                                                {t.name} ({t.email})
+                                                            </option>
+                                                        ))}
+                                                        {subTeachers.length === 0 && (
+                                                            <option value="" disabled>No registered {subName} faculty (will use department lead)</option>
+                                                        )}
+                                                    </select>
+                                                </div>
+
+                                                <div className="text-right text-[11px] font-bold text-slate/50">
+                                                    Target: {commissionForm.targetPerSubject} Qs
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+
+                            {/* Submit & Dispatch */}
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCommissionModal(false)}
+                                    className="px-6 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-100 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-8 py-3 rounded-xl bg-gold text-navy font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow-lg"
+                                >
+                                    Proceed & Dispatch to Faculty
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
@@ -241,13 +476,21 @@ const SubjectDetails = () => {
                                     }
 
                                     return subjectsList.map((subItem, idx) => {
-                                        const creator = teachers.find(t => t.subject?.toLowerCase() === subItem.name.toLowerCase() || t._id === selectedViewPaper.teacherId) || teachers[0];
-                                        const creatorName = creator ? creator.name : 'Prof. Faculty Lead';
-                                        const creatorEmail = creator ? creator.email : `${subItem.name.toLowerCase()}.faculty@college.edu`;
+                                        // Match distinct faculty for this specific subject
+                                        const creator = allTeachers.find(t => {
+                                            const tSub = (t.subject || '').toLowerCase();
+                                            const sName = subItem.name.toLowerCase();
+                                            if (sName === 'mathematics' && tSub.includes('math')) return true;
+                                            if ((sName === 'botany' || sName === 'zoology') && (tSub.includes('bio') || tSub.includes(sName))) return true;
+                                            return tSub.includes(sName);
+                                        }) || (subItem.name.toLowerCase() === (selectedViewPaper.subject || '').toLowerCase() ? teachers.find(t => t._id === selectedViewPaper.teacherId) : null);
+
+                                        const creatorName = creator ? creator.name : `Prof. ${subItem.name} Lead`;
+                                        const creatorEmail = creator ? creator.email : `${subItem.name.toLowerCase()}.faculty@manchester.edu`;
                                         
-                                        // Count questions matching subject or slice proportional
-                                        const subQuestions = (selectedViewPaper.questions || []).filter(q => (q.subject || '').toLowerCase() === subItem.name.toLowerCase());
-                                        const count = subQuestions.length > 0 ? subQuestions.length : Math.min(subItem.target, selectedViewPaper.questions?.length || 0);
+                                        // Count questions matching subject
+                                        const isCurrentSub = (selectedViewPaper.subject || '').toLowerCase().includes(subItem.name.toLowerCase()) || subItem.name.toLowerCase().includes((selectedViewPaper.subject || '').toLowerCase());
+                                        const count = isCurrentSub ? (selectedViewPaper.questions?.length || 0) : 0;
                                         const pct = Math.min(100, Math.round((count / subItem.target) * 100));
 
                                         return (
@@ -304,7 +547,7 @@ const SubjectDetails = () => {
                         {/* Footer */}
                         <div className="flex justify-between items-center p-6 border-t border-gray-100 bg-gray-50/50">
                             <div className="text-xs text-navy font-black">
-                                Total Paper Questions: <span className="text-blue-700">{selectedViewPaper.questions?.length} Questions</span>
+                                Total Questions in This Subject Paper: <span className="text-blue-700">{selectedViewPaper.questions?.length} Questions</span>
                             </div>
                             <div className="flex gap-3">
                                 <button onClick={() => setSelectedViewPaper(null)} className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-100 transition">
