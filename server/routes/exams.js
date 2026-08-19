@@ -210,7 +210,7 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
         }
 
         // Validate question counts per subject
-        const expectedQCount = examType === 'JEE' ? 30 : examType === 'NEET' ? 50 : 60; // CET = 60
+        const expectedQCount = examType === 'JEE' ? 25 : examType === 'NEET' ? 50 : 60; // JEE = 25 (20 MCQs + 5 Numerical), CET = 60
         for (const p of papers) {
             if (p.questions.length !== expectedQCount) {
                 return res.status(400).json({ msg: `Paper '${p.title}' (${p.subject}) has ${p.questions.length} questions. ${examType} requires exactly ${expectedQCount} questions per subject.` });

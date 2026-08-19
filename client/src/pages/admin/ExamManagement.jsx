@@ -1021,7 +1021,7 @@ export default function ExamManagement() {
                             </label>
                             <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
                                 {mergeForm.examType === 'NEET' && 'Required: Physics, Chemistry, Botany, Zoology (50 Qs each)'}
-                                {mergeForm.examType === 'JEE' && 'Required: Physics, Chemistry, Mathematics (30 Qs each)'}
+                                {mergeForm.examType === 'JEE' && 'Required: Physics, Chemistry, Mathematics (25 Qs each: 20 MCQs + 5 Numerical)'}
                                 {mergeForm.examType === 'CET' && 'Required: Physics, Chemistry, Mathematics, Biology (60 Qs each)'}
                             </div>
 
