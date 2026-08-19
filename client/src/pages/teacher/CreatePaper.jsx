@@ -197,277 +197,6 @@ const AutoGetModal = ({ onClose, onConfirm, filteredCount }) => {
     );
 };
 
-// ─── Generate Paper Modal ────────────────────────────────────────────────────
-const GeneratePaperModal = ({ onClose, onGenerate, filters, setFilters, uniqueChapters, uniqueConcepts }) => {
-    const [localPattern, setLocalPattern] = useState([
-        { sectionName: 'Section A', numQuestions: '', type: '', description: '', marks: 0 }
-    ]);
-    const [localFilters, setLocalFilters] = useState({ ...filters });
-
-    const getTypeMultiplier = (type) => {
-        const isNeet = localFilters.class === 'NEET';
-        const map = { MCQ: isNeet ? 4 : 1, '1m': 1, '2m': 2, '3m': 3, '4m': 4, '5m': 5 };
-        return map[type] || 0;
-    };
-
-    const handlePatternChange = (idx, field, value) => {
-        const updated = [...localPattern];
-        updated[idx][field] = value;
-        const num = field === 'numQuestions' ? parseInt(value) || 0 : parseInt(updated[idx].numQuestions) || 0;
-        const type = field === 'type' ? value : updated[idx].type;
-        updated[idx].marks = num * getTypeMultiplier(type);
-        setLocalPattern(updated);
-    };
-
-    const addSection = () => {
-        setLocalPattern([...localPattern, {
-            sectionName: `Section ${String.fromCharCode(65 + localPattern.length)}`,
-            numQuestions: '', type: '', description: '', marks: 0
-        }]);
-    };
-
-    const removeSection = (idx) => {
-        const updated = localPattern.filter((_, i) => i !== idx)
-            .map((s, i) => ({ ...s, sectionName: `Section ${String.fromCharCode(65 + i)}` }));
-        setLocalPattern(updated);
-    };
-
-    const totalQuestionsNeeded = localPattern.reduce((sum, s) => sum + (parseInt(s.numQuestions) || 0), 0);
-    const totalMarks = localPattern.reduce((sum, s) => sum + (s.marks || 0), 0);
-
-    const isPatternValid = localPattern.every(s => s.numQuestions && s.type);
-
-    const handleGenerate = () => {
-        onGenerate(localPattern, localFilters);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-            <div className="bg-surface rounded-[2.5rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden bg-white">
-
-                {/* Modal Header */}
-                <div className="flex justify-between items-center p-10 border-b border-gray-100 bg-gray-50/50">
-                    <div>
-                        <h2 className="text-3xl font-black text-navy mb-2 flex items-center gap-4">
-                            <span className="bg-gold text-navy w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow-lg rotate-3">⚡</span>
-                            Generation Engine
-                        </h2>
-                        <p className="text-xs text-slate/40 font-bold uppercase tracking-widest">Automatic assessment assembly across all repository questions</p>
-                    </div>
-                    <button onClick={onClose} className="text-slate/30 hover:text-red-500 bg-white rounded-full w-12 h-12 flex items-center justify-center text-2xl font-bold border border-gray-100 shadow-sm transition">×</button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-10 space-y-10">
-
-                    {/* Step 1: Filter Settings */}
-                    <div>
-                        <div className="flex items-center gap-4 mb-6">
-                            <span className="w-8 h-8 rounded-xl bg-navy text-gold text-xs font-black flex items-center justify-center shadow-lg">01</span>
-                            <h3 className="font-black text-navy text-sm uppercase tracking-[0.2em]">Domain Context</h3>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 bg-gray-50 p-8 rounded-[2rem] border border-gray-100">
-                            {[
-                                {
-                                    label: 'Academic Class', key: 'class',
-                                    options: [
-                                        { value: '', label: 'All Classes' },
-                                        { value: '11', label: 'Class 11' },
-                                        { value: '12', label: 'Class 12' },
-                                        { value: 'JEE', label: 'JEE' },
-                                        { value: 'KCET', label: 'KCET' },
-                                        { value: 'NEET', label: 'NEET' },
-                                    ]
-                                },
-                                {
-                                    label: 'Difficulty Level', key: 'level',
-                                    options: [
-                                        { value: '', label: 'All Levels' },
-                                        { value: 'easy', label: 'Easy' },
-                                        { value: 'medium', label: 'Medium' },
-                                        { value: 'hard', label: 'Hard' },
-                                    ]
-                                },
-                            ].map(({ label, key, options }) => (
-                                <div key={key} className="relative">
-                                    <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2 ml-1">{label}</label>
-                                    <select
-                                        value={localFilters[key] || ''}
-                                        onChange={e => setLocalFilters({ ...localFilters, [key]: e.target.value })}
-                                        className="w-full border-2 border-gray-100 p-3.5 rounded-2xl text-sm font-bold text-navy bg-white focus:border-navy outline-none cursor-pointer transition-all shadow-sm"
-                                    >
-                                        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                                    </select>
-                                </div>
-                            ))}
-                            <div>
-                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2 ml-1">Curriculum Chapter</label>
-                                <select
-                                    value={localFilters.chapter || ''}
-                                    onChange={e => setLocalFilters({ ...localFilters, chapter: e.target.value, concept: '' })}
-                                    className="w-full border-2 border-gray-100 p-3.5 rounded-2xl text-sm font-bold text-navy bg-white focus:border-navy outline-none cursor-pointer transition-all shadow-sm"
-                                >
-                                    <option value="">All Chapters</option>
-                                    {uniqueChapters.map(ch => <option key={ch} value={ch}>{ch}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2 ml-1">Specific Concept</label>
-                                <select
-                                    value={localFilters.concept || ''}
-                                    onChange={e => setLocalFilters({ ...localFilters, concept: e.target.value })}
-                                    className="w-full border-2 border-gray-100 p-3.5 rounded-2xl text-sm font-bold text-navy bg-white focus:border-navy outline-none cursor-pointer transition-all shadow-sm"
-                                >
-                                    <option value="">All Concepts</option>
-                                    {uniqueConcepts.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Step 2: Pattern */}
-                    <div>
-                        <div className="flex items-center gap-3 mb-4">
-                            <span className="w-7 h-7 rounded-full bg-[#1e3280] text-white text-xs font-black flex items-center justify-center">2</span>
-                            <h3 className="font-black text-gray-700 text-sm uppercase tracking-wider">Define Paper Pattern</h3>
-                            <div className="ml-auto flex gap-3">
-                                <span className="bg-blue-50 text-blue-700 border border-blue-100 px-3 py-1 rounded-full text-xs font-bold">
-                                    {totalQuestionsNeeded} Questions
-                                </span>
-                                <span className="bg-green-50 text-green-700 border border-green-100 px-3 py-1 rounded-full text-xs font-bold">
-                                    {totalMarks} Total Marks
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            {localPattern.map((sec, idx) => (
-                                <div key={idx} className="relative flex flex-col md:flex-row gap-4 items-start md:items-center p-5 rounded-2xl border-l-4 group transition bg-gray-50 border-l-[#1e3280] border border-gray-100">
-                                    <div className="font-black text-sm text-[#1e3280] bg-white px-4 py-2.5 rounded-xl border border-blue-100 uppercase tracking-widest min-w-[120px] text-center shadow-sm">
-                                        {sec.sectionName}
-                                    </div>
-
-                                    {/* Qty */}
-                                    <div className="relative flex-shrink-0">
-                                        <label className="absolute -top-2 left-3 bg-gray-50 px-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Questions</label>
-                                        <div className="flex items-center gap-1 mt-1">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const current = parseInt(sec.numQuestions) || 0;
-                                                    if (current > 1) handlePatternChange(idx, 'numQuestions', current - 1);
-                                                }}
-                                                className="w-8 h-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-black text-navy flex items-center justify-center transition shadow-sm"
-                                            >-</button>
-                                            <input
-                                                type="number" min="1" placeholder="Qty"
-                                                value={sec.numQuestions}
-                                                onChange={e => handlePatternChange(idx, 'numQuestions', e.target.value)}
-                                                className="border border-gray-200 p-2 rounded-xl w-16 text-sm font-bold text-gray-700 outline-none text-center focus:border-[#1e3280] bg-white"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const current = parseInt(sec.numQuestions) || 0;
-                                                    handlePatternChange(idx, 'numQuestions', current + 1);
-                                                }}
-                                                className="w-8 h-8 rounded-lg bg-gray-200 hover:bg-gray-300 font-black text-navy flex items-center justify-center transition shadow-sm"
-                                            >+</button>
-                                        </div>
-                                    </div>
-
-                                    {/* Type */}
-                                    <div className="relative flex-shrink-0">
-                                        <label className="absolute -top-2 left-3 bg-gray-50 px-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Type</label>
-                                        <select
-                                            value={sec.type}
-                                            onChange={e => handlePatternChange(idx, 'type', e.target.value)}
-                                            className="border border-gray-200 p-3 rounded-xl w-36 text-sm font-bold text-gray-700 outline-none focus:border-[#1e3280] bg-white appearance-none cursor-pointer"
-                                        >
-                                            <option value="">Select Type</option>
-                                            <option value="MCQ">MCQ</option>
-                                            <option value="ASSERTION_REASON">Assertion / Reason</option>
-                                            <option value="STATEMENT_BASED">Statement Based</option>
-                                            <option value="MATCH_FOLLOWING">Match the Following</option>
-                                            <option value="TRUE_FALSE">True / False</option>
-                                            <option value="NUMERICAL">Numerical</option>
-                                            <option value="1m">1 Mark</option>
-                                            <option value="2m">2 Marks</option>
-                                            <option value="3m">3 Marks</option>
-                                            <option value="4m">4 Marks</option>
-                                            <option value="5m">5 Marks</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Instructions */}
-                                    <div className="relative flex-1">
-                                        <label className="absolute -top-2 left-3 bg-gray-50 px-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider">Instructions</label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. Answer any 5 of the following..."
-                                            value={sec.description}
-                                            onChange={e => handlePatternChange(idx, 'description', e.target.value)}
-                                            className="border border-gray-200 p-3 rounded-xl w-full text-sm font-medium text-gray-700 outline-none focus:border-[#1e3280] bg-white"
-                                        />
-                                    </div>
-
-                                    {/* Marks */}
-                                    <div className="flex items-center justify-center px-4 py-2.5 rounded-xl shadow-inner min-w-[90px] flex-shrink-0 bg-green-50 border border-green-200">
-                                        <span className="font-bold text-[11px] uppercase tracking-widest flex flex-col items-center leading-tight text-green-700">
-                                            Marks
-                                            <span className="text-xl mt-0.5">{sec.marks}</span>
-                                        </span>
-                                    </div>
-
-                                    {localPattern.length > 1 && (
-                                        <button
-                                            onClick={() => removeSection(idx)}
-                                            className="absolute -top-3 -right-3 bg-white border border-gray-200 text-red-500 hover:text-white w-7 h-7 rounded-full font-bold shadow hover:bg-red-500 hover:border-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all text-xs z-10"
-                                        >✕</button>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-
-                        <button
-                            onClick={addSection}
-                            className="mt-4 flex items-center gap-2 text-[#1e3280] bg-blue-50 hover:bg-[#1e3280] hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all border border-blue-100"
-                        >
-                            <span className="text-lg leading-none">+</span> Add Section
-                        </button>
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="flex justify-between items-center p-10 border-t border-gray-100 bg-gray-50/50">
-                    <div className="flex gap-6">
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-navy/40 uppercase tracking-widest">Total Volume</span>
-                            <span className="text-xl font-black text-navy">{totalQuestionsNeeded} <small className="text-xs opacity-50 uppercase tracking-widest">Questions</small></span>
-                        </div>
-                        <div className="w-px h-10 bg-gray-200"></div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black text-navy/40 uppercase tracking-widest">Assessment Score</span>
-                            <span className="text-xl font-black text-navy">{totalMarks} <small className="text-xs opacity-50 uppercase tracking-widest">Marks</small></span>
-                        </div>
-                    </div>
-                    <div className="flex gap-4">
-                        <button onClick={onClose} className="bg-white border-2 border-gray-100 text-slate/50 px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:border-navy/20 hover:text-navy transition-all shadow-sm">
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleGenerate}
-                            disabled={!isPatternValid || totalQuestionsNeeded === 0}
-                            className="bg-gold text-navy px-12 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-30 disabled:grayscale shadow-xl active:scale-95"
-                        >
-                            Execute Generation
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // ─── MultiSelect Component ──────────────────────────────────────────────────
 const MultiSelectCheckbox = ({ label, options, selectedValues, onChange, disabled }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -541,8 +270,12 @@ const CreatePaper = () => {
     const navigate = useNavigate();
     const subject = user?.subject || 'Chemistry';
 
-    // Mode: 'paper' or 'assignment'
-    const [mode, setMode] = useState('paper');
+    // Mode: 'assignment' (default) or 'paper' (unlocked only if commissioned by admin)
+    const [mode, setMode] = useState('assignment');
+
+    // Admin Commissioned Exam states
+    const [assignedExams, setAssignedExams] = useState([]);
+    const [selectedExamId, setSelectedExamId] = useState('');
 
     // Filter states
     const [filters, setFilters] = useState({ class: '', level: [], type: [], chapter: [], concept: [], sourceType: '', sourcePaperId: '' });
@@ -584,7 +317,6 @@ const CreatePaper = () => {
 
     // Modals
     const [showAutoGetModal, setShowAutoGetModal] = useState(false);
-    const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [toast, setToast] = useState(null);
 
     // Blueprints / GTs / PYQs
@@ -605,16 +337,42 @@ const CreatePaper = () => {
         return () => clearTimeout(handler);
     }, [searchQuery]);
 
-    // Fetch initial metadata and blueprints on mount
+    // Fetch initial metadata, blueprints, and commissioned exams on mount
     useEffect(() => {
         api.get('/api/questions/meta').then(res => {
             if (res.data) setMetadata(res.data);
+        }).catch(console.error);
+
+        // Fetch commissioned assignments for current teacher
+        api.get('/api/exams/my-assignments').then(res => {
+            const list = Array.isArray(res.data) ? res.data : [];
+            setAssignedExams(list);
+            if (list.length === 0) {
+                setMode('assignment');
+            }
         }).catch(console.error);
 
         api.get('/api/exam-blueprints').then(res => setBlueprints(Array.isArray(res.data) ? res.data : [])).catch(console.error);
         api.get('/api/grand-tests').then(res => setGrandTests(Array.isArray(res.data) ? res.data : [])).catch(console.error);
         api.get('/api/previous-year-papers').then(res => setPreviousYearPapers(Array.isArray(res.data) ? res.data : [])).catch(console.error);
     }, [subject]);
+
+    const handleExamSelect = (examId) => {
+        setSelectedExamId(examId);
+        if (!examId) {
+            setMode('assignment');
+            return;
+        }
+        const ex = assignedExams.find(e => e._id === examId);
+        if (ex) {
+            setMode('paper');
+            setPaperTitle(`${ex.title} - ${subject}`);
+            if (ex.classes && ex.classes[0]) {
+                setFilters(f => ({ ...f, class: ex.classes[0] }));
+            }
+            showToast(`✓ Linked to Commissioned Exam: ${ex.title} (${ex.examType})`, 'success');
+        }
+    };
 
     // Build query params from filters and search
     const buildQueryParams = useCallback((pageNum, limitNum = 50) => {
@@ -801,53 +559,6 @@ const CreatePaper = () => {
         }
     };
 
-    // Generate Paper handler
-    const handleGeneratePaper = async (genPattern, genFilters) => {
-        try {
-            showToast('Generating balanced paper sections...', 'info');
-            const res = await api.get('/api/questions?limit=5000');
-            const poolAll = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
-
-            const alreadyPicked = new Set();
-            const newSelected = [];
-
-            for (const sec of genPattern) {
-                const needed = parseInt(sec.numQuestions) || 0;
-                if (!needed || !sec.type) continue;
-
-                let pool = poolAll.filter(q => {
-                    if (alreadyPicked.has(q._id)) return false;
-                    const matchClass = !genFilters.class || q.classes?.includes(genFilters.class) || q.class === genFilters.class;
-                    const matchLevel = !genFilters.level || q.level === genFilters.level;
-                    const matchType = q.type === sec.type;
-                    const matchChapter = !genFilters.chapter || q.chapter === genFilters.chapter;
-                    const matchConcept = !genFilters.concept || q.concept === genFilters.concept;
-                    return matchClass && matchLevel && matchType && matchChapter && matchConcept;
-                });
-
-                pool.sort(() => Math.random() - 0.5);
-                const picked = pool.slice(0, needed);
-                picked.forEach(q => { alreadyPicked.add(q._id); newSelected.push(q); });
-            }
-
-            if (newSelected.length === 0) {
-                showToast('No questions found matching pattern + filters.', 'error');
-                setShowGenerateModal(false);
-                return;
-            }
-
-            setSelectedQuestions(newSelected);
-            setPattern(genPattern);
-            setShowGenerateModal(false);
-
-            const total = genPattern.reduce((s, p) => s + (parseInt(p.numQuestions) || 0), 0);
-            showToast(`✓ Generated: ${newSelected.length}/${total} questions selected`, newSelected.length < total ? 'info' : 'success');
-        } catch (err) {
-            console.error(err);
-            showToast('Generation failed', 'error');
-        }
-    };
-
     // Save Paper handler
     const handleSavePaper = async () => {
         if (!paperTitle || selectedQuestions.length === 0) {
@@ -909,11 +620,19 @@ const CreatePaper = () => {
                         <span className="text-gold text-[10px] font-black uppercase tracking-wider">Format:</span>
                         <select
                             value={mode}
-                            onChange={e => setMode(e.target.value)}
+                            onChange={e => {
+                                if (e.target.value === 'paper' && assignedExams.length === 0) {
+                                    showToast('⚠️ Standard Exam Papers require an active Exam Commissioned by Admin.', 'error');
+                                    return;
+                                }
+                                setMode(e.target.value);
+                            }}
                             className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer pr-2 py-0.5"
                         >
-                            <option value="paper" className="bg-navy text-white">📄 Standard Paper</option>
                             <option value="assignment" className="bg-navy text-white">📋 Assignment</option>
+                            <option value="paper" disabled={assignedExams.length === 0} className="bg-navy text-white">
+                                {assignedExams.length > 0 ? '📄 Standard Paper' : '🔒 Standard Paper (Admin Locked)'}
+                            </option>
                         </select>
                     </div>
                 </div>
@@ -921,26 +640,27 @@ const CreatePaper = () => {
                 {/* Right Side: Golden Action Area */}
                 <div className="flex items-center flex-wrap gap-3 mr-4">
                     
-                    {/* ── Blueprint Selector (Only for Standard Paper mode, NOT in Assignment mode) ── */}
-                    {mode === 'paper' && (
-                        <div className="flex items-center gap-2 bg-gold/10 border-2 border-gold/50 px-3 py-2 rounded-xl shadow-md">
-                            <span className="text-gold font-black uppercase tracking-wider text-[10px] flex items-center gap-1">
-                                <span>📐</span> Blueprint:
-                            </span>
-                            <select
-                                value={selectedBlueprintId}
-                                onChange={e => handleBlueprintChange(e.target.value)}
-                                className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer rounded-lg px-2 py-1 border border-gold/30 hover:border-gold transition"
-                            >
-                                <option value="" className="bg-navy text-white">-- Apply Blueprint --</option>
-                                {blueprints.map(bp => (
-                                    <option key={bp._id} value={bp._id} className="bg-navy text-white">
-                                        {bp.name} ({bp.examType})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
+                    {/* ── Type of Exam Selector (Replaced Blueprint) ── */}
+                    <div className="flex items-center gap-2 bg-gold/10 border-2 border-gold/50 px-3 py-2 rounded-xl shadow-md">
+                        <span className="text-gold font-black uppercase tracking-wider text-[10px] flex items-center gap-1">
+                            <span>🎓</span> Type of Exam:
+                        </span>
+                        <select
+                            value={selectedExamId}
+                            onChange={e => handleExamSelect(e.target.value)}
+                            className="bg-navy text-gold font-bold text-xs outline-none cursor-pointer rounded-lg px-2 py-1 border border-gold/30 hover:border-gold transition"
+                        >
+                            <option value="" className="bg-navy text-white">-- Select Commissioned Exam --</option>
+                            {assignedExams.map(ex => (
+                                <option key={ex._id} value={ex._id} className="bg-navy text-white">
+                                    {ex.title} ({ex.examType})
+                                </option>
+                            ))}
+                            {assignedExams.length === 0 && (
+                                <option value="" disabled className="bg-navy text-gray-400">No Admin Commissioned Exams</option>
+                            )}
+                        </select>
+                    </div>
 
                     {/* Auto Fetch Button */}
                     <button
@@ -950,16 +670,6 @@ const CreatePaper = () => {
                     >
                         Auto Fetch
                     </button>
-
-                    {/* Generate Engine Button (Standard Paper Mode only) */}
-                    {mode === 'paper' && (
-                        <button
-                            onClick={() => setShowGenerateModal(true)}
-                            className="flex items-center gap-2 bg-gold text-navy px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg active:scale-95"
-                        >
-                            Generate Engine
-                        </button>
-                    )}
 
                     <div className="w-px h-8 bg-gold/20 mx-1"></div>
 
