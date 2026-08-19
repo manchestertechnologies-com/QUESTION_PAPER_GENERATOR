@@ -66,20 +66,6 @@ const TeacherDashboardHome = () => {
                     </div>
                 </Link>
 
-                {/* Assignment Generator */}
-                <Link
-                    to="/teacher/dashboard/assignments"
-                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
-                >
-                    <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
-                        A
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-black text-navy">Assignments</h2>
-                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Assignment Creator</p>
-                    </div>
-                </Link>
-
                 {/* Grand Test Papers */}
                 <Link
                     to="/teacher/dashboard/grand-tests"
