@@ -329,6 +329,73 @@ const CreatePaper = () => {
 
     const showToast = (msg, type = 'info') => setToast({ msg, type });
 
+    // Draft persistence key scoped to teacher user & subject
+    const DRAFT_KEY = useMemo(() => `qpg_draft_${user?._id || user?.id || 'teacher'}_${subject}`, [user, subject]);
+    const [draftRestored, setDraftRestored] = useState(false);
+
+    // 1. Restore saved draft on mount (survives computer restarts, tab close, etc.)
+    useEffect(() => {
+        try {
+            const savedStr = localStorage.getItem(DRAFT_KEY);
+            if (savedStr) {
+                const saved = JSON.parse(savedStr);
+                if (saved) {
+                    if (saved.mode) setMode(saved.mode);
+                    if (Array.isArray(saved.selectedQuestions) && saved.selectedQuestions.length > 0) {
+                        setSelectedQuestions(saved.selectedQuestions);
+                        setDraftRestored(true);
+                    }
+                    if (saved.paperTitle) setPaperTitle(saved.paperTitle);
+                    if (saved.assignmentTitle) setAssignmentTitle(saved.assignmentTitle);
+                    if (saved.startQNo) setStartQNo(saved.startQNo);
+                    if (saved.assignmentSettings) setAssignmentSettings(saved.assignmentSettings);
+                    if (saved.selectedExamId) setSelectedExamId(saved.selectedExamId);
+                    if (saved.filters) setFilters(prev => ({ ...prev, ...saved.filters }));
+                }
+            }
+        } catch (err) {
+            console.error('Failed to restore draft from storage:', err);
+        }
+    }, [DRAFT_KEY]);
+
+    // 2. Real-time auto-save to localStorage whenever work changes
+    useEffect(() => {
+        try {
+            const draftData = {
+                mode,
+                selectedQuestions,
+                paperTitle,
+                assignmentTitle,
+                startQNo,
+                assignmentSettings,
+                selectedExamId,
+                filters,
+                timestamp: new Date().toISOString()
+            };
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+        } catch (err) {
+            console.error('Failed to auto-save draft to storage:', err);
+        }
+    }, [mode, selectedQuestions, paperTitle, assignmentTitle, startQNo, assignmentSettings, selectedExamId, filters, DRAFT_KEY]);
+
+    // Clear Draft / Start Fresh Handler
+    const handleClearDraft = () => {
+        if (window.confirm('Are you sure you want to clear your current progress and start fresh?')) {
+            setSelectedQuestions([]);
+            setPaperTitle('');
+            setAssignmentTitle(`${subject.toUpperCase()} Assignment`);
+            setStartQNo(1);
+            setSelectedExamId('');
+            try {
+                localStorage.removeItem(DRAFT_KEY);
+            } catch (err) {
+                console.error(err);
+            }
+            setDraftRestored(false);
+            showToast('✓ Draft cleared. Starting fresh.', 'info');
+        }
+    };
+
     // Debounce search query
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -347,7 +414,7 @@ const CreatePaper = () => {
         api.get('/api/exams/my-assignments').then(res => {
             const list = Array.isArray(res.data) ? res.data : [];
             setAssignedExams(list);
-            if (list.length === 0) {
+            if (list.length === 0 && mode !== 'assignment') {
                 setMode('assignment');
             }
         }).catch(console.error);
@@ -572,6 +639,11 @@ const CreatePaper = () => {
                 questions: selectedQuestions.map(q => q._id),
                 pattern: (filters.class === '11' || filters.class === '12') ? pattern : []
             });
+            try {
+                localStorage.removeItem(DRAFT_KEY);
+            } catch {
+                // ignore
+            }
             showToast('Paper saved successfully!', 'success');
             setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1500);
         } catch (err) {
@@ -610,9 +682,16 @@ const CreatePaper = () => {
                         <h1 className="text-lg font-black tracking-tight uppercase leading-none">
                             {mode === 'assignment' ? 'Assignment Builder' : 'Paper Builder'}
                         </h1>
-                        <span className="text-[10px] text-gold font-bold uppercase tracking-widest">
-                            {subject} Department
-                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-gold font-bold uppercase tracking-widest">
+                                {subject} Department
+                            </span>
+                            {selectedQuestions.length > 0 && (
+                                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <span>💾</span> Auto-Saved
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     {/* Paper Type Dropdown (Standard Paper vs Assignment) */}
@@ -670,6 +749,17 @@ const CreatePaper = () => {
                     >
                         Auto Fetch
                     </button>
+
+                    {/* Clear / Start Fresh Button */}
+                    {selectedQuestions.length > 0 && (
+                        <button
+                            onClick={handleClearDraft}
+                            className="bg-white/5 border border-rose-400/40 text-rose-300 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white transition shadow-sm"
+                            title="Reset all selections and start fresh"
+                        >
+                            Start Fresh
+                        </button>
+                    )}
 
                     <div className="w-px h-8 bg-gold/20 mx-1"></div>
 
