@@ -537,22 +537,24 @@ const CreatePaper = () => {
 
     // Selection handlers
     const handleSelect = (q) => {
-        if (!selectedQuestions.find(sq => sq._id === q._id)) {
+        const qId = (q._id || q.id)?.toString();
+        if (!selectedQuestions.some(sq => (sq._id || sq.id)?.toString() === qId)) {
             setSelectedQuestions(prev => [...prev, q]);
         }
     };
 
     const handleDeselect = (id) => {
-        setSelectedQuestions(prev => prev.filter(q => q._id !== id));
+        const targetId = id?.toString();
+        setSelectedQuestions(prev => prev.filter(q => (q._id || q.id)?.toString() !== targetId));
     };
 
     const handleSelectAllLoaded = () => {
         setSelectedQuestions(prev => {
-            const currentIds = new Set(prev.map(q => q._id));
-            const toAdd = questions.filter(q => !currentIds.has(q._id));
+            const currentIds = new Set(prev.map(q => (q._id || q.id)?.toString()));
+            const toAdd = questions.filter(q => !currentIds.has((q._id || q.id)?.toString()));
             return [...prev, ...toAdd];
         });
-        showToast(`✓ Added ${questions.length} loaded questions to selected list`, 'success');
+        showToast(`✓ Added loaded questions to selected list`, 'success');
     };
 
     const handleClearSelected = () => {
@@ -566,7 +568,7 @@ const CreatePaper = () => {
         if (!blueprintId) return;
         const bp = blueprints.find(b => b._id === blueprintId);
         if (bp) {
-            const userSub = subject.toLowerCase();
+            const userSub = (subject || '').toLowerCase();
             const matchingSub = bp.subjects?.find(s => s.subjectName?.toLowerCase().includes(userSub) || userSub.includes(s.subjectName?.toLowerCase()));
             const targetSubject = matchingSub || bp.subjects?.[0];
             if (targetSubject && targetSubject.sections) {
@@ -596,8 +598,8 @@ const CreatePaper = () => {
                 pool = fallbackRes.data?.questions || (Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
             }
 
-            const currentSelectedIds = new Set(selectedQuestions.map(sq => (sq._id || sq.id).toString()));
-            pool = pool.filter(q => !currentSelectedIds.has((q._id || q.id).toString()));
+            const currentSelectedIds = new Set(selectedQuestions.map(sq => (sq._id || sq.id)?.toString()));
+            pool = pool.filter(q => !currentSelectedIds.has((q._id || q.id)?.toString()));
 
             if (pool.length === 0) {
                 showToast('No available questions remaining in the pool.', 'error');
@@ -618,17 +620,17 @@ const CreatePaper = () => {
             let pickedHard = hardPool.slice(0, hardTarget);
 
             let picked = [...pickedEasy, ...pickedMed, ...pickedHard];
-            const pickedIds = new Set(picked.map(q => (q._id || q.id).toString()));
+            const pickedIds = new Set(picked.map(q => (q._id || q.id)?.toString()));
 
             // If not enough in specific difficulty buckets, top up from remainder of pool
             if (picked.length < targetQty) {
-                const remainingPool = pool.filter(q => !pickedIds.has((q._id || q.id).toString())).sort(() => Math.random() - 0.5);
+                const remainingPool = pool.filter(q => !pickedIds.has((q._id || q.id)?.toString())).sort(() => Math.random() - 0.5);
                 picked = [...picked, ...remainingPool.slice(0, targetQty - picked.length)];
             }
 
             setSelectedQuestions(prev => {
-                const curIds = new Set(prev.map(s => (s._id || s.id).toString()));
-                const newOnes = picked.filter(p => !curIds.has((p._id || p.id).toString()));
+                const curIds = new Set(prev.map(s => (s._id || s.id)?.toString()));
+                const newOnes = picked.filter(p => !curIds.has((p._id || p.id)?.toString()));
                 return [...prev, ...newOnes];
             });
             setShowAutoGetModal(false);
@@ -641,15 +643,17 @@ const CreatePaper = () => {
 
     // Save Paper handler
     const handleSavePaper = async () => {
-        if (!paperTitle || selectedQuestions.length === 0) {
-            alert('Please provide a title and select at least one question.');
+        const effectiveTitle = (paperTitle || assignmentTitle || `${subject} Assessment ${new Date().toLocaleDateString()}`).trim();
+        if (selectedQuestions.length === 0) {
+            alert('Please select at least one question to create a paper.');
             return;
         }
         try {
+            showToast('Saving paper to repository...', 'info');
             await api.post('/api/papers', {
-                title: paperTitle,
+                title: effectiveTitle,
                 subject: subject,
-                classes: filters.class ? [filters.class] : [],
+                classes: filters.class ? [filters.class] : ['12'],
                 questions: selectedQuestions.map(q => q._id || q.id),
                 pattern: (filters.class === '11' || filters.class === '12') ? pattern : [],
                 examId: selectedExamId || undefined
@@ -659,10 +663,11 @@ const CreatePaper = () => {
             } catch {
                 // ignore
             }
-            showToast('Paper saved & synced successfully!', 'success');
-            setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1500);
+            showToast('✓ Paper successfully saved & synced to repository!', 'success');
+            setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1200);
         } catch (err) {
-            showToast('Failed to save paper', 'error');
+            console.error('Save paper error:', err);
+            showToast('Failed to save paper. Please try again.', 'error');
         }
     };
 
@@ -778,24 +783,23 @@ const CreatePaper = () => {
 
                     <div className="w-px h-8 bg-gold/20 mx-1"></div>
 
-                    {/* Assignment Mode: Preview & Print Action */}
-                    {mode === 'assignment' ? (
-                        <button
-                            onClick={() => setShowAssignmentPreview(true)}
-                            disabled={selectedQuestions.length === 0}
-                            className="bg-gold text-navy px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg disabled:opacity-40 disabled:grayscale flex items-center gap-2"
-                        >
-                            <span>🖨</span> Preview & Print Assignment
-                        </button>
-                    ) : (
-                        <button
-                            onClick={handleSavePaper}
-                            disabled={selectedQuestions.length === 0}
-                            className="bg-gold text-navy px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg disabled:opacity-40"
-                        >
-                            Finalize & Save
-                        </button>
-                    )}
+                    {/* Preview & Print Action */}
+                    <button
+                        onClick={() => setShowAssignmentPreview(true)}
+                        disabled={selectedQuestions.length === 0}
+                        className="bg-white/10 text-gold border border-gold/40 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/20 transition-all shadow-md disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                        <span>🖨</span> Preview & Print
+                    </button>
+
+                    {/* Finalize & Save Action */}
+                    <button
+                        onClick={handleSavePaper}
+                        disabled={selectedQuestions.length === 0}
+                        className="bg-gold text-navy px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-lg disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                        <span>💾</span> Finalize & Save
+                    </button>
 
                     <button
                         onClick={() => navigate(-1)}
@@ -984,10 +988,11 @@ const CreatePaper = () => {
                             </div>
                         ) : (
                             questions.map(q => {
-                                const isSelected = selectedQuestions.some(sq => sq._id === q._id);
+                                const qId = (q._id || q.id)?.toString();
+                                const isSelected = selectedQuestions.some(sq => (sq._id || sq.id)?.toString() === qId);
                                 return (
                                     <div
-                                        key={q._id}
+                                        key={qId}
                                         onClick={() => setPreviewQuestion(q)}
                                         className={`border p-3.5 rounded-xl cursor-pointer transition flex items-start gap-3 ${isSelected ? 'border-blue-400 bg-blue-50/60 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                                     >
@@ -999,7 +1004,7 @@ const CreatePaper = () => {
                                                 onChange={e => {
                                                     e.stopPropagation();
                                                     if (e.target.checked) handleSelect(q);
-                                                    else handleDeselect(q._id);
+                                                    else handleDeselect(qId);
                                                 }}
                                             />
                                         </div>
@@ -1020,7 +1025,7 @@ const CreatePaper = () => {
                                                     {q.level || 'medium'}
                                                 </span>
                                             </div>
-                                            <MathRenderer className="text-xs text-gray-700 line-clamp-3 font-medium leading-relaxed" text={q.questionText} />
+                                            <MathRenderer className="text-xs text-gray-700 line-clamp-3 font-medium leading-relaxed" text={q.questionText || q.question} />
                                         </div>
                                     </div>
                                 );
@@ -1047,20 +1052,24 @@ const CreatePaper = () => {
                 <div className="w-1/3 bg-white border border-gray-200 rounded-2xl flex flex-col overflow-hidden shadow-sm">
                     <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                         <h3 className="font-bold text-gray-500 text-xs tracking-widest uppercase">Question Preview</h3>
-                        {previewQuestion && (
-                            <button
-                                onClick={() => {
-                                    if (selectedQuestions.some(sq => sq._id === previewQuestion._id)) {
-                                        handleDeselect(previewQuestion._id);
-                                    } else {
-                                        handleSelect(previewQuestion);
-                                    }
-                                }}
-                                className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition ${selectedQuestions.some(sq => sq._id === previewQuestion._id) ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gold text-navy shadow-sm'}`}
-                            >
-                                {selectedQuestions.some(sq => sq._id === previewQuestion._id) ? 'Remove Question' : '+ Add Question'}
-                            </button>
-                        )}
+                        {previewQuestion && (() => {
+                            const pId = (previewQuestion._id || previewQuestion.id)?.toString();
+                            const isPrevSelected = selectedQuestions.some(sq => (sq._id || sq.id)?.toString() === pId);
+                            return (
+                                <button
+                                    onClick={() => {
+                                        if (isPrevSelected) {
+                                            handleDeselect(pId);
+                                        } else {
+                                            handleSelect(previewQuestion);
+                                        }
+                                    }}
+                                    className={`text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-lg transition ${isPrevSelected ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-gold text-navy shadow-sm'}`}
+                                >
+                                    {isPrevSelected ? 'Remove Question' : '+ Add Question'}
+                                </button>
+                            );
+                        })()}
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 flex flex-col">
                         {previewQuestion ? (

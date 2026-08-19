@@ -455,13 +455,36 @@ const PaperRenderer = ({
     const sections = useMemo(() => {
         if (!paper?.pattern?.length) return null;
         let pool = [...visibleQuestions];
-        return paper.pattern.map(sec => {
+        const result = paper.pattern.map(sec => {
             const num = sec.numQuestions || 0;
-            let secQs = sec.type ? pool.filter(q => q.type === sec.type).slice(0, num) : pool.slice(0, num);
-            const usedIds = new Set(secQs.map(q => q._id));
-            pool = pool.filter(q => !usedIds.has(q._id));
+            const secType = (sec.type || '').toUpperCase();
+            let secQs = [];
+            if (secType) {
+                secQs = pool.filter(q => {
+                    const qType = (q.type || q.q_type || '').toUpperCase();
+                    return qType === secType || (secType.includes('MCQ') && (qType.includes('MCQ') || !qType));
+                }).slice(0, num || pool.length);
+            } else {
+                secQs = pool.slice(0, num || pool.length);
+            }
+            if (secQs.length === 0 && pool.length > 0) {
+                secQs = pool.slice(0, num || pool.length);
+            }
+            const usedIds = new Set(secQs.map(q => q._id || q.id));
+            pool = pool.filter(q => !usedIds.has(q._id || q.id));
             return { ...sec, questions: secQs };
         }).filter(s => s.questions.length > 0);
+
+        // If leftover questions remain in pool, attach them to the last section or fallback
+        if (pool.length > 0) {
+            if (result.length > 0) {
+                result[result.length - 1].questions.push(...pool);
+            } else {
+                return null;
+            }
+        }
+
+        return result.length > 0 ? result : null;
     }, [paper, visibleQuestions]);
 
     const pageStyle = {
@@ -497,7 +520,7 @@ const PaperRenderer = ({
 
     // Render all questions as a flat list, then split if 2-col
     const renderAllQuestions = () => {
-        if (sections) {
+        if (sections && sections.length > 0) {
             // Pattern-based sections
             let runningNum = startQNo;
             return sections.map((sec, si) => {
@@ -518,7 +541,7 @@ const PaperRenderer = ({
 
     const renderColumns = () => {
         if (settings.columns === 2) {
-            if (sections) {
+            if (sections && sections.length > 0) {
                 // Split sections between columns
                 const [left, right] = splitIntoColumns(sections);
                 let leftNum = startQNo;

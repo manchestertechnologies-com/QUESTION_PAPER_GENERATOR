@@ -148,9 +148,10 @@ const AR_OPTIONS = [
 // ─── Type Renderers ──────────────────────────────────────────────────────────
 
 function BodyMCQ({ q, classes, singleColMode }) {
+    const qText = q.questionText || q.question || '';
     return (
         <>
-            <MathRenderer style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }} text={q.questionText} />
+            <MathRenderer style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }} text={qText} />
             {q.imageUrl && (
                 <img src={q.imageUrl} alt="Diagram" style={{ ...Q.img, maxHeight: '160px' }} />
             )}
@@ -171,10 +172,11 @@ function BodyMCQ({ q, classes, singleColMode }) {
 function BodyAssertionReason({ q, classes, singleColMode }) {
     const { assertion, reason } = parseAssertionReason(q);
     const opts = q.options && q.options.length > 0 ? q.options : AR_OPTIONS;
+    const qText = q.questionText || q.question || '';
     return (
         <>
-            {q.questionText && !q.assertion && (
-                <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={q.questionText} />
+            {qText && !q.assertion && (
+                <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={qText} />
             )}
             <div style={Q.assertRow}>
                 <strong style={Q.assertLabel}>Assertion (A):</strong>
@@ -210,9 +212,10 @@ function BodyAssertionReason({ q, classes, singleColMode }) {
 function BodyMatchFollowing({ q, classes, singleColMode }) {
     const pairs = q.matchPairs || [];
     const opts = q.options || [];
+    const qText = q.questionText || q.question || '';
     return (
         <>
-            <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={q.questionText} />
+            {qText && <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={qText} />}
             {q.imageUrl && (
                 <img src={q.imageUrl} alt="Diagram" style={{ ...Q.img, maxHeight: '120px' }} />
             )}
@@ -254,9 +257,10 @@ function BodyMatchFollowing({ q, classes, singleColMode }) {
 
 function BodyStatementBased({ q, classes, singleColMode }) {
     const stmts = q.statements || [];
+    const qText = q.questionText || q.question || '';
     return (
         <>
-            <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={q.questionText} />
+            {qText && <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={qText} />}
             {stmts.length > 0 && (
                 <div style={Q.stmtBar}>
                     {stmts.map((s, i) => (
@@ -287,9 +291,10 @@ function BodyStatementBased({ q, classes, singleColMode }) {
 function BodyMultipleStatement({ q, classes, singleColMode }) {
     // Multi-statement: statements labeled A, B, C, D then options like "A and B only"
     const stmts = q.statements || [];
+    const qText = q.questionText || q.question || '';
     return (
         <>
-            <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={q.questionText} />
+            {qText && <MathRenderer style={{ marginBottom: '6px', wordBreak: 'break-word' }} text={qText} />}
             {stmts.length > 0 && (
                 <div style={{ margin: '5px 0 7px 4px' }}>
                     {stmts.map((s, i) => (

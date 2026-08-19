@@ -9,11 +9,19 @@ const supabaseQuestions = require('../services/supabaseQuestions');
 async function populatePaperQuestions(paper) {
     const pObj = paper.toObject ? paper.toObject() : paper;
     if (Array.isArray(pObj.questions) && pObj.questions.length > 0) {
-        // If items are string UUIDs, fetch from Supabase
-        const isStringIds = typeof pObj.questions[0] === 'string';
-        if (isStringIds) {
-            const fetched = await supabaseQuestions.getQuestionsByIds(pObj.questions);
-            pObj.questions = fetched;
+        // If items are string UUIDs or objects with _id
+        const stringIds = pObj.questions.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(Boolean);
+        if (stringIds.length > 0 && typeof pObj.questions[0] === 'string') {
+            try {
+                const fetched = await supabaseQuestions.getQuestionsByIds(stringIds);
+                if (fetched && fetched.length > 0) {
+                    const fetchedMap = new Map(fetched.map(q => [(q._id || q.id).toString(), q]));
+                    const ordered = stringIds.map(id => fetchedMap.get(id.toString())).filter(Boolean);
+                    pObj.questions = ordered.length > 0 ? ordered : fetched;
+                }
+            } catch (fetchErr) {
+                console.error('Error populating paper questions:', fetchErr.message);
+            }
         }
     }
     return pObj;
@@ -120,7 +128,13 @@ router.get('/', [auth, checkRole(['teacher', 'admin'])], async (req, res) => {
     try {
         let query = {};
         if (req.user.role === 'teacher') {
-            query.teacherId = req.user.id;
+            const uId = req.user.id?.toString();
+            query = {
+                $or: [
+                    { teacherId: uId },
+                    { teacherId: req.user.id }
+                ]
+            };
         }
         const papers = await Paper.find(query).sort({ createdAt: -1 });
         const populated = await Promise.all(papers.map(populatePaperQuestions));
