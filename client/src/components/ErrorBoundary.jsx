@@ -1,6 +1,6 @@
 import React from 'react';
 
-class ErrorBaoundary extends React.Component {
+class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
         this.state = { hasError: false, error: null };
@@ -26,26 +26,25 @@ class ErrorBaoundary extends React.Component {
     render() {
         if (this.state.hasError) {
             return (
-                <div className="min-h-screen bg-background flex items-center justify-center p-6">
-                    <div className="bg-surface p-10 rounded-3xl shadow-2xl w-full max-w-md border-b-8 border-gold text-center">
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6 font-sans">
+                    <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md border-b-8 border-gold text-center">
                         <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner">
                             <span>⚠️</span>
                         </div>
                         <h2 className="text-2xl font-black text-navy mb-2 uppercase tracking-tight">Manchester College</h2>
-                        <p className="text-sm text-slate/70 font-medium mb-6 leading-relaxed">
-                            A temporary rendering or connection issue occurred. A quick refresh will restore the portal.
+                        <p className="text-sm text-slate-600 font-medium mb-6 leading-relaxed">
+                            A temporary display or network sync issue occurred. A quick refresh will restore the interface.
                         </p>
                         <div className="flex gap-3 justify-center">
                             <button 
-                                onClick=
-{() => window.location.reload()} 
+                                onClick={() => window.location.reload()} 
                                 className="bg-navy text-gold px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow-lg"
                             >
                                 ↕ Understood & Refresh
                             </button>
                             <button 
                                 onClick={this.handleReset} 
-                                className="bg-gray-100 text-slate px-6 py-3 rounded-2xl font-bold text-xs hover:bg-gray-200 transition"
+                                className="bg-gray-100 text-slate-700 px-6 py-3 rounded-2xl font-bold text-xs hover:bg-gray-200 transition border border-gray-200"
                             >
                                 Return to Login
                             </button>
