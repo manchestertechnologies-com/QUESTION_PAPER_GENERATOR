@@ -131,6 +131,20 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     }
 });
 
+// @route   GET /api/questions/meta
+// @desc    Get metadata (total count, distinct chapters, distinct topics) for subject
+// @access  Teacher / Admin
+router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const subject = req.user.role === 'teacher' ? req.user.subject : (req.query.subject || '');
+        const meta = await supabaseQuestions.getSubjectMetadata(subject);
+        res.json(meta);
+    } catch (err) {
+        console.error('[QUESTIONS META] error:', err.message);
+        res.status(500).json({ msg: 'Server error fetching question metadata.' });
+    }
+});
+
 // @route   GET /api/questions/:id
 // @desc    Get a single question by ID from Supabase or MongoDB
 // @access  Teacher / Admin

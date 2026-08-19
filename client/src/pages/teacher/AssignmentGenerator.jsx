@@ -111,7 +111,7 @@ const AssignmentGenerator = ({ onBack, adminMode = false, adminSubject = '' }) =
     useEffect(() => {
         const fetchQs = async () => {
             try {
-                const res = await api.get('/api/questions', { params: { limit: 2000, subject } });
+                const res = await api.get('/api/questions', { params: { limit: 10000, subject } });
                 const list = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
                 setAllQuestions(list);
             } catch (e) { console.error(e); }

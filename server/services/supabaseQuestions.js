@@ -151,23 +151,7 @@ function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
 // Queries
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Query questions with filters and pagination from Supabase.
- */
-async function getQuestions(filters = {}, page = 1, limit = 100) {
-    if (isTest && memoryTestQuestions.size > 0) {
-        let list = Array.from(memoryTestQuestions.values());
-        if (filters.subject) list = list.filter(q => q.subject === filters.subject);
-        return {
-            questions: list,
-            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
-        };
-    }
-
-    let query = supabase
-        .from('questions')
-        .select('*', { count: 'exact' });
-
+function applyFilters(query, filters = {}) {
     if (filters.subject) {
         const sub = (filters.subject || '').trim().toLowerCase();
         if (sub.includes('math')) {
@@ -188,20 +172,30 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
     }
 
     if (filters.chapter) {
-        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',');
-        query = query.in('chapter', chapters);
+        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+        if (chapters.length > 0) {
+            query = query.in('chapter', chapters);
+        }
+    }
+
+    if (filters.concept) {
+        const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
+        if (concepts.length > 0) {
+            query = query.in('topic', concepts);
+        }
     }
 
     if (filters.type) {
-        const typeStr = (filters.type || '').toLowerCase();
-        if (typeStr.includes('numerical')) {
-            query = query.eq('q_type', 'numerical');
-        } else if (typeStr.includes('assertion')) {
-            query = query.in('q_type', ['assertion_reason', 'assertion']);
-        } else if (typeStr.includes('match')) {
-            query = query.in('q_type', ['match', 'match_following']);
-        } else if (typeStr.includes('mcq')) {
-            query = query.in('q_type', ['mcq_single', 'mcq', 'mcq_multiple']);
+        const typeArr = Array.isArray(filters.type) ? filters.type : filters.type.split(',').map(t => t.trim().toLowerCase());
+        const qTypes = [];
+        typeArr.forEach(t => {
+            if (t.includes('numerical')) qTypes.push('numerical');
+            else if (t.includes('assertion')) qTypes.push('assertion_reason', 'assertion');
+            else if (t.includes('match')) qTypes.push('match', 'match_following');
+            else if (t.includes('mcq')) qTypes.push('mcq_single', 'mcq', 'mcq_multiple');
+        });
+        if (qTypes.length > 0) {
+            query = query.in('q_type', [...new Set(qTypes)]);
         }
     }
 
@@ -227,28 +221,141 @@ async function getQuestions(filters = {}, page = 1, limit = 100) {
         }
     }
 
-    const from = (page - 1) * limit;
-    const to = from + limit - 1;
-    query = query.range(from, to).order('created_at', { ascending: false });
+    return query;
+}
 
-    const { data, error, count } = await query;
-
-    if (error) {
-        console.error('[SUPABASE] getQuestions error:', error.message);
-        return { questions: [], pagination: { page: 1, limit: 100, total: 0, pages: 0 } };
+/**
+ * Query questions with filters and pagination from Supabase.
+ * Supports unlimited / multi-thousand questions by querying in parallel chunks when limit > 1000.
+ */
+async function getQuestions(filters = {}, page = 1, limit = 100) {
+    if (isTest && memoryTestQuestions.size > 0) {
+        let list = Array.from(memoryTestQuestions.values());
+        if (filters.subject) list = list.filter(q => q.subject === filters.subject);
+        return {
+            questions: list,
+            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
+        };
     }
 
-    const mappedQuestions = (data || []).map(mapSupabaseToQuestion);
+    const CHUNK_SIZE = 1000;
+    const requestedLimit = Math.min(50000, Number(limit) || 100);
+    const requestedPage = Math.max(1, Number(page) || 1);
 
+    // If single chunk (<= 1000)
+    if (requestedLimit <= CHUNK_SIZE) {
+        const from = (requestedPage - 1) * requestedLimit;
+        const to = from + requestedLimit - 1;
+
+        let query = supabase.from('questions').select('*', { count: 'exact' });
+        query = applyFilters(query, filters);
+        query = query.range(from, to).order('created_at', { ascending: false });
+
+        const { data, error, count } = await query;
+
+        if (error) {
+            console.error('[SUPABASE] getQuestions error:', error.message);
+            return { questions: [], pagination: { page: requestedPage, limit: requestedLimit, total: 0, pages: 0 } };
+        }
+
+        const mappedQuestions = (data || []).map(mapSupabaseToQuestion);
+
+        return {
+            questions: mappedQuestions,
+            pagination: {
+                page: requestedPage,
+                limit: requestedLimit,
+                total: count || 0,
+                pages: Math.ceil((count || 0) / requestedLimit)
+            }
+        };
+    }
+
+    // Multi-chunk fetching for large requests (e.g. 5000, 20000)
+    let initialQuery = supabase.from('questions').select('*', { count: 'exact' });
+    initialQuery = applyFilters(initialQuery, filters);
+    initialQuery = initialQuery.range(0, CHUNK_SIZE - 1).order('created_at', { ascending: false });
+
+    const { data: firstChunk, error: firstErr, count } = await initialQuery;
+    if (firstErr) {
+        console.error('[SUPABASE] getQuestions multi-chunk error:', firstErr.message);
+        return { questions: [], pagination: { page: 1, limit: requestedLimit, total: 0, pages: 0 } };
+    }
+
+    const totalCount = count || 0;
+    const targetCount = Math.min(totalCount, requestedLimit);
+    let allData = [...(firstChunk || [])];
+
+    if (targetCount > CHUNK_SIZE) {
+        const totalChunksNeeded = Math.ceil(targetCount / CHUNK_SIZE);
+        const chunkPromises = [];
+        for (let c = 1; c < totalChunksNeeded; c++) {
+            const from = c * CHUNK_SIZE;
+            const to = Math.min(from + CHUNK_SIZE - 1, targetCount - 1);
+            let chunkQuery = supabase.from('questions').select('*');
+            chunkQuery = applyFilters(chunkQuery, filters);
+            chunkQuery = chunkQuery.range(from, to).order('created_at', { ascending: false });
+            chunkPromises.push(chunkQuery);
+        }
+
+        const chunkResults = await Promise.all(chunkPromises);
+        chunkResults.forEach(res => {
+            if (res.data) allData.push(...res.data);
+        });
+    }
+
+    const mappedQuestions = allData.map(mapSupabaseToQuestion);
     return {
         questions: mappedQuestions,
         pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total: count || 0,
-            pages: Math.ceil((count || 0) / limit)
+            page: 1,
+            limit: requestedLimit,
+            total: totalCount,
+            pages: Math.ceil(totalCount / requestedLimit)
         }
     };
+}
+
+async function getSubjectMetadata(subject = '') {
+    try {
+        let countQuery = supabase.from('questions').select('*', { count: 'exact', head: true });
+        if (subject) {
+            countQuery = applyFilters(countQuery, { subject });
+        }
+        const { count } = await countQuery;
+
+        // Fetch distinct chapters & topics
+        let metaQuery = supabase.from('questions').select('chapter, topic');
+        if (subject) {
+            metaQuery = applyFilters(metaQuery, { subject });
+        }
+
+        const promises = [
+            metaQuery.range(0, 999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(1000, 1999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(2000, 2999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(3000, 3999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(4000, 4999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(5000, 5999),
+            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(6000, 6999)
+        ];
+
+        const metaResults = await Promise.all(promises);
+        let allMeta = [];
+        metaResults.forEach(r => { if (r.data) allMeta.push(...r.data); });
+
+        const chapters = [...new Set(allMeta.map(d => d.chapter).filter(Boolean))].sort();
+        const concepts = [...new Set(allMeta.map(d => d.topic).filter(Boolean))].sort();
+
+        return {
+            total: count || 0,
+            chapters,
+            concepts
+        };
+    } catch (err) {
+        console.error('[SUPABASE] getSubjectMetadata error:', err.message);
+        return { total: 0, chapters: [], concepts: [] };
+    }
 }
 
 async function getQuestionById(id) {
@@ -376,6 +483,7 @@ module.exports = {
     getQuestions,
     getQuestionById,
     getQuestionsByIds,
+    getSubjectMetadata,
     createQuestion,
     updateQuestion,
     deleteQuestion,
