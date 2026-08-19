@@ -30,11 +30,11 @@ const UnifiedLogin = () => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
-            <div className="bg-surface p-10 rounded-3xl shadow-2xl w-full max-w-md border-b-8 border-gold animate-fade-in-up">
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 font-sans">
+            <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md border-b-8 border-gold animate-fade-in-up">
                 <div className="text-center mb-10">
-                    <div className="w-24 h-24 rounded-3xl overflow-hidden mx-auto mb-6 shadow-xl hover:scale-110 transition-transform duration-300">
-                        <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-cover" />
+                    <div className="w-24 h-24 rounded-3xl overflow-hidden mx-auto mb-6 shadow-xl hover:scale-110 transition-transform duration-300 bg-white p-1 border border-gray-100">
+                        <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-cover rounded-2xl" />
                     </div>
                     <h1 className="text-3xl font-black text-navy tracking-tight">Manchester College</h1>
                     <p className="text-slate/60 mt-1 font-bold uppercase tracking-widest text-[10px]">Institutional Assessment Portal</p>
