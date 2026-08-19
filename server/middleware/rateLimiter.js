@@ -6,18 +6,8 @@ const rateLimit = require('express-rate-limit');
 
 const isTest = process.env.NODE_ENV === 'test';
 
-/** Strict limiter for auth endpoints — 5 attempts per 15 minutes per IP */
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 5,
-    standardHeaders: true,
-    legacyHeaders: false,
-    skip: () => isTest,
-    message: {
-        msg: 'Too many login attempts from this IP. Please try again after 15 minutes.'
-    },
-    skipSuccessfulRequests: false
-});
+/** Unlimited login limiter (disabled per requirement) */
+const loginLimiter = (req, res, next) => next();
 
 /** PDF / export endpoint limiter — 20 per hour per IP */
 const exportLimiter = rateLimit({
