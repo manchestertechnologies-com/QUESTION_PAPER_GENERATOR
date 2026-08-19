@@ -32,9 +32,20 @@ const ApiLoaderLinker = ({ children }) => {
     return children;
 };
 
+const AppLoadingSpinner = () => (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-white shadow-xl flex items-center justify-center p-2.5 mb-5 border-2 border-gold/30">
+            <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-contain" />
+        </div>
+        <div className="w-8 h-8 border-4 border-navy border-t-gold rounded-full animate-spin mb-3"></div>
+        <h3 className="text-sm font-black text-navy uppercase tracking-widest">Manchester College</h3>
+        <p className="text-[10px] text-slate/40 font-bold uppercase tracking-wider mt-1">Connecting to Secure Assessment Network...</p>
+    </div>
+);
+
 const ProtectedRoute = ({ children, role }) => {
     const { user, loading } = useContext(AuthContext);
-    if (loading) return null;
+    if (loading) return <AppLoadingSpinner />;
     if (!user) return <Navigate to="/" />;
     if (role && user.role !== role) return <Navigate to="/" />;
     return children;

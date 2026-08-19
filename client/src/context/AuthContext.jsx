@@ -9,30 +9,39 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const initAuth = async () => {
-            const savedToken = localStorage.getItem('token');
-            const savedUser = localStorage.getItem('user');
+            try {
+                const savedToken = localStorage.getItem('token');
+                const savedUser = localStorage.getItem('user');
 
-            if (savedUser) {
-                try {
-                    setUser(JSON.parse(savedUser));
-                } catch {
-                    localStorage.removeItem('user');
+                if (savedUser) {
+                    try {
+                        setUser(JSON.parse(savedUser));
+                    } catch {
+                        localStorage.removeItem('user');
+                    }
                 }
-            }
 
-            if (savedToken || savedUser) {
-                try {
-                    const res = await api.get('/api/auth/me');
-                    setUser(res.data.user);
-                    localStorage.setItem('user', JSON.stringify(res.data.user));
-                } catch {
-                    // Session invalid or expired
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('user');
-                    setUser(null);
+                if (savedToken || savedUser) {
+                    const fetchMe = api.get('/api/auth/me').then(res => {
+                        if (res.data?.user) {
+                            setUser(res.data.user);
+                            localStorage.setItem('user', JSON.stringify(res.data.user));
+                        }
+                    }).catch(() => {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        setUser(null);
+                    });
+
+                    // Max 3.5s wait so other laptops on cold-start never freeze
+                    const timeout = new Promise(resolve => setTimeout(resolve, 3500));
+                    await Promise.race([fetchMe, timeout]);
                 }
+            } catch (err) {
+                console.error('[AUTH INIT ERROR]:', err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         initAuth();
