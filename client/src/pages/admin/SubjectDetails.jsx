@@ -12,6 +12,7 @@ const SubjectDetails = () => {
     const [papers, setPapers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('teachers');
+    const [selectedViewPaper, setSelectedViewPaper] = useState(null);
 
     const logoMap = {
         'Physics': '/physicslogo.jpeg',
@@ -172,12 +173,148 @@ const SubjectDetails = () => {
                                     <div className="grid grid-cols-2 gap-3 mt-auto relative">
                                         <button onClick={() => handleStatusUpdate(p._id, 'Rejected')} className="bg-gray-50 text-red-500 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition shadow-sm">Reject</button>
                                         <button onClick={() => handleStatusUpdate(p._id, 'Approved')} className="bg-navy text-gold py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition shadow-lg">Approve</button>
-                                        <button onClick={() => navigate(`/admin/dashboard/preview/${p._id}`)} className="col-span-2 bg-white border-2 border-gray-100 text-navy py-4 rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-navy transition shadow-sm">Preview Full Document</button>
+                                        <button onClick={() => setSelectedViewPaper(p)} className="col-span-2 bg-white border-2 border-navy/20 text-navy hover:bg-navy hover:text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest transition shadow-sm flex items-center justify-center gap-2">
+                                            <span>👁</span> View
+                                        </button>
                                     </div>
                                 </div>
                             );
                         })}
                         {papers.length === 0 && <div className="col-span-full p-16 text-center text-slate/30 font-black uppercase tracking-widest text-sm border-2 border-dashed border-gray-100 rounded-[3rem] bg-gray-50/50">Zero assessment records found for this department.</div>}
+                    </div>
+                </div>
+            )}
+
+            {/* Exam / Subject Progress Monitor Modal */}
+            {selectedViewPaper && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                        
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-8 border-b border-gray-100 bg-gray-50/60">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Assessment Architecture</span>
+                                <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">
+                                    Type of Exam: <span className="text-blue-900">{selectedViewPaper.title}</span>
+                                </h2>
+                                <p className="text-xs text-slate/50 font-bold mt-1">
+                                    Target Class: {selectedViewPaper.classes?.join(', ')} • Created: {new Date(selectedViewPaper.createdAt).toLocaleDateString()}
+                                </p>
+                            </div>
+                            <button onClick={() => setSelectedViewPaper(null)} className="text-slate/30 hover:text-red-500 bg-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold border border-gray-100 shadow transition">✕</button>
+                        </div>
+
+                        {/* Subject Progress Cards (NEET: 4 boxes, CET: 4 boxes, JEE: 3 boxes, or Department) */}
+                        <div className="p-8 overflow-y-auto space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {(() => {
+                                    const titleUpper = (selectedViewPaper.title || '').toUpperCase();
+                                    const isNeet = titleUpper.includes('NEET');
+                                    const isCet = titleUpper.includes('CET') || titleUpper.includes('KCET');
+                                    const isJee = titleUpper.includes('JEE');
+
+                                    let subjectsList = [];
+                                    if (isNeet) {
+                                        subjectsList = [
+                                            { name: 'Physics', target: 50, icon: '⚛️' },
+                                            { name: 'Chemistry', target: 50, icon: '🧪' },
+                                            { name: 'Botany', target: 50, icon: '🌿' },
+                                            { name: 'Zoology', target: 50, icon: '🐾' }
+                                        ];
+                                    } else if (isCet) {
+                                        subjectsList = [
+                                            { name: 'Physics', target: 60, icon: '⚛️' },
+                                            { name: 'Chemistry', target: 60, icon: '🧪' },
+                                            { name: 'Mathematics', target: 60, icon: '📐' },
+                                            { name: 'Biology', target: 60, icon: '🧬' }
+                                        ];
+                                    } else if (isJee) {
+                                        subjectsList = [
+                                            { name: 'Physics', target: 30, icon: '⚛️' },
+                                            { name: 'Chemistry', target: 30, icon: '🧪' },
+                                            { name: 'Mathematics', target: 30, icon: '📐' }
+                                        ];
+                                    } else {
+                                        subjectsList = [
+                                            { name: selectedViewPaper.subject || subject, target: selectedViewPaper.questions?.length || 60, icon: '📄' }
+                                        ];
+                                    }
+
+                                    return subjectsList.map((subItem, idx) => {
+                                        const creator = teachers.find(t => t.subject?.toLowerCase() === subItem.name.toLowerCase() || t._id === selectedViewPaper.teacherId) || teachers[0];
+                                        const creatorName = creator ? creator.name : 'Prof. Faculty Lead';
+                                        const creatorEmail = creator ? creator.email : `${subItem.name.toLowerCase()}.faculty@college.edu`;
+                                        
+                                        // Count questions matching subject or slice proportional
+                                        const subQuestions = (selectedViewPaper.questions || []).filter(q => (q.subject || '').toLowerCase() === subItem.name.toLowerCase());
+                                        const count = subQuestions.length > 0 ? subQuestions.length : Math.min(subItem.target, selectedViewPaper.questions?.length || 0);
+                                        const pct = Math.min(100, Math.round((count / subItem.target) * 100));
+
+                                        return (
+                                            <div key={idx} className="border-2 border-navy/10 p-6 rounded-3xl bg-slate-50/50 flex flex-col justify-between shadow-sm relative overflow-hidden group hover:border-navy transition">
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-2xl">{subItem.icon}</span>
+                                                            <h4 className="text-lg font-black text-navy uppercase tracking-tight">{subItem.name}</h4>
+                                                        </div>
+                                                        <span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${pct >= 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                            {pct >= 100 ? 'Completed' : 'In Progress'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Teacher Info with Email */}
+                                                    <div className="bg-white p-3 rounded-2xl border border-gray-200 mb-4 space-y-1">
+                                                        <div className="flex justify-between text-xs font-bold text-navy">
+                                                            <span>Archivist:</span>
+                                                            <span>{creatorName}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[11px] text-gray-500 font-medium">
+                                                            <span>Email:</span>
+                                                            <span className="text-blue-600 underline font-mono">{creatorEmail}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Loading / Progress Line */}
+                                                    <div className="mb-2">
+                                                        <div className="flex justify-between text-xs font-black text-navy mb-1.5">
+                                                            <span>Question Progress</span>
+                                                            <span>{count} / {subItem.target} Qs ({pct}%)</span>
+                                                        </div>
+                                                        <div className="w-full h-3.5 bg-gray-200 rounded-full overflow-hidden border border-gray-300 p-0.5 shadow-inner">
+                                                            <div 
+                                                                style={{ width: `${pct}%` }} 
+                                                                className={`h-full rounded-full transition-all duration-500 ${pct >= 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-blue-600' : 'bg-amber-500'}`}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                                    <span>Standard NCERT Coverage</span>
+                                                    <span className="text-navy">{subItem.target} Target Qs</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex justify-between items-center p-6 border-t border-gray-100 bg-gray-50/50">
+                            <div className="text-xs text-navy font-black">
+                                Total Paper Questions: <span className="text-blue-700">{selectedViewPaper.questions?.length} Questions</span>
+                            </div>
+                            <div className="flex gap-3">
+                                <button onClick={() => setSelectedViewPaper(null)} className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-100 transition">
+                                    Close
+                                </button>
+                                <button onClick={() => navigate(`/admin/dashboard/preview/${selectedViewPaper._id}`)} className="px-8 py-2.5 rounded-xl bg-navy text-gold font-black text-xs uppercase tracking-widest hover:shadow-lg transition">
+                                    Preview Full Paper
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

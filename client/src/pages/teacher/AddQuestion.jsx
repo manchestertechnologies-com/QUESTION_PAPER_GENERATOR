@@ -728,12 +728,9 @@ const AddQuestion = () => {
                                 onChange={e => { setClassFilter(e.target.value); setPage(1); }}
                                 className="w-full border border-gray-200 px-3 py-2.5 rounded-xl text-xs font-semibold text-gray-700 bg-white outline-none focus:border-navy"
                             >
-                                <option value="">All Classes / Exams</option>
+                                <option value="">All Classes</option>
                                 <option value="11">Class 11</option>
                                 <option value="12">Class 12</option>
-                                <option value="JEE">JEE</option>
-                                <option value="NEET">NEET</option>
-                                <option value="KCET">KCET</option>
                             </select>
                         </div>
                     </div>

@@ -28,41 +28,57 @@ const Toast = ({ msg, type, onClose }) => {
 // ─── Auto Get Questions Modal ────────────────────────────────────────────────
 const AutoGetModal = ({ onClose, onConfirm, filteredCount }) => {
     const [qty, setQty] = useState('');
-    const [level, setLevel] = useState('random');
+    const [dist, setDist] = useState({ easy: 40, medium: 40, hard: 20 });
     const max = Math.max(1, filteredCount);
+
+    const updatePct = (key, val) => {
+        const num = Math.max(0, Math.min(100, parseInt(val) || 0));
+        setDist(prev => {
+            const keys = ['easy', 'medium', 'hard'];
+            const otherKeys = keys.filter(k => k !== key);
+            const remaining = 100 - num;
+            const currentOtherTotal = prev[otherKeys[0]] + prev[otherKeys[1]];
+            let newFirst = currentOtherTotal > 0 ? Math.round(remaining * (prev[otherKeys[0]] / currentOtherTotal)) : Math.floor(remaining / 2);
+            let newSecond = remaining - newFirst;
+            return { [key]: num, [otherKeys[0]]: newFirst, [otherKeys[1]]: newSecond };
+        });
+    };
+
+    const applyPreset = (e, m, h) => {
+        setDist({ easy: e, medium: m, hard: h });
+    };
+
+    const totalCount = parseInt(qty) || 0;
+    const easyCount = Math.round(totalCount * (dist.easy / 100));
+    const medCount = Math.round(totalCount * (dist.medium / 100));
+    const hardCount = Math.max(0, totalCount - easyCount - medCount);
 
     const handleConfirm = () => {
         const n = parseInt(qty);
-        if (!n || n < 1) return alert('Enter a valid number.');
-        onConfirm(n, level);
+        if (!n || n < 1) return alert('Enter a valid number of questions.');
+        onConfirm(n, dist);
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md p-10 border-b-8 border-gold animate-fade-in-up">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg p-8 border-b-8 border-gold animate-fade-in-up">
                 {/* Header */}
-                <div className="flex justify-between items-start mb-8">
+                <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="text-2xl font-black text-navy mb-1 tracking-tight">Auto Fetch</h2>
                         <p className="text-xs text-slate/40 font-bold uppercase tracking-widest">
-                            {filteredCount} Questions in Repository
+                            {filteredCount} Questions Available in Pool
                         </p>
                     </div>
                     <button onClick={onClose} className="text-slate/30 hover:text-red-500 bg-gray-50 rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold border border-gray-100 transition">×</button>
                 </div>
 
-                {/* Filter summary */}
-                <div className="bg-navy/5 border border-navy/10 rounded-2xl p-5 mb-8">
-                    <p className="text-[10px] font-black text-navy uppercase tracking-[0.2em] mb-2 opacity-50">Active Context</p>
-                    <p className="text-sm text-navy font-medium leading-relaxed">The system will select questions matching your currently active filters and criteria.</p>
-                </div>
-
                 {/* Quantity input */}
-                <div className="mb-8">
-                    <label className="block text-[10px] font-black text-navy uppercase tracking-[0.2em] mb-3 ml-1">
+                <div className="mb-6">
+                    <label className="block text-[10px] font-black text-navy uppercase tracking-[0.2em] mb-2 ml-1">
                         Question Quantity
                     </label>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                         <input
                             type="number"
                             min={1}
@@ -70,54 +86,110 @@ const AutoGetModal = ({ onClose, onConfirm, filteredCount }) => {
                             value={qty}
                             onChange={e => setQty(e.target.value)}
                             placeholder={`1 – ${max}`}
-                            className="flex-1 border-2 border-gray-100 focus:border-navy rounded-2xl px-5 py-4 text-2xl font-black text-navy outline-none text-center transition bg-gray-50/50"
+                            className="flex-1 border-2 border-gray-100 focus:border-navy rounded-2xl px-4 py-3 text-xl font-black text-navy outline-none text-center transition bg-gray-50/50"
                         />
-                        <button onClick={() => setQty(String(Math.min(max, 50)))} className="text-[10px] bg-navy text-gold font-black px-4 py-5 rounded-2xl shadow-lg hover:scale-105 transition active:scale-95 uppercase tracking-widest">
+                        <button onClick={() => setQty(String(Math.min(max, 30)))} className="text-[10px] bg-navy text-gold font-black px-3 py-3.5 rounded-xl shadow hover:scale-105 transition active:scale-95 uppercase tracking-widest">
+                            30
+                        </button>
+                        <button onClick={() => setQty(String(Math.min(max, 50)))} className="text-[10px] bg-navy text-gold font-black px-3 py-3.5 rounded-xl shadow hover:scale-105 transition active:scale-95 uppercase tracking-widest">
                             50
                         </button>
-                        <button onClick={() => setQty(String(Math.min(max, 100)))} className="text-[10px] bg-navy text-gold font-black px-4 py-5 rounded-2xl shadow-lg hover:scale-105 transition active:scale-95 uppercase tracking-widest">
-                            100
+                        <button onClick={() => setQty(String(Math.min(max, 60)))} className="text-[10px] bg-navy text-gold font-black px-3 py-3.5 rounded-xl shadow hover:scale-105 transition active:scale-95 uppercase tracking-widest">
+                            60
                         </button>
                     </div>
                 </div>
 
-                {/* Level preference */}
-                <div className="mb-10">
-                    <label className="block text-[10px] font-black text-navy uppercase tracking-[0.2em] mb-3 ml-1">
-                        Selection Strategy
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {[
-                            { val: 'random', label: 'Random' },
-                            { val: 'easy', label: 'Easy First' },
-                            { val: 'hard', label: 'Hard First' },
-                            { val: 'balanced', label: 'Balanced' },
-                        ].map(opt => (
-                            <button
-                                key={opt.val}
-                                onClick={() => setLevel(opt.val)}
-                                className={`py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${level === opt.val
-                                        ? 'bg-navy text-gold border-navy shadow-lg'
-                                        : 'bg-white text-slate/50 border-gray-100 hover:border-navy/30'
-                                    }`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
+                {/* Difficulty Percentage Line */}
+                <div className="mb-6 bg-slate-50 border border-slate-200 rounded-2xl p-5">
+                    <div className="flex justify-between items-center mb-3">
+                        <label className="text-[10px] font-black text-navy uppercase tracking-[0.15em]">
+                            Difficulty Distribution (100% Total)
+                        </label>
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {dist.easy + dist.medium + dist.hard}% Total
+                        </span>
+                    </div>
+
+                    {/* Segmented Percentage Visual Bar */}
+                    <div className="w-full h-4 rounded-full overflow-hidden flex bg-gray-200 border border-gray-300 mb-4 shadow-inner">
+                        <div style={{ width: `${dist.easy}%` }} className="bg-emerald-500 transition-all duration-200" title={`Easy: ${dist.easy}%`}></div>
+                        <div style={{ width: `${dist.medium}%` }} className="bg-amber-400 transition-all duration-200" title={`Medium: ${dist.medium}%`}></div>
+                        <div style={{ width: `${dist.hard}%` }} className="bg-rose-500 transition-all duration-200" title={`Hard: ${dist.hard}%`}></div>
+                    </div>
+
+                    {/* 3 percentage inputs */}
+                    <div className="grid grid-cols-3 gap-3 mb-4">
+                        <div className="bg-white p-3 rounded-xl border border-emerald-200 flex flex-col items-center">
+                            <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-1">🟢 Easy</span>
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={dist.easy}
+                                    onChange={e => updatePct('easy', e.target.value)}
+                                    className="w-12 text-center font-black text-base text-emerald-800 border border-emerald-300 rounded p-1 outline-none"
+                                />
+                                <span className="font-bold text-xs text-gray-500">%</span>
+                            </div>
+                            {totalCount > 0 && <span className="text-[10px] font-bold text-emerald-600 mt-1">{easyCount} Qs</span>}
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-amber-200 flex flex-col items-center">
+                            <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">🟡 Medium</span>
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={dist.medium}
+                                    onChange={e => updatePct('medium', e.target.value)}
+                                    className="w-12 text-center font-black text-base text-amber-800 border border-amber-300 rounded p-1 outline-none"
+                                />
+                                <span className="font-bold text-xs text-gray-500">%</span>
+                            </div>
+                            {totalCount > 0 && <span className="text-[10px] font-bold text-amber-600 mt-1">{medCount} Qs</span>}
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-rose-200 flex flex-col items-center">
+                            <span className="text-[10px] font-black text-rose-700 uppercase tracking-wider mb-1">🔴 Hard</span>
+                            <div className="flex items-center gap-1">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={dist.hard}
+                                    onChange={e => updatePct('hard', e.target.value)}
+                                    className="w-12 text-center font-black text-base text-rose-800 border border-rose-300 rounded p-1 outline-none"
+                                />
+                                <span className="font-bold text-xs text-gray-500">%</span>
+                            </div>
+                            {totalCount > 0 && <span className="text-[10px] font-bold text-rose-600 mt-1">{hardCount} Qs</span>}
+                        </div>
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Presets:</span>
+                        <button type="button" onClick={() => applyPreset(40, 40, 20)} className="text-[10px] font-bold bg-white border border-gray-200 px-2 py-1 rounded hover:bg-navy hover:text-white transition">40/40/20</button>
+                        <button type="button" onClick={() => applyPreset(33, 34, 33)} className="text-[10px] font-bold bg-white border border-gray-200 px-2 py-1 rounded hover:bg-navy hover:text-white transition">Balanced</button>
+                        <button type="button" onClick={() => applyPreset(60, 30, 10)} className="text-[10px] font-bold bg-white border border-gray-200 px-2 py-1 rounded hover:bg-navy hover:text-white transition">Easy 60%</button>
+                        <button type="button" onClick={() => applyPreset(20, 40, 40)} className="text-[10px] font-bold bg-white border border-gray-200 px-2 py-1 rounded hover:bg-navy hover:text-white transition">Hard 40%</button>
                     </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex gap-4">
-                    <button onClick={onClose} className="flex-1 bg-gray-50 text-slate/60 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition">
+                    <button onClick={onClose} className="flex-1 bg-gray-50 text-slate/60 py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition">
                         Cancel
                     </button>
                     <button
                         onClick={handleConfirm}
                         disabled={!qty || parseInt(qty) < 1}
-                        className="flex-[2] bg-gold text-navy py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-xl transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-lg"
+                        className="flex-[2] bg-gold text-navy py-3.5 rounded-xl font-black text-xs uppercase tracking-widest hover:shadow-xl transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-lg"
                     >
-                        Confirm Fetch
+                        Confirm Fetch ({totalCount > 0 ? totalCount : 0} Qs)
                     </button>
                 </div>
             </div>
@@ -686,35 +758,43 @@ const CreatePaper = () => {
         }
     };
 
-    // Auto Fetch handler (fetches from backend if needed)
-    const handleAutoGet = async (qty, level) => {
+    // Auto Fetch handler (fetches exact proportions of easy, medium, hard from backend)
+    const handleAutoGet = async (qty, dist = { easy: 40, medium: 40, hard: 20 }) => {
         try {
-            showToast(`Fetching ${qty} matching questions...`, 'info');
-            const qs = buildQueryParams(1, Math.min(qty * 2, 200));
+            showToast(`Fetching ${qty} questions with custom difficulty split...`, 'info');
+            const qs = buildQueryParams(1, Math.min(qty * 3, 500));
             const res = await api.get(`/api/questions?${qs}`);
             let pool = res.data?.questions || questions;
 
             pool = pool.filter(q => !selectedQuestions.find(sq => sq._id === q._id));
 
-            if (level === 'easy') pool.sort((a, b) => { const o = ['easy', 'medium', 'hard']; return o.indexOf(a.level) - o.indexOf(b.level); });
-            else if (level === 'hard') pool.sort((a, b) => { const o = ['hard', 'medium', 'easy']; return o.indexOf(a.level) - o.indexOf(b.level); });
-            else if (level === 'balanced') {
-                const easy = pool.filter(q => q.level === 'easy');
-                const medium = pool.filter(q => q.level === 'medium');
-                const hard = pool.filter(q => q.level === 'hard');
-                const third = Math.ceil(qty / 3);
-                pool = [...easy.slice(0, third), ...medium.slice(0, third), ...hard.slice(0, third)];
-            } else {
-                pool.sort(() => Math.random() - 0.5);
+            const easyTarget = Math.round(qty * ((dist.easy || 40) / 100));
+            const medTarget = Math.round(qty * ((dist.medium || 40) / 100));
+            const hardTarget = Math.max(0, qty - easyTarget - medTarget);
+
+            const easyPool = pool.filter(q => q.level === 'easy').sort(() => Math.random() - 0.5);
+            const medPool = pool.filter(q => q.level === 'medium').sort(() => Math.random() - 0.5);
+            const hardPool = pool.filter(q => q.level === 'hard').sort(() => Math.random() - 0.5);
+
+            const pickedEasy = easyPool.slice(0, easyTarget);
+            const pickedMed = medPool.slice(0, medTarget);
+            const pickedHard = hardPool.slice(0, hardTarget);
+
+            const pickedIds = new Set([...pickedEasy, ...pickedMed, ...pickedHard].map(q => q._id));
+            let picked = [...pickedEasy, ...pickedMed, ...pickedHard];
+
+            // If not enough in specific difficulty buckets, top up from remainder of pool
+            if (picked.length < qty) {
+                const remainingPool = pool.filter(q => !pickedIds.has(q._id)).sort(() => Math.random() - 0.5);
+                picked = [...picked, ...remainingPool.slice(0, qty - picked.length)];
             }
 
-            const picked = pool.slice(0, qty);
             setSelectedQuestions(prev => {
                 const newOnes = picked.filter(p => !prev.find(s => s._id === p._id));
                 return [...prev, ...newOnes];
             });
             setShowAutoGetModal(false);
-            showToast(`✓ Added ${picked.length} questions to Selected`, 'success');
+            showToast(`✓ Added ${picked.length} questions (Easy: ${pickedEasy.length}, Medium: ${pickedMed.length}, Hard: ${pickedHard.length})`, 'success');
         } catch (err) {
             console.error(err);
             showToast('Error auto-fetching questions', 'error');
@@ -1000,9 +1080,6 @@ const CreatePaper = () => {
                     <option value="">All Classes</option>
                     <option value="11">Class 11</option>
                     <option value="12">Class 12</option>
-                    <option value="JEE">JEE</option>
-                    <option value="KCET">KCET</option>
-                    <option value="NEET">NEET</option>
                 </select>
 
                 <MultiSelectCheckbox 
@@ -1014,7 +1091,7 @@ const CreatePaper = () => {
                 
                 <MultiSelectCheckbox 
                     label="All Types" 
-                    options={["MCQ", "ASSERTION_REASON", "STATEMENT_BASED", "TRUE_FALSE", "MATCH_FOLLOWING", "NUMERICAL", "1m", "2m", "3m", "4m", "5m"]} 
+                    options={["MCQ", "ASSERTION_REASON", "STATEMENT_BASED", "MATCH_FOLLOWING", "NUMERICAL", "TRUE_FALSE"]} 
                     selectedValues={filters.type} 
                     onChange={vals => setFilters(f => ({ ...f, type: vals }))} 
                 />
