@@ -153,9 +153,19 @@ router.get('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
         const paper = await Paper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Paper not found' });
 
-        // IDOR check: teacher can only access their own paper
+        // IDOR check: teacher can access if admin, or own paper, or assigned to exam
         if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
-            return res.status(403).json({ msg: 'Access denied: not your paper.' });
+            // Check if teacher is assigned to this paper's exam
+            if (paper.examId) {
+                const OnlineExam = require('../models/OnlineExam');
+                const exam = await OnlineExam.findById(paper.examId);
+                const isAssigned = exam && exam.subjectAssignments.some(sa => sa.teacherId && sa.teacherId.toString() === req.user.id);
+                if (!isAssigned) {
+                    return res.status(403).json({ msg: 'Access denied: not your paper.' });
+                }
+            } else {
+                return res.status(403).json({ msg: 'Access denied: not your paper.' });
+            }
         }
 
         const populated = await populatePaperQuestions(paper);
@@ -163,6 +173,62 @@ router.get('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
     } catch (err) {
         console.error(err.message);
         res.status(500).json({ msg: 'Server Error' });
+    }
+});
+
+// @route   PUT /api/papers/:id
+// @desc    Update an existing paper by ID
+// @access  Teacher, Admin
+router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => {
+    try {
+        let paper = await Paper.findById(req.params.id);
+        if (!paper) return res.status(404).json({ msg: 'Paper not found' });
+
+        if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
+            return res.status(403).json({ msg: 'Access denied: not your paper.' });
+        }
+
+        const { title, questions, questionObjects, pattern, templateId, difficultyDistribution, status, classes } = req.body;
+        if (title) paper.title = title;
+        if (questions) paper.questions = questions;
+        if (questionObjects) paper.questionObjects = questionObjects;
+        if (pattern) paper.pattern = pattern;
+        if (templateId !== undefined) paper.templateId = templateId;
+        if (difficultyDistribution) paper.difficultyDistribution = difficultyDistribution;
+        if (status) paper.status = status;
+        if (classes) paper.classes = classes;
+        paper.updatedAt = new Date();
+
+        await paper.save();
+
+        // Sync with parent OnlineExam if linked
+        if (paper.examId) {
+            const OnlineExam = require('../models/OnlineExam');
+            const exam = await OnlineExam.findById(paper.examId);
+            if (exam) {
+                const subName = (paper.subject || '').toLowerCase().trim();
+                const assignment = exam.subjectAssignments.find(sa => {
+                    const saSub = (sa.subject || '').toLowerCase().trim();
+                    return saSub === subName ||
+                           (subName.includes('math') && saSub.includes('math')) ||
+                           (subName.includes('bio') && saSub.includes('bio')) ||
+                           (subName.includes('physic') && saSub.includes('physic')) ||
+                           (subName.includes('chem') && saSub.includes('chem'));
+                });
+                if (assignment) {
+                    assignment.submittedPaperId = paper._id;
+                    const qCount = Array.isArray(paper.questions) ? paper.questions.length : 0;
+                    assignment.status = qCount >= (assignment.targetQuestions || 60) ? 'Completed' : (qCount > 0 ? 'In Progress' : 'Not Started');
+                    await exam.save();
+                }
+            }
+        }
+
+        const populated = await populatePaperQuestions(paper);
+        res.json(populated);
+    } catch (err) {
+        console.error('Update paper error:', err.message);
+        res.status(500).json({ msg: 'Server error updating paper.' });
     }
 });
 

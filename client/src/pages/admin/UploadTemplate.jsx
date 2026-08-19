@@ -99,146 +99,57 @@ const UploadTemplate = () => {
             </div>
 
             {/* Upload Form */}
-            <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-gray-100">
-                <h3 className="text-sm font-black mb-8 text-navy uppercase tracking-[0.2em] flex items-center gap-4">
-                    <span className="bg-gold text-navy w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow-lg rotate-3">↑</span>
-                    Create / Customize Template
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100">
+                <h3 className="text-sm font-black mb-6 text-navy uppercase tracking-[0.2em] flex items-center gap-3">
+                    <span className="bg-gold text-navy w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black shadow">↑</span>
+                    Upload Visual Template (PDF / PNG / JPG)
                 </h3>
                 <form onSubmit={handleTemplateUpload} className="flex flex-col gap-5">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Template Title *</label>
-                            <input
-                                type="text" required
-                                placeholder="e.g. Manchester College Template 2026"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={templateTitle}
-                                onChange={e => setTemplateTitle(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Template Type *</label>
-                            <select
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={templateType}
-                                onChange={e => setTemplateType(e.target.value)}
-                            >
-                                <option value="FULL_PAPER">Full Paper Layout</option>
-                                <option value="LOGO">Institution Logo Only</option>
-                                <option value="HEADER">Header Template Only</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Description</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. Custom layout blueprint for semester exams"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={templateDesc}
-                                onChange={e => setTemplateDesc(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Institution Name</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. MANCHESTER COLLEGE OF SCIENCE & COMMERCE"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={institutionName}
-                                onChange={e => setInstitutionName(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Institution Address</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. Main Ring Road, Bangalore"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={address}
-                                onChange={e => setAddress(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Exam Header Text</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. SEMESTER EXAMINATION - 2026"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={headerText}
-                                onChange={e => setHeaderText(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Footer Text</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. Prepared by department of science"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={footerText}
-                                onChange={e => setFooterText(e.target.value)}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Watermark Text</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. CONFIDENTIAL"
-                                className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                                value={watermarkText}
-                                onChange={e => setWatermarkText(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
                     <div>
-                        <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">General Instructions</label>
-                        <textarea
-                            rows={3}
-                            placeholder="Write instructions (one per line)...&#10;e.g. 1. All questions are compulsory.&#10;2. Use of scientific calculators is permitted."
-                            className="w-full border-2 border-gray-100 p-4 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
-                            value={instructions}
-                            onChange={e => setInstructions(e.target.value)}
+                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Template Name *</label>
+                        <input
+                            type="text" required
+                            placeholder="e.g. Manchester College Standard Layout 2026"
+                            className="w-full border-2 border-gray-200 p-3.5 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
+                            value={templateTitle}
+                            onChange={e => setTemplateTitle(e.target.value)}
                         />
                     </div>
 
                     <div className="w-full">
-                        <label className="block text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Upload Asset File (PNG / JPG / PDF)</label>
+                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Select Template File (Supported: PDF, PNG, JPG/JPEG) *</label>
                         <input
-                            type="file" accept="image/*,application/pdf"
+                            type="file" required accept="image/*,application/pdf"
                             onChange={(e) => {
                                 if (e.target.files[0]) {
                                     setTemplateFile(e.target.files[0]);
                                     setPreviewUrl(URL.createObjectURL(e.target.files[0]));
                                 }
                             }}
-                            className="w-full border-2 border-gray-100 p-5 rounded-2xl bg-gray-50/50 hover:bg-white focus:border-navy outline-none transition-all shadow-inner font-bold text-navy cursor-pointer file:mr-6 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-navy file:text-gold hover:file:scale-105"
+                            className="w-full border-2 border-dashed border-gray-300 p-6 rounded-2xl bg-gray-50/50 hover:bg-white focus:border-navy outline-none transition-all font-bold text-navy cursor-pointer file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-black file:uppercase file:bg-navy file:text-gold hover:file:scale-105"
                         />
                     </div>
+
                     {previewUrl && (
                         <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 text-center">
-                            <p className="text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Asset Preview</p>
+                            <p className="text-[10px] font-black text-navy/40 uppercase tracking-widest mb-2">Uploaded Template Preview</p>
                             {templateFile?.type === 'application/pdf' ? (
                                 <div className="flex flex-col items-center py-4">
                                     <span className="text-4xl mb-1">📄</span>
                                     <span className="text-xs text-navy font-bold">{templateFile.name} (PDF Document)</span>
                                 </div>
                             ) : (
-                                <img src={previewUrl} alt="Preview" className="max-h-32 mx-auto object-contain rounded-xl" />
+                                <img src={previewUrl} alt="Preview" className="max-h-40 mx-auto object-contain rounded-xl shadow-sm" />
                             )}
                         </div>
                     )}
+
                     <button
                         type="submit"
                         disabled={uploading}
-                        className="w-full bg-gold text-navy py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:shadow-2xl hover:scale-[1.02] transition-all shadow-xl active:scale-95 disabled:opacity-50"
+                        className="w-full bg-navy text-gold py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-[1.01] transition-all shadow-lg active:scale-95 disabled:opacity-50 mt-2"
                     >
-                        {uploading ? 'Processing...' : '+ Save Template Layout'}
+                        {uploading ? 'Uploading & Processing...' : '🚀 Save & Activate Template'}
                     </button>
                 </form>
             </div>

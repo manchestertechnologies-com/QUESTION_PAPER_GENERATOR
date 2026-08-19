@@ -268,14 +268,19 @@ const MultiSelectCheckbox = ({ label, options, selectedValues, onChange, disable
 const CreatePaper = () => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlPaperId = searchParams.get('paperId') || '';
+    const urlExamId = searchParams.get('examId') || '';
+
     const subject = user?.subject || 'Chemistry';
 
-    // Mode: 'assignment' (default) or 'paper' (unlocked only if commissioned by admin)
-    const [mode, setMode] = useState('assignment');
+    // Mode: 'assignment' or 'paper'
+    const [mode, setMode] = useState(urlPaperId || urlExamId ? 'paper' : 'assignment');
 
     // Admin Commissioned Exam states
     const [assignedExams, setAssignedExams] = useState([]);
-    const [selectedExamId, setSelectedExamId] = useState('');
+    const [selectedExamId, setSelectedExamId] = useState(urlExamId);
+    const [currentPaperId, setCurrentPaperId] = useState(urlPaperId);
 
     // Filter states
     const [filters, setFilters] = useState({ class: '', level: [], type: [], chapter: [], concept: [], sourceType: '', sourcePaperId: '' });
@@ -329,12 +334,39 @@ const CreatePaper = () => {
 
     const showToast = (msg, type = 'info') => setToast({ msg, type });
 
-    // Draft persistence key scoped to teacher user & subject
-    const DRAFT_KEY = useMemo(() => `qpg_draft_${user?._id || user?.id || 'teacher'}_${subject}`, [user, subject]);
+    // ── ISOLATED DRAFT PERSISTENCE KEY ──────────────────────────────────────────
+    // Strictly scoped per paper / exam ID so paper questions NEVER collide or leak
+    const DRAFT_KEY = useMemo(() => {
+        const scope = currentPaperId || selectedExamId || 'standalone_paper';
+        return `qpg_draft_${user?._id || user?.id || 'teacher'}_${subject}_${scope}`;
+    }, [user, subject, currentPaperId, selectedExamId]);
+
     const [draftRestored, setDraftRestored] = useState(false);
 
-    // 1. Restore saved draft on mount (survives computer restarts, tab close, etc.)
+    // 1. If opening an existing paper by URL paperId, load it directly from DB
     useEffect(() => {
+        if (urlPaperId) {
+            api.get(`/api/papers/${urlPaperId}`)
+                .then(res => {
+                    const p = res.data;
+                    if (p) {
+                        setCurrentPaperId(p._id);
+                        if (p.examId) setSelectedExamId(p.examId._id || p.examId);
+                        if (p.title) setPaperTitle(p.title);
+                        if (Array.isArray(p.questions) && p.questions.length > 0) {
+                            setSelectedQuestions(p.questions);
+                        }
+                        setMode('paper');
+                        setDraftRestored(true);
+                    }
+                })
+                .catch(err => console.error('Error fetching paper by ID:', err));
+        }
+    }, [urlPaperId]);
+
+    // 2. Restore saved draft on mount (survives computer restarts, tab close, etc.)
+    useEffect(() => {
+        if (urlPaperId) return; // DB load takes priority when paperId is in URL
         try {
             const savedStr = localStorage.getItem(DRAFT_KEY);
             if (savedStr) {
@@ -356,9 +388,9 @@ const CreatePaper = () => {
         } catch (err) {
             console.error('Failed to restore draft from storage:', err);
         }
-    }, [DRAFT_KEY]);
+    }, [DRAFT_KEY, urlPaperId]);
 
-    // 2. Real-time auto-save to localStorage whenever work changes
+    // 3. Real-time auto-save to localStorage scoped to this specific paper
     useEffect(() => {
         try {
             const draftData = {
@@ -369,6 +401,7 @@ const CreatePaper = () => {
                 startQNo,
                 assignmentSettings,
                 selectedExamId,
+                currentPaperId,
                 filters,
                 timestamp: new Date().toISOString()
             };
@@ -376,7 +409,7 @@ const CreatePaper = () => {
         } catch (err) {
             console.error('Failed to auto-save draft to storage:', err);
         }
-    }, [mode, selectedQuestions, paperTitle, assignmentTitle, startQNo, assignmentSettings, selectedExamId, filters, DRAFT_KEY]);
+    }, [mode, selectedQuestions, paperTitle, assignmentTitle, startQNo, assignmentSettings, selectedExamId, currentPaperId, filters, DRAFT_KEY]);
 
     // Clear Draft / Start Fresh Handler
     const handleClearDraft = () => {
@@ -650,14 +683,25 @@ const CreatePaper = () => {
         }
         try {
             showToast('Saving paper to repository...', 'info');
-            await api.post('/api/papers', {
+            const payload = {
                 title: effectiveTitle,
                 subject: subject,
                 classes: filters.class ? [filters.class] : ['12'],
                 questions: selectedQuestions.map(q => q._id || q.id),
                 pattern: (filters.class === '11' || filters.class === '12') ? pattern : [],
                 examId: selectedExamId || undefined
-            });
+            };
+
+            let savedPaper;
+            if (currentPaperId) {
+                const res = await api.put(`/api/papers/${currentPaperId}`, payload);
+                savedPaper = res.data;
+            } else {
+                const res = await api.post('/api/papers', payload);
+                savedPaper = res.data;
+                if (savedPaper?._id) setCurrentPaperId(savedPaper._id);
+            }
+
             try {
                 localStorage.removeItem(DRAFT_KEY);
             } catch {

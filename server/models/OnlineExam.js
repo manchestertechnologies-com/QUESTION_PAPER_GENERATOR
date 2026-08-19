@@ -43,8 +43,14 @@ const OnlineExamSchema = new mongoose.Schema({
         teacherName: String,
         teacherEmail: String,
         targetQuestions: { type: Number, default: 60 },
+        difficultyDistribution: {
+            easy: { type: Number, default: 40 },
+            medium: { type: Number, default: 40 },
+            hard: { type: Number, default: 20 }
+        },
         submittedPaperId: { type: mongoose.Schema.Types.ObjectId, ref: 'Paper' },
-        status: { type: String, enum: ['Pending', 'In Progress', 'Completed'], default: 'Pending' }
+        status: { type: String, enum: ['Not Started', 'In Progress', 'Submitted', 'Completed', 'Pending'], default: 'Not Started' },
+        assignedDate: { type: Date, default: Date.now }
     }],
     classes: [{ type: String }],
     allowedStudents: { type: [String], default: [] },
