@@ -313,15 +313,14 @@ const SubjectDetails = () => {
                                         value={commissionForm.examType}
                                         onChange={e => {
                                             const val = e.target.value;
-                                            const defaultTarget = val === 'JEE' ? 30 : val === 'NEET' ? 50 : 60;
+                                            const defaultTarget = val === 'JEE' ? 30 : val === 'NEET' ? 45 : 60;
                                             setCommissionForm({ ...commissionForm, examType: val, targetPerSubject: defaultTarget });
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
                                     >
-                                        <option value="CET">CET (4 Subjects: Physics, Chemistry, Maths, Biology)</option>
-                                        <option value="NEET">NEET (4 Subjects: Physics, Chemistry, Botany, Zoology)</option>
-                                        <option value="JEE">JEE (3 Subjects: Physics, Chemistry, Mathematics)</option>
-                                        <option value="SINGLE">Single Subject ({subject})</option>
+                                        <option value="CET">CET (4 Subjects: Physics, Chemistry, Maths, Biology - 60 Qs each)</option>
+                                        <option value="NEET">NEET (4 Subjects: Physics, Chemistry, Botany, Zoology - 45 Qs each, 180 Total)</option>
+                                        <option value="JEE">JEE (3 Subjects: Physics, Chemistry, Mathematics - 30 Qs each)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -451,10 +450,10 @@ const SubjectDetails = () => {
                                     let subjectsList = [];
                                     if (isNeet) {
                                         subjectsList = [
-                                            { name: 'Physics', target: 50, icon: '⚛️' },
-                                            { name: 'Chemistry', target: 50, icon: '🧪' },
-                                            { name: 'Botany', target: 50, icon: '🌿' },
-                                            { name: 'Zoology', target: 50, icon: '🐾' }
+                                            { name: 'Physics', target: 45, icon: '⚛️' },
+                                            { name: 'Chemistry', target: 45, icon: '🧪' },
+                                            { name: 'Botany', target: 45, icon: '🌿' },
+                                            { name: 'Zoology', target: 45, icon: '🐾' }
                                         ];
                                     } else if (isCet) {
                                         subjectsList = [
