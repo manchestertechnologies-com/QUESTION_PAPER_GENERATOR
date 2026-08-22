@@ -14,3 +14,13 @@ services:
         sync: false
       - key: BACKEND_URL
         sync: false
+      - key: SUPABASE_URL
+        value: https://gbdtfmutwzgkhkuuxnqr.supabase.co
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: ALLOWED_ORIGINS
+        value: "*"
