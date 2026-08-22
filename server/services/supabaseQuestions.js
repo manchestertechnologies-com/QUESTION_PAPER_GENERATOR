@@ -1,16 +1,45 @@
+const pool = require('../config/postgres');
 const supabase = require('../config/supabase');
 const { sanitizeHtml } = require('../utils/sanitize');
 
 const isTest = process.env.NODE_ENV === 'test';
 const memoryTestQuestions = new Map();
 
+// In-memory cache for subject metadata (5 min TTL)
+const metadataCache = new Map();
+const METADATA_TTL_MS = 5 * 60 * 1000;
+
 /**
- * Maps a Supabase `questions` table record to the frontend/system Question DTO.
+ * Universal tag cleaner to strip all internal difficulty and QPV/QBP metadata tags.
  */
-function mapSupabaseToQuestion(row) {
+function cleanDifficultyTags(text) {
+    if (!text || typeof text !== 'string') return '';
+    // Matches [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], [QPV_...:...]
+    return text
+        .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
+        .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .trim();
+}
+
+/**
+ * Extracts difficulty level ('easy', 'medium', 'hard') from solution or question text.
+ */
+function extractDifficulty(solutionText, questionText) {
+    const diffRegex = /\[(?:QPV_|QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/i;
+    const match = (solutionText || '').match(diffRegex) || (questionText || '').match(diffRegex);
+    if (match && match[1]) {
+        return match[1].toLowerCase();
+    }
+    return 'medium';
+}
+
+/**
+ * Maps a Supabase/Postgres `questions` table record to the frontend/system Question DTO.
+ */
+function mapSupabaseToQuestion(row, usageMap = null) {
     if (!row) return null;
 
-    // Map q_type format: 'mcq_single' / 'mcq' -> 'MCQ', 'numerical' -> 'NUMERICAL', 'assertion_reason' -> 'ASSERTION_REASON'
+    // Map q_type format: 'mcq_single' / 'mcq' -> 'MCQ', 'numerical' -> 'NUMERICAL', etc.
     let type = 'MCQ';
     const qTypeLower = (row.q_type || '').toLowerCase();
     if (qTypeLower.includes('numerical')) {
@@ -19,18 +48,24 @@ function mapSupabaseToQuestion(row) {
         type = 'ASSERTION_REASON';
     } else if (qTypeLower.includes('match')) {
         type = 'MATCH_FOLLOWING';
+    } else if (qTypeLower.includes('statement')) {
+        type = 'STATEMENT_BASED';
+    } else if (qTypeLower.includes('true') || qTypeLower.includes('false')) {
+        type = 'TRUE_FALSE';
     }
 
     // Build options array from opt_a, opt_b, opt_c, opt_d
-    const options = [];
-    if (row.opt_a) options.push(row.opt_a);
-    if (row.opt_b) options.push(row.opt_b);
-    if (row.opt_c) options.push(row.opt_c);
-    if (row.opt_d) options.push(row.opt_d);
+    const rawOptions = [];
+    if (row.opt_a) rawOptions.push(row.opt_a);
+    if (row.opt_b) rawOptions.push(row.opt_b);
+    if (row.opt_c) rawOptions.push(row.opt_c);
+    if (row.opt_d) rawOptions.push(row.opt_d);
+
+    // Sanitize option texts
+    const options = rawOptions.map(cleanDifficultyTags);
 
     // Map answer
     let answer = row.correct_option || row.num_answer || '';
-    // If correct_option is 1, 2, 3, 4 -> map to option text or A, B, C, D
     if (row.correct_option && options.length > 0) {
         const idx = parseInt(row.correct_option) - 1;
         if (idx >= 0 && idx < options.length) {
@@ -48,20 +83,14 @@ function mapSupabaseToQuestion(row) {
     }
     if (classesList.length === 0) classesList.push('JEE', 'NEET');
 
-    // Extract difficulty level from [QBP_DIFFICULTY:Easy] or [DIFFICULTY:Easy] tags
-    let level = 'medium';
-    let cleanSolution = row.solution_text || '';
-    let cleanQuestion = row.question || '';
+    // Extract difficulty level and clean markers
+    const level = extractDifficulty(row.solution_text, row.question);
+    const cleanSolution = cleanDifficultyTags(row.solution_text || '');
+    const cleanQuestion = cleanDifficultyTags(row.question || '');
 
-    const diffRegex = /\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/gi;
-    const match = (row.solution_text || '').match(/\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/i) ||
-                  (row.question || '').match(/\[(?:QBP_)?DIFFICULTY:\s*([A-Za-z]+)\]/i);
-    if (match && match[1]) {
-        level = match[1].toLowerCase();
-    }
-    // Clean internal difficulty tags so they don't appear in user UI or printed papers
-    cleanSolution = cleanSolution.replace(diffRegex, '').trim();
-    cleanQuestion = cleanQuestion.replace(diffRegex, '').trim();
+    // Resolve usage information if available
+    const qIdStr = (row.id || '').toString();
+    const usage = (usageMap && usageMap.get(qIdStr)) || null;
 
     return {
         _id: row.id,
@@ -81,10 +110,10 @@ function mapSupabaseToQuestion(row) {
         correct_option: row.correct_option,
         num_answer: row.num_answer,
         solutionText: cleanSolution,
-        questionTextTranslation: row.question_text_translation || '',
-        optionsTranslation: row.options_translation || [],
-        assertion: row.assertion || '',
-        reason: row.reason || '',
+        questionTextTranslation: cleanDifficultyTags(row.question_text_translation || ''),
+        optionsTranslation: Array.isArray(row.options_translation) ? row.options_translation.map(cleanDifficultyTags) : [],
+        assertion: cleanDifficultyTags(row.assertion || ''),
+        reason: cleanDifficultyTags(row.reason || ''),
         column_a: row.column_a || [],
         column_b: row.column_b || [],
         match_options: row.match_options || {},
@@ -92,7 +121,14 @@ function mapSupabaseToQuestion(row) {
         sourceExam: Array.isArray(row.exams) ? row.exams.join(', ') : '',
         createdBy: row.created_by,
         createdByName: row.created_by_name || 'Admin',
-        createdAt: row.created_at || new Date().toISOString()
+        createdAt: row.created_at || new Date().toISOString(),
+        // Usage history attributes
+        usedCount: usage ? parseInt(usage.used_count) || 0 : 0,
+        lastUsedAt: usage ? usage.last_used_at : null,
+        lastUsedTeacher: usage ? usage.last_teacher_name : '',
+        lastUsedExam: usage ? usage.last_exam_name : '',
+        lastUsedDate: usage ? usage.last_exam_date : null,
+        usageHistory: usage && Array.isArray(usage.usage_history) ? usage.usage_history : []
     };
 }
 
@@ -113,12 +149,11 @@ function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
     }
     if (!Array.isArray(optionsArr)) optionsArr = [];
 
-    const optA = optionsArr[0] || '';
-    const optB = optionsArr[1] || '';
-    const optC = optionsArr[2] || '';
-    const optD = optionsArr[3] || '';
+    const optA = cleanDifficultyTags(optionsArr[0] || '');
+    const optB = cleanDifficultyTags(optionsArr[1] || '');
+    const optC = cleanDifficultyTags(optionsArr[2] || '');
+    const optD = cleanDifficultyTags(optionsArr[3] || '');
 
-    // Deduce correct_option index if answer matches an option
     let correctOpt = '';
     if (optionsArr.length > 0 && dto.answer) {
         const idx = optionsArr.findIndex(opt => opt === dto.answer);
@@ -137,6 +172,11 @@ function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
 
     const validUserId = isUuid(userId) ? userId : null;
 
+    // Append difficulty tag to solution text for database storage preservation
+    const levelTag = dto.level ? `[QBP_DIFFICULTY:${dto.level.charAt(0).toUpperCase() + dto.level.slice(1)}]` : '';
+    const cleanSolution = cleanDifficultyTags(dto.solutionText || '');
+    const solutionWithTag = levelTag ? `${cleanSolution}\n${levelTag}` : cleanSolution;
+
     return {
         subject: dto.subject || 'Physics',
         klass: klassVal,
@@ -144,16 +184,16 @@ function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
         topic: dto.concept || dto.subConcept || 'General',
         exams: examsList,
         q_type: isNumerical ? 'numerical' : 'mcq_single',
-        question: sanitizeHtml(dto.questionText || ''),
+        question: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
         opt_a: sanitizeHtml(optA),
         opt_b: sanitizeHtml(optB),
         opt_c: sanitizeHtml(optC),
         opt_d: sanitizeHtml(optD),
-        assertion: sanitizeHtml(dto.assertion || ''),
-        reason: sanitizeHtml(dto.reason || ''),
+        assertion: sanitizeHtml(cleanDifficultyTags(dto.assertion || '')),
+        reason: sanitizeHtml(cleanDifficultyTags(dto.reason || '')),
         num_answer: isNumerical ? (dto.answer || '') : '',
         correct_option: correctOpt,
-        solution_text: sanitizeHtml(dto.solutionText || ''),
+        solution_text: sanitizeHtml(solutionWithTag),
         created_by: validUserId,
         created_by_name: userName,
         updated_by: validUserId,
@@ -163,72 +203,48 @@ function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Queries
+// Queries & API Methods
 // ─────────────────────────────────────────────────────────────────────────────
 
-function applyFilters(query, filters = {}) {
+/**
+ * Query questions with indexed filters, pagination, and batch usage lookup.
+ */
+async function getQuestions(filters = {}, page = 1, limit = 50) {
+    if (isTest && memoryTestQuestions.size > 0) {
+        let list = Array.from(memoryTestQuestions.values());
+        if (filters.subject) list = list.filter(q => q.subject.toLowerCase() === filters.subject.toLowerCase());
+        return {
+            questions: list,
+            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
+        };
+    }
+
+    const requestedLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    const requestedPage = Math.max(1, Number(page) || 1);
+    const offset = (requestedPage - 1) * requestedLimit;
+
+    const whereClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    // 1. Subject filter
     if (filters.subject) {
         const sub = (filters.subject || '').trim().toLowerCase();
         if (sub.includes('math')) {
-            query = query.in('subject', ['Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS']);
+            whereClauses.push(`q.subject IN ('Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS')`);
         } else if (sub.includes('physic')) {
-            query = query.in('subject', ['Physics', 'PHYSICS']);
+            whereClauses.push(`q.subject IN ('Physics', 'PHYSICS')`);
         } else if (sub.includes('chem')) {
-            query = query.in('subject', ['Chemistry', 'CHEMISTRY']);
+            whereClauses.push(`q.subject IN ('Chemistry', 'CHEMISTRY')`);
         } else if (sub.includes('bio')) {
-            query = query.in('subject', ['Biology', 'BIOLOGY']);
+            whereClauses.push(`q.subject IN ('Biology', 'BIOLOGY')`);
         } else {
-            query = query.ilike('subject', `%${filters.subject}%`);
+            whereClauses.push(`q.subject ILIKE $${paramIndex++}`);
+            values.push(`%${filters.subject}%`);
         }
     }
 
-    if (filters.search) {
-        query = query.ilike('question', `%${filters.search}%`);
-    }
-
-    if (filters.chapter) {
-        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
-        if (chapters.length > 0) {
-            query = query.in('chapter', chapters);
-        }
-    }
-
-    if (filters.concept) {
-        const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
-        if (concepts.length > 0) {
-            query = query.in('topic', concepts);
-        }
-    }
-
-    if (filters.type) {
-        const typeArr = Array.isArray(filters.type) ? filters.type : filters.type.split(',').map(t => t.trim().toLowerCase());
-        const qTypes = [];
-        typeArr.forEach(t => {
-            if (t.includes('numerical')) qTypes.push('numerical');
-            else if (t.includes('assertion')) qTypes.push('assertion_reason', 'assertion');
-            else if (t.includes('match')) qTypes.push('match', 'match_following');
-            else if (t.includes('mcq')) qTypes.push('mcq_single', 'mcq', 'mcq_multiple');
-        });
-        if (qTypes.length > 0) {
-            query = query.in('q_type', [...new Set(qTypes)]);
-        }
-    }
-
-    if (filters.level) {
-        const levelArr = Array.isArray(filters.level) ? filters.level : filters.level.split(',').map(l => l.trim()).filter(Boolean);
-        if (levelArr.length === 1) {
-            const l = levelArr[0].toLowerCase();
-            const cap = l.charAt(0).toUpperCase() + l.slice(1);
-            query = query.or(`solution_text.ilike.%DIFFICULTY:${cap}%,question.ilike.%DIFFICULTY:${cap}%`);
-        } else if (levelArr.length > 1) {
-            const orClauses = levelArr.map(lvl => {
-                const cap = lvl.charAt(0).toUpperCase() + lvl.slice(1).toLowerCase();
-                return `solution_text.ilike.%DIFFICULTY:${cap}%,question.ilike.%DIFFICULTY:${cap}%`;
-            }).join(',');
-            query = query.or(orClauses);
-        }
-    }
-
+    // 2. Class filter
     if (filters.classes) {
         const classesArr = Array.isArray(filters.classes) ? filters.classes : filters.classes.split(',');
         const klassVals = [];
@@ -242,167 +258,242 @@ function applyFilters(query, filters = {}) {
             }
         });
 
-        if (klassVals.length > 0 && examVals.length > 0) {
-            query = query.in('klass', klassVals).overlaps('exams', examVals);
-        } else if (klassVals.length > 0) {
-            query = query.in('klass', klassVals);
-        } else if (examVals.length > 0) {
-            query = query.overlaps('exams', examVals);
+        if (klassVals.length > 0) {
+            whereClauses.push(`q.klass = ANY($${paramIndex++}::text[])`);
+            values.push(klassVals);
+        }
+        if (examVals.length > 0) {
+            whereClauses.push(`q.exams && $${paramIndex++}::text[]`);
+            values.push(examVals);
         }
     }
 
-    return query;
-}
-
-/**
- * Query questions with filters and pagination from Supabase.
- * Supports unlimited / multi-thousand questions by querying in parallel chunks when limit > 1000.
- */
-async function getQuestions(filters = {}, page = 1, limit = 100) {
-    if (isTest && memoryTestQuestions.size > 0) {
-        let list = Array.from(memoryTestQuestions.values());
-        if (filters.subject) list = list.filter(q => q.subject === filters.subject);
-        return {
-            questions: list,
-            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
-        };
+    // 3. Chapter filter
+    if (filters.chapter) {
+        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+        if (chapters.length > 0) {
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(chapters);
+        }
     }
 
-    const CHUNK_SIZE = 1000;
-    const requestedLimit = Math.min(50000, Number(limit) || 100);
-    const requestedPage = Math.max(1, Number(page) || 1);
+    // 4. Topic / Concept filter
+    if (filters.concept) {
+        const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
+        if (concepts.length > 0) {
+            whereClauses.push(`q.topic = ANY($${paramIndex++}::text[])`);
+            values.push(concepts);
+        }
+    }
 
-    // If single chunk (<= 1000)
-    if (requestedLimit <= CHUNK_SIZE) {
-        const from = (requestedPage - 1) * requestedLimit;
-        const to = from + requestedLimit - 1;
+    // 5. Question Type filter
+    if (filters.type) {
+        const typeArr = Array.isArray(filters.type) ? filters.type : filters.type.split(',').map(t => t.trim().toLowerCase());
+        const qTypes = [];
+        typeArr.forEach(t => {
+            if (t.includes('numerical')) qTypes.push('numerical');
+            else if (t.includes('assertion')) qTypes.push('assertion_reason', 'assertion');
+            else if (t.includes('match')) qTypes.push('match', 'match_following');
+            else if (t.includes('mcq')) qTypes.push('mcq_single', 'mcq', 'mcq_multiple');
+        });
+        if (qTypes.length > 0) {
+            whereClauses.push(`q.q_type = ANY($${paramIndex++}::text[])`);
+            values.push([...new Set(qTypes)]);
+        }
+    }
 
-        let query = supabase.from('questions').select('*', { count: 'exact' });
-        query = applyFilters(query, filters);
-        query = query.range(from, to).order('created_at', { ascending: false });
+    // 6. Level / Difficulty filter
+    if (filters.level) {
+        const levelArr = Array.isArray(filters.level) ? filters.level : filters.level.split(',').map(l => l.trim().toLowerCase()).filter(Boolean);
+        if (levelArr.length > 0) {
+            const levelPatterns = levelArr.map(lvl => {
+                const cap = lvl.charAt(0).toUpperCase() + lvl.slice(1).toLowerCase();
+                return `%DIFFICULTY:${cap}%`;
+            });
+            whereClauses.push(`(q.solution_text ILIKE ANY($${paramIndex}::text[]) OR q.question ILIKE ANY($${paramIndex++}::text[]))`);
+            values.push(levelPatterns);
+        }
+    }
 
-        const { data, error, count } = await query;
+    // 7. Search text filter (uses full text search index or ILIKE)
+    if (filters.search && filters.search.trim()) {
+        const searchStr = filters.search.trim();
+        whereClauses.push(`(q.question ILIKE $${paramIndex} OR q.chapter ILIKE $${paramIndex} OR q.topic ILIKE $${paramIndex++})`);
+        values.push(`%${searchStr}%`);
+    }
 
-        if (error) {
-            console.error('[SUPABASE] getQuestions error:', error.message);
-            return { questions: [], pagination: { page: requestedPage, limit: requestedLimit, total: 0, pages: 0 } };
+    // 8. Usage filter (All, Never Used, Used Before)
+    if (filters.usage) {
+        const u = filters.usage.toString().toLowerCase().trim();
+        if (u === 'never_used' || u === 'never') {
+            whereClauses.push(`NOT EXISTS (SELECT 1 FROM public.question_usage qu WHERE qu.question_id = q.id)`);
+        } else if (u === 'used_before' || u === 'used') {
+            whereClauses.push(`EXISTS (SELECT 1 FROM public.question_usage qu WHERE qu.question_id = q.id)`);
+        }
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    try {
+        const queryValues = [...values, requestedLimit, offset];
+        const limitParam = `$${queryValues.length - 1}`;
+        const offsetParam = `$${queryValues.length}`;
+
+        const unifiedSql = `
+            WITH filtered AS (
+                SELECT 
+                    q.id, q.subject, q.klass, q.chapter, q.topic, q.exams,
+                    q.q_type, q.question, q.opt_a, q.opt_b, q.opt_c, q.opt_d,
+                    q.assertion, q.reason, q.correct_option, q.num_answer,
+                    q.solution_text, q.created_by, q.created_by_name, q.created_at,
+                    count(*) OVER() AS full_count
+                FROM public.questions q
+                ${whereSql}
+                ORDER BY q.created_at DESC
+                LIMIT ${limitParam} OFFSET ${offsetParam}
+            )
+            SELECT 
+                f.*,
+                qu_agg.used_count,
+                qu_agg.last_used_at,
+                qu_agg.last_teacher_name,
+                qu_agg.last_exam_name,
+                qu_agg.last_exam_date,
+                qu_agg.usage_history
+            FROM filtered f
+            LEFT JOIN LATERAL (
+                SELECT 
+                    count(*)::bigint AS used_count,
+                    max(qu.used_at) AS last_used_at,
+                    (array_agg(qu.teacher_name ORDER BY qu.used_at DESC))[1] AS last_teacher_name,
+                    (array_agg(qu.exam_name ORDER BY qu.used_at DESC))[1] AS last_exam_name,
+                    (array_agg(qu.exam_date ORDER BY qu.used_at DESC))[1] AS last_exam_date,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'id', qu.id,
+                            'paper_id', qu.paper_id,
+                            'teacher_id', qu.teacher_id,
+                            'teacher_name', qu.teacher_name,
+                            'exam_name', qu.exam_name,
+                            'exam_date', qu.exam_date,
+                            'used_at', qu.used_at
+                        ) ORDER BY qu.used_at DESC
+                    ) AS usage_history
+                FROM public.question_usage qu
+                WHERE qu.question_id = f.id
+            ) qu_agg ON true;
+        `;
+
+        const res = await pool.query(unifiedSql, queryValues);
+        const rows = res.rows;
+
+        if (rows.length === 0) {
+            // Check if there are truly 0 or just beyond offset
+            const countCheck = await pool.query(`SELECT count(*)::bigint as total FROM public.questions q ${whereSql};`, values);
+            const total = parseInt(countCheck.rows[0]?.total || 0, 10);
+            return {
+                questions: [],
+                pagination: { page: requestedPage, limit: requestedLimit, total: total, pages: Math.ceil(total / requestedLimit) }
+            };
         }
 
-        const mappedQuestions = (data || []).map(mapSupabaseToQuestion);
+        const total = parseInt(rows[0].full_count, 10);
+
+        const mappedQuestions = rows.map(r => {
+            const usage = {
+                used_count: r.used_count || 0,
+                last_used_at: r.last_used_at,
+                last_teacher_name: r.last_teacher_name,
+                last_exam_name: r.last_exam_name,
+                last_exam_date: r.last_exam_date,
+                usage_history: r.usage_history || []
+            };
+            const uMap = new Map([[r.id.toString(), usage]]);
+            return mapSupabaseToQuestion(r, uMap);
+        });
 
         return {
             questions: mappedQuestions,
             pagination: {
                 page: requestedPage,
                 limit: requestedLimit,
-                total: count || 0,
-                pages: Math.ceil((count || 0) / requestedLimit)
+                total: total,
+                pages: Math.ceil(total / requestedLimit)
             }
         };
+    } catch (err) {
+        console.error('[POSTGRES] getQuestions error:', err.message);
+        return { questions: [], pagination: { page: requestedPage, limit: requestedLimit, total: 0, pages: 0 } };
     }
-
-    // Multi-chunk fetching for large requests (e.g. 5000, 20000)
-    let initialQuery = supabase.from('questions').select('*', { count: 'exact' });
-    initialQuery = applyFilters(initialQuery, filters);
-    initialQuery = initialQuery.range(0, CHUNK_SIZE - 1).order('created_at', { ascending: false });
-
-    const { data: firstChunk, error: firstErr, count } = await initialQuery;
-    if (firstErr) {
-        console.error('[SUPABASE] getQuestions multi-chunk error:', firstErr.message);
-        return { questions: [], pagination: { page: 1, limit: requestedLimit, total: 0, pages: 0 } };
-    }
-
-    const totalCount = count || 0;
-    const targetCount = Math.min(totalCount, requestedLimit);
-    let allData = [...(firstChunk || [])];
-
-    if (targetCount > CHUNK_SIZE) {
-        const totalChunksNeeded = Math.ceil(targetCount / CHUNK_SIZE);
-        const chunkPromises = [];
-        for (let c = 1; c < totalChunksNeeded; c++) {
-            const from = c * CHUNK_SIZE;
-            const to = Math.min(from + CHUNK_SIZE - 1, targetCount - 1);
-            let chunkQuery = supabase.from('questions').select('*');
-            chunkQuery = applyFilters(chunkQuery, filters);
-            chunkQuery = chunkQuery.range(from, to).order('created_at', { ascending: false });
-            chunkPromises.push(chunkQuery);
-        }
-
-        const chunkResults = await Promise.all(chunkPromises);
-        chunkResults.forEach(res => {
-            if (res.data) allData.push(...res.data);
-        });
-    }
-
-    const mappedQuestions = allData.map(mapSupabaseToQuestion);
-    return {
-        questions: mappedQuestions,
-        pagination: {
-            page: 1,
-            limit: requestedLimit,
-            total: totalCount,
-            pages: Math.ceil(totalCount / requestedLimit)
-        }
-    };
 }
 
+/**
+ * High-speed cached metadata query (zero-egress RPC).
+ */
 async function getSubjectMetadata(subject = '') {
+    const cacheKey = (subject || 'ALL').trim().toLowerCase();
+    const cached = metadataCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < METADATA_TTL_MS)) {
+        return cached.data;
+    }
+
     try {
-        let countQuery = supabase.from('questions').select('*', { count: 'exact', head: true });
-        if (subject) {
-            countQuery = applyFilters(countQuery, { subject });
-        }
-        const { count } = await countQuery;
+        const subParam = subject ? subject.trim() : null;
+        const res = await pool.query(
+            `SELECT public.get_subject_meta($1) as meta;`,
+            [subParam]
+        );
 
-        // Fetch distinct chapters & topics
-        let metaQuery = supabase.from('questions').select('chapter, topic');
-        if (subject) {
-            metaQuery = applyFilters(metaQuery, { subject });
-        }
-
-        const promises = [
-            metaQuery.range(0, 999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(1000, 1999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(2000, 2999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(3000, 3999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(4000, 4999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(5000, 5999),
-            applyFilters(supabase.from('questions').select('chapter, topic'), { subject }).range(6000, 6999)
-        ];
-
-        const metaResults = await Promise.all(promises);
-        let allMeta = [];
-        metaResults.forEach(r => { if (r.data) allMeta.push(...r.data); });
-
-        const chapters = [...new Set(allMeta.map(d => d.chapter).filter(Boolean))].sort();
-        const concepts = [...new Set(allMeta.map(d => d.topic).filter(Boolean))].sort();
-
-        return {
-            total: count || 0,
-            chapters,
-            concepts
+        const meta = res.rows[0]?.meta || { total: 0, chapters: [], concepts: [] };
+        const result = {
+            total: parseInt(meta.total) || 0,
+            chapters: Array.isArray(meta.chapters) ? meta.chapters : [],
+            concepts: Array.isArray(meta.concepts) ? meta.concepts : []
         };
+
+        metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     } catch (err) {
-        console.error('[SUPABASE] getSubjectMetadata error:', err.message);
+        console.error('[POSTGRES] getSubjectMetadata error:', err.message);
         return { total: 0, chapters: [], concepts: [] };
     }
 }
 
+/**
+ * Get a single question by UUID with usage history attached.
+ */
 async function getQuestionById(id) {
     if (isTest && memoryTestQuestions.has(id)) {
         return memoryTestQuestions.get(id);
     }
+    if (!isUuid(id)) return null;
 
-    const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('id', id)
-        .single();
+    try {
+        const res = await pool.query(
+            `SELECT * FROM public.questions WHERE id = $1 LIMIT 1;`,
+            [id]
+        );
+        if (res.rows.length === 0) return null;
 
-    if (error || !data) return null;
-    return mapSupabaseToQuestion(data);
+        const usageRes = await pool.query(
+            `SELECT * FROM public.get_questions_usage($1::uuid[]);`,
+            [[id]]
+        );
+        const usageMap = new Map();
+        if (usageRes.rows.length > 0) {
+            usageMap.set(id.toString(), usageRes.rows[0]);
+        }
+
+        return mapSupabaseToQuestion(res.rows[0], usageMap);
+    } catch (err) {
+        console.error('[POSTGRES] getQuestionById error:', err.message);
+        return null;
+    }
 }
 
+/**
+ * Batch lookup questions by UUIDs with usage history.
+ */
 async function getQuestionsByIds(ids) {
     if (!Array.isArray(ids) || ids.length === 0) return [];
 
@@ -410,17 +501,67 @@ async function getQuestionsByIds(ids) {
         return ids.map(id => memoryTestQuestions.get(id)).filter(Boolean);
     }
 
-    const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .in('id', ids);
+    const validUuids = ids.filter(isUuid);
+    if (validUuids.length === 0) return [];
 
-    if (error) {
-        console.error('[SUPABASE] getQuestionsByIds error:', error.message);
+    try {
+        const res = await pool.query(
+            `SELECT * FROM public.questions WHERE id = ANY($1::uuid[]);`,
+            [validUuids]
+        );
+
+        const usageRes = await pool.query(
+            `SELECT * FROM public.get_questions_usage($1::uuid[]);`,
+            [validUuids]
+        );
+        const usageMap = new Map();
+        usageRes.rows.forEach(u => usageMap.set(u.question_id.toString(), u));
+
+        return res.rows.map(r => mapSupabaseToQuestion(r, usageMap));
+    } catch (err) {
+        console.error('[POSTGRES] getQuestionsByIds error:', err.message);
         return [];
     }
+}
 
-    return (data || []).map(mapSupabaseToQuestion);
+/**
+ * Record usage of questions in a paper / exam.
+ */
+async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName, examName, examDate) {
+    if (!Array.isArray(questionIds) || questionIds.length === 0) return;
+
+    const validUuids = questionIds.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(isUuid);
+    if (validUuids.length === 0) return;
+
+    try {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const insertQuery = `
+                INSERT INTO public.question_usage (
+                    question_id, paper_id, teacher_id, teacher_name, exam_name, exam_date, used_at
+                ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), NOW());
+            `;
+            for (const qId of validUuids) {
+                await client.query(insertQuery, [
+                    qId,
+                    paperId.toString(),
+                    teacherId ? teacherId.toString() : null,
+                    teacherName || 'Faculty',
+                    examName || 'Assessment',
+                    examDate || null
+                ]);
+            }
+            await client.query('COMMIT');
+        } catch (txErr) {
+            await client.query('ROLLBACK');
+            throw txErr;
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('[POSTGRES] recordQuestionUsage error:', err.message);
+    }
 }
 
 async function createQuestion(dto, userId = null, userName = 'Admin') {
@@ -438,10 +579,10 @@ async function createQuestion(dto, userId = null, userName = 'Admin') {
             chapter: dto.chapter || 'General',
             concept: dto.concept || 'General',
             type: dto.type || 'MCQ',
-            questionText: sanitizeHtml(dto.questionText || ''),
-            options: dto.options || [],
+            questionText: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
+            options: (dto.options || []).map(cleanDifficultyTags),
             answer: dto.answer || '',
-            solutionText: sanitizeHtml(dto.solutionText || ''),
+            solutionText: sanitizeHtml(cleanDifficultyTags(dto.solutionText || '')),
             questionTextTranslation: dto.questionTextTranslation || '',
             optionsTranslation: dto.optionsTranslation || [],
             createdBy: userId,
@@ -462,6 +603,8 @@ async function createQuestion(dto, userId = null, userName = 'Admin') {
         throw new Error(error.message);
     }
 
+    // Invalidate cache
+    metadataCache.clear();
     return mapSupabaseToQuestion(data);
 }
 
@@ -514,9 +657,11 @@ module.exports = {
     getQuestionById,
     getQuestionsByIds,
     getSubjectMetadata,
+    recordQuestionUsage,
     createQuestion,
     updateQuestion,
     deleteQuestion,
     mapSupabaseToQuestion,
-    mapQuestionToSupabase
+    mapQuestionToSupabase,
+    cleanDifficultyTags
 };

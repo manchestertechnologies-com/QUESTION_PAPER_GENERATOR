@@ -283,7 +283,7 @@ const CreatePaper = () => {
     const [currentPaperId, setCurrentPaperId] = useState(urlPaperId);
 
     // Filter states
-    const [filters, setFilters] = useState({ class: '', level: [], type: [], chapter: [], concept: [], sourceType: '', sourcePaperId: '' });
+    const [filters, setFilters] = useState({ class: '', level: [], type: [], chapter: [], concept: [], sourceType: '', sourcePaperId: '', usage: '' });
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -490,6 +490,7 @@ const CreatePaper = () => {
         if (filters.concept && filters.concept.length > 0) params.append('concept', filters.concept.join(','));
         if (filters.type && filters.type.length > 0) params.append('type', filters.type.join(','));
         if (filters.level && filters.level.length > 0) params.append('level', filters.level.join(','));
+        if (filters.usage) params.append('usage', filters.usage);
 
         return params.toString();
     }, [debouncedSearch, filters]);
@@ -707,8 +708,8 @@ const CreatePaper = () => {
             } catch {
                 // ignore
             }
-            showToast('✓ Paper successfully saved & synced to repository!', 'success');
-            setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1200);
+            showToast('✓ Work submitted successfully. The Admin has been notified for review.', 'success');
+            setTimeout(() => navigate('/teacher/dashboard/saved-papers'), 1500);
         } catch (err) {
             console.error('Save paper error:', err);
             showToast('Failed to save paper. Please try again.', 'error');
@@ -973,6 +974,18 @@ const CreatePaper = () => {
                     onChange={vals => setFilters(f => ({ ...f, concept: vals }))} 
                     disabled={filters.chapter.length === 0 && uniqueConcepts.length === 0}
                 />
+
+                {/* Usage Filter */}
+                <div className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-2">Usage</div>
+                <select
+                    value={filters.usage || ''}
+                    onChange={e => setFilters(f => ({ ...f, usage: e.target.value }))}
+                    className="border border-gray-300 p-2 rounded-lg text-sm text-gray-700 bg-white focus:border-blue-500 outline-none shadow-sm cursor-pointer font-semibold"
+                >
+                    <option value="">All Usage</option>
+                    <option value="never_used">🟢 Never Used</option>
+                    <option value="used_before">🟡 Used Before</option>
+                </select>
             </div>
 
             {/* ── Three Columns Workspace ── */}
@@ -1040,7 +1053,8 @@ const CreatePaper = () => {
                                         onClick={() => setPreviewQuestion(q)}
                                         className={`border p-3.5 rounded-xl cursor-pointer transition flex items-start gap-3 ${isSelected ? 'border-blue-400 bg-blue-50/60 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                                     >
-                                        <div className="mt-1">
+                                        {/* Left Side: Checkbox + Usage Badge */}
+                                        <div className="mt-1 flex flex-col items-center gap-1.5 flex-shrink-0">
                                             <input
                                                 type="checkbox"
                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
@@ -1051,7 +1065,28 @@ const CreatePaper = () => {
                                                     else handleDeselect(qId);
                                                 }}
                                             />
+                                            {q.usedCount > 0 ? (
+                                                <div
+                                                    className="flex flex-col items-center text-center px-1 py-1 bg-amber-50 border border-amber-200 rounded-lg w-[68px] shadow-xs"
+                                                    title={`Used by ${q.lastUsedTeacher || 'Faculty'} in ${q.lastUsedExam || 'Exam'} (${q.lastUsedDate ? new Date(q.lastUsedDate).toLocaleDateString() : 'Previous Exam'})`}
+                                                >
+                                                    <span className="text-[7.5px] font-black text-amber-800 uppercase tracking-tight leading-none">
+                                                        {q.usedCount > 1 ? `USED ${q.usedCount}X` : 'USED BEFORE'}
+                                                    </span>
+                                                    <span className="text-[7px] text-amber-700 font-bold truncate max-w-[62px] mt-0.5">
+                                                        {q.lastUsedTeacher || 'Faculty'}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center text-center px-1 py-1 bg-emerald-50 border border-emerald-200 rounded-lg w-[68px]">
+                                                    <span className="text-[7px] font-black text-emerald-700 uppercase tracking-tight leading-none">
+                                                        NEVER USED
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
+
+                                        {/* Right Side: Question Info & Text */}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex flex-wrap gap-1.5 mb-2">
                                                 <span className="font-semibold text-[9px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100">
@@ -1157,6 +1192,49 @@ const CreatePaper = () => {
                                         <MathRenderer text={previewQuestion.solutionText} />
                                     </div>
                                 )}
+
+                                {/* Question Usage History Panel */}
+                                <div className="mt-4 p-4 rounded-2xl border bg-gray-50/90 border-gray-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-navy flex items-center gap-1.5">
+                                            <span>📋</span> Usage History
+                                        </span>
+                                        {previewQuestion.usedCount > 0 ? (
+                                            <span className="text-[10px] font-black px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full border border-amber-300 uppercase tracking-wider">
+                                                Used {previewQuestion.usedCount} Time{previewQuestion.usedCount > 1 ? 's' : ''}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-black px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-300 uppercase tracking-wider">
+                                                Never Used Before
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {previewQuestion.usedCount > 0 ? (
+                                        <div className="space-y-2 mt-2">
+                                            {(previewQuestion.usageHistory && previewQuestion.usageHistory.length > 0 ? previewQuestion.usageHistory : [{
+                                                teacher_name: previewQuestion.lastUsedTeacher,
+                                                exam_name: previewQuestion.lastUsedExam,
+                                                exam_date: previewQuestion.lastUsedDate
+                                            }]).map((u, uIdx) => (
+                                                <div key={uIdx} className="text-xs bg-white p-2.5 rounded-xl border border-gray-200 flex justify-between items-center shadow-xs">
+                                                    <div>
+                                                        <span className="font-bold text-navy">{u.teacher_name || 'Faculty'}</span>
+                                                        <span className="text-gray-400 mx-1.5">•</span>
+                                                        <span className="text-gray-700 font-medium">{u.exam_name || 'Assessment Paper'}</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-md">
+                                                        {u.exam_date ? new Date(u.exam_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-gray-500 font-medium italic mt-1">
+                                            This question has never been included in any previous exams or papers.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         ) : (
                             <div className="flex-1 flex flex-col items-center justify-center text-gray-300">

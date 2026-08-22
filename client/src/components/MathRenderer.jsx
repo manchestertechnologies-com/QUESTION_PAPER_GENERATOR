@@ -45,7 +45,11 @@ const KATEX_CONFIG = {
 function processText(text, inline = false) {
     if (!text || typeof text !== 'string') return '';
 
-    let result = text;
+    // 0) Strip internal QPV / QBP / DIFFICULTY tags
+    let result = text
+        .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
+        .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .trim();
 
     // 1) Handle {{IMG::...}} image blocks with clean proportional sizing
     result = result.replace(/\{\{IMG::(.*?)\}\}/gi, (_match, src) => {

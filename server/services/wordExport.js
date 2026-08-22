@@ -1,23 +1,32 @@
 const { Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, Table, TableRow, TableCell, WidthType, BorderStyle } = require('docx');
 const { getMathPng } = require('../utils/mathToImage');
-const axios = require('axios');
-
 async function getLogoBuffer(url) {
     if (!url) return null;
     try {
-        const response = await axios.get(url, { responseType: 'arraybuffer' });
-        return Buffer.from(response.data);
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
     } catch (err) {
         console.error('Failed to download logo:', err.message);
         return null;
     }
 }
 
+function cleanDifficultyTags(text) {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
+        .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .trim();
+}
+
 /**
  * Split a string by mathematical delimiters and return an array of Runs.
  * LaTeX blocks ($$, $, \[, \() are rendered as PNGs using Puppeteer.
  */
-async function textToRuns(text) {
+async function textToRuns(rawText) {
+    if (!rawText) return [];
+    const text = cleanDifficultyTags(rawText);
     if (!text) return [];
     
     // Match inline and block LaTeX segments

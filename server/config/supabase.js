@@ -3,10 +3,13 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const DEFAULT_KEY = ['sb_secret_', 'Ve7IiXGrul0pgirtKFkg1w_YsyWEFyF'].join('');
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vznhcbwrssbqvnihysys.supabase.co';
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || DEFAULT_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+    console.warn('⚠️ SUPABASE_URL or SUPABASE_SECRET_KEY environment variable is not defined.');
+}
+
+const supabase = createClient(SUPABASE_URL || '', SUPABASE_SECRET_KEY || '');
 
 module.exports = supabase;

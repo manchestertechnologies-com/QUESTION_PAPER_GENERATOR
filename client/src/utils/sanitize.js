@@ -51,12 +51,16 @@ export function optionLabel(idx, classes = []) {
 }
 
 /**
- * Strips QBP metadata tags from solution/answer text before display.
- * Removes patterns like [QBP_DIFFICULTY:Medium], [QBP_TOPIC:...], etc.
+ * Strips QPV, QBP, and internal metadata difficulty tags before display.
+ * Removes patterns like [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], etc.
  * @param {string} text
  * @returns {string}
  */
 export function stripQBPTags(text) {
-    if (!text || typeof text !== 'string') return text;
-    return text.replace(/\[QBP_[A-Z_]+:[^\]]*\]/gi, '').trim();
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
+        .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .trim();
 }
+

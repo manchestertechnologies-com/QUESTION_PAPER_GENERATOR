@@ -4,6 +4,46 @@ const Paper = require('../models/Paper');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const supabaseQuestions = require('../services/supabaseQuestions');
+const { createNotification } = require('./notifications');
+
+// Helper to record question usage and notify admin
+async function handlePaperFinalization(paper, user, exam = null) {
+    try {
+        const qList = Array.isArray(paper.questions) ? paper.questions : [];
+        if (qList.length > 0) {
+            const examTitle = exam ? exam.title : (paper.title || 'Question Paper');
+            const examDate = (exam && exam.examDate) ? new Date(exam.examDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+            await supabaseQuestions.recordQuestionUsage(
+                qList,
+                paper._id.toString(),
+                user.id,
+                user.name || 'Faculty',
+                examTitle,
+                examDate
+            );
+        }
+
+        if (user && user.role === 'teacher') {
+            await createNotification({
+                recipient_role: 'admin',
+                sender_id: user.id,
+                sender_name: user.name || 'Faculty',
+                related_paper_id: paper._id.toString(),
+                type: 'paper_submission',
+                title: 'New Work Submitted for Review',
+                message: `Teacher ${user.name || 'Faculty'} submitted ${paper.title || 'Question Paper'} for review.`,
+                metadata: {
+                    subject: paper.subject,
+                    questionsCount: qList.length,
+                    examTitle: exam ? exam.title : paper.title,
+                    submittedAt: new Date().toISOString()
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error in handlePaperFinalization:', e.message);
+    }
+}
 
 // Helper to populate paper questions from Supabase if stored as IDs
 async function populatePaperQuestions(paper) {
@@ -74,6 +114,9 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
                 await exam.save();
             }
         }
+
+        // Record question usage & notify admin
+        await handlePaperFinalization(paper, req.user, exam);
 
         res.json(paper);
     } catch (err) {
@@ -223,6 +266,9 @@ router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
                 }
             }
         }
+
+        // Record question usage & notify admin
+        await handlePaperFinalization(paper, req.user);
 
         const populated = await populatePaperQuestions(paper);
         res.json(populated);
