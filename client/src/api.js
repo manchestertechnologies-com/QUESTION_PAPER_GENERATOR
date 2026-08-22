@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // ── Base URL Configuration ──────────────────────────────────────────────────
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://qpg-backend-5h72.onrender.com');
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '' : 'https://question-paper-generator-yy53.onrender.com');
 
 const api = axios.create({
     baseURL: API_URL,
