@@ -50,8 +50,15 @@ const DashboardHome = () => {
         }
     });
 
-    // Expanded / Selected Exam state (null = show all exams list, string ID = show detailed 3/4 subject progress boxes)
-    const [expandedExamId, setExpandedExamId] = useState(null);
+    // Active selected exam ID (defaults to first exam when loaded)
+    const [selectedExamId, setSelectedExamId] = useState(null);
+
+    // Automatically set default selected exam when list loads
+    useEffect(() => {
+        if (commissionedExams.length > 0 && !selectedExamId) {
+            setSelectedExamId(commissionedExams[0]._id);
+        }
+    }, [commissionedExams, selectedExamId]);
 
     // View Full Paper / Exam Preview Modal
     const [selectedViewExam, setSelectedViewExam] = useState(null);
@@ -65,7 +72,11 @@ const DashboardHome = () => {
                 api.get('/api/exams/commissioned')
             ]);
             setAllTeachers(teachersRes.data || []);
-            setCommissionedExams(examsRes.data || []);
+            const examsList = examsRes.data || [];
+            setCommissionedExams(examsList);
+            if (examsList.length > 0) {
+                setSelectedExamId(prev => (prev && examsList.some(e => e._id === prev) ? prev : examsList[0]._id));
+            }
             setLoading(false);
         } catch (err) {
             console.error('Error fetching admin dashboard data:', err);
@@ -110,7 +121,7 @@ const DashboardHome = () => {
                 };
             });
 
-            await api.post('/api/exams/commission', {
+            const res = await api.post('/api/exams/commission', {
                 title: commissionForm.title,
                 examType: commissionForm.examType,
                 classes: commissionForm.classes,
@@ -127,6 +138,7 @@ const DashboardHome = () => {
                 targetPerSubject: 60,
                 assignedTeachers: {}
             });
+            if (res.data?._id) setSelectedExamId(res.data._id);
             fetchData();
         } catch (err) {
             console.error(err);
@@ -138,7 +150,7 @@ const DashboardHome = () => {
         if (window.confirm('Are you sure you want to delete this exam? This will remove all associated submissions.')) {
             try {
                 await api.delete(`/api/exams/${examId}`);
-                if (expandedExamId === examId) setExpandedExamId(null);
+                setSelectedExamId(null);
                 fetchData();
             } catch (err) {
                 console.error(err);
@@ -147,7 +159,7 @@ const DashboardHome = () => {
         }
     };
 
-    const selectedExamObj = commissionedExams.find(e => e._id === expandedExamId);
+    const activeExam = commissionedExams.find(e => e._id === selectedExamId) || commissionedExams[0];
 
     return (
         <div className="animate-fade-in-up space-y-10">
@@ -171,34 +183,32 @@ const DashboardHome = () => {
                 </div>
             </div>
 
-            {/* ── SECTION 1: LIVE EXAM MANAGEMENT & PROGRESS BARS ── */}
-            <div className="space-y-6">
-                <div className="flex items-center justify-between">
+            {/* ── SECTION 1: SINGLE UNIFIED EXAMS CARD (LIST & 3/4 SUBJECT PROGRESS BOXES INSIDE) ── */}
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-200 relative overflow-hidden space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
                     <div className="flex items-center gap-3">
                         <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
                         <h2 className="text-sm font-black text-navy uppercase tracking-[0.2em]">
-                            {expandedExamId ? 'Exam Department Progress Breakdown' : 'Active Examinations List'}
+                            EXAMS & DEPARTMENT PROGRESS
                         </h2>
                     </div>
                     <div className="flex items-center gap-3">
-                        {expandedExamId && (
-                            <button
-                                onClick={() => setExpandedExamId(null)}
-                                className="bg-gray-100 hover:bg-gray-200 text-navy px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer"
-                            >
-                                ← Back to All Exams ({commissionedExams.length})
-                            </button>
-                        )}
                         <span className="text-xs font-bold text-slate/40">{commissionedExams.length} Commissioned Assessments</span>
+                        <button
+                            onClick={() => setShowCommissionModal(true)}
+                            className="bg-gold text-navy px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow-sm cursor-pointer"
+                        >
+                            + New Exam
+                        </button>
                     </div>
                 </div>
 
                 {loading ? (
-                    <div className="bg-white p-12 rounded-3xl border border-gray-100 text-center text-slate/40 font-bold text-sm">
+                    <div className="p-12 text-center text-slate/40 font-bold text-sm">
                         Loading exam progress...
                     </div>
                 ) : commissionedExams.length === 0 ? (
-                    <div className="bg-white p-12 rounded-[2.5rem] border-2 border-dashed border-gray-200 text-center">
+                    <div className="p-12 border-2 border-dashed border-gray-200 rounded-[2rem] text-center">
                         <div className="w-16 h-16 bg-navy/5 text-navy rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4 font-black">🎓</div>
                         <h4 className="font-black text-navy text-lg mb-1">No Commissioned Exams Yet</h4>
                         <p className="text-xs text-gray-500 max-w-md mx-auto mb-6">Create your first exam (e.g. CET MOCK 1) and delegate question targets to PCMB faculty.</p>
@@ -209,11 +219,47 @@ const DashboardHome = () => {
                             + Create Exam
                         </button>
                     </div>
-                ) : expandedExamId && selectedExamObj ? (
-                    /* ── DETAILED VIEW FOR SELECTED EXAM (SHOWS ALL 3 OR 4 PCMB BOXES) ── */
-                    <div className="space-y-6 animate-fade-in">
-                        {(() => {
-                            const exam = selectedExamObj;
+                ) : (
+                    <div className="space-y-6">
+                        {/* ── EXAM SELECTOR TABS (CLICK TO SWITCH BETWEEN EXAMS) ── */}
+                        <div className="flex items-center gap-3 overflow-x-auto pb-2 border-b border-gray-100">
+                            <span className="text-xs font-black text-navy uppercase tracking-wider whitespace-nowrap mr-1">
+                                Select Exam:
+                            </span>
+                            {commissionedExams.map((exam) => {
+                                const isSelected = (activeExam?._id === exam._id);
+                                const subAssignments = exam.subjectAssignments || [];
+                                const totalTarget = subAssignments.reduce((sum, sa) => sum + (sa.targetQuestions || 60), 0);
+                                const totalAdded = exam.totalQuestionsAdded !== undefined
+                                    ? exam.totalQuestionsAdded
+                                    : subAssignments.reduce((sum, sa) => sum + (sa.questionsCount || (sa.submittedPaperId?.questions?.length || 0)), 0);
+                                const overallPct = totalTarget > 0 ? Math.min(100, Math.round((totalAdded / totalTarget) * 100)) : 0;
+
+                                return (
+                                    <button
+                                        key={exam._id}
+                                        onClick={() => setSelectedExamId(exam._id)}
+                                        className={`px-4 py-2.5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center gap-2.5 whitespace-nowrap cursor-pointer ${
+                                            isSelected
+                                                ? 'bg-navy text-gold shadow-md scale-105 border-2 border-gold'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                                        }`}
+                                    >
+                                        <span className="w-2 h-2 rounded-full bg-gold"></span>
+                                        <span>{exam.title}</span>
+                                        <span className={`text-[9px] px-2 py-0.5 rounded-md font-black ${
+                                            isSelected ? 'bg-white/20 text-white' : 'bg-white text-navy'
+                                        }`}>
+                                            {overallPct}%
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* ── ACTIVE EXAM DETAILS & 3/4 PCMB SUBJECT PROGRESS BOXES ── */}
+                        {activeExam && (() => {
+                            const exam = activeExam;
                             const subAssignments = exam.subjectAssignments || [];
                             const totalTarget = subAssignments.reduce((sum, sa) => sum + (sa.targetQuestions || 60), 0);
                             const totalAdded = exam.totalQuestionsAdded !== undefined
@@ -222,24 +268,16 @@ const DashboardHome = () => {
                             const overallPct = totalTarget > 0 ? Math.min(100, Math.round((totalAdded / totalTarget) * 100)) : 0;
 
                             return (
-                                <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border-2 border-navy/20 relative overflow-hidden space-y-6">
-                                    <div className="absolute top-0 right-0 w-40 h-40 bg-navy/[0.02] rounded-full -mr-20 -mt-20 pointer-events-none"></div>
-
-                                    {/* Exam Card Top Header */}
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+                                <div className="space-y-6 animate-fade-in pt-2">
+                                    {/* Active Exam Header Banner */}
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                                         <div>
                                             <div className="flex items-center gap-3 mb-1.5 flex-wrap">
-                                                <button
-                                                    onClick={() => setExpandedExamId(null)}
-                                                    className="bg-gray-100 hover:bg-gray-200 text-navy px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition cursor-pointer"
-                                                >
-                                                    ← All Exams
-                                                </button>
                                                 <span className="bg-navy text-gold text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg shadow-sm">
                                                     {exam.examType || 'CET'}
                                                 </span>
                                                 <h3 className="font-black text-2xl text-navy uppercase tracking-tight">{exam.title}</h3>
-                                                <span className="text-[10px] font-bold text-slate/50 bg-gray-100 px-2.5 py-1 rounded-md">
+                                                <span className="text-[10px] font-bold text-slate/50 bg-white px-2.5 py-1 rounded-md border border-gray-200">
                                                     Class {exam.classes?.join(', ') || '12'}
                                                 </span>
                                             </div>
@@ -248,7 +286,7 @@ const DashboardHome = () => {
                                             </p>
                                         </div>
 
-                                        {/* Header Controls */}
+                                        {/* Action Controls */}
                                         <div className="flex items-center gap-3 flex-wrap">
                                             <button
                                                 onClick={() => setSelectedViewExam(exam)}
@@ -267,12 +305,12 @@ const DashboardHome = () => {
                                                 className="bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white px-3.5 py-2.5 rounded-xl font-black text-xs transition shadow-sm cursor-pointer"
                                                 title="Delete this exam"
                                             >
-                                                ✕
+                                                ✕ Delete
                                             </button>
                                         </div>
                                     </div>
 
-                                    {/* Overall Progress Bar Header */}
+                                    {/* Overall Assessment Progress Bar */}
                                     <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
                                         <div className="flex justify-between items-center text-xs font-black text-navy mb-2">
                                             <span>Overall Assessment Compilation Progress</span>
@@ -286,7 +324,7 @@ const DashboardHome = () => {
                                         </div>
                                     </div>
 
-                                    {/* PCMB Multi-Subject Grid (3 or 4 Subject Boxes) */}
+                                    {/* ── 3 OR 4 PCMB SUBJECT PROGRESS BOXES (INSIDE EXAM) ── */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                                         {subAssignments.map((sa, idx) => {
                                             const subName = sa.subject;
@@ -352,92 +390,6 @@ const DashboardHome = () => {
                                 </div>
                             );
                         })()}
-                    </div>
-                ) : (
-                    /* ── EXAMS LIST (CLEAN OVERVIEW LIST OF ALL EXAMS) ── */
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
-                        {commissionedExams.map((exam) => {
-                            const subAssignments = exam.subjectAssignments || [];
-                            const totalTarget = subAssignments.reduce((sum, sa) => sum + (sa.targetQuestions || 60), 0);
-                            const totalAdded = exam.totalQuestionsAdded !== undefined
-                                ? exam.totalQuestionsAdded
-                                : subAssignments.reduce((sum, sa) => sum + (sa.questionsCount || (sa.submittedPaperId?.questions?.length || 0)), 0);
-                            const overallPct = totalTarget > 0 ? Math.min(100, Math.round((totalAdded / totalTarget) * 100)) : 0;
-
-                            return (
-                                <div
-                                    key={exam._id}
-                                    className="bg-white p-6 rounded-3xl shadow-sm border-2 border-gray-200 hover:border-navy/50 hover:shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
-                                >
-                                    <div>
-                                        <div className="flex justify-between items-start mb-3">
-                                            <span className="bg-navy text-gold text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg">
-                                                {exam.examType || 'CET'}
-                                            </span>
-                                            <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                                                overallPct >= 100 ? 'bg-emerald-100 text-emerald-800' : overallPct > 0 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                                            }`}>
-                                                {overallPct >= 100 ? 'Completed' : overallPct > 0 ? 'In Progress' : 'Pending'}
-                                            </span>
-                                        </div>
-
-                                        <h3 className="font-black text-xl text-navy uppercase tracking-tight mb-1 group-hover:text-gold transition">
-                                            {exam.title}
-                                        </h3>
-                                        <p className="text-[11px] text-gray-500 font-semibold mb-4">
-                                            Class {exam.classes?.join(', ') || '12'} • {subAssignments.length} Departments Delegated
-                                        </p>
-
-                                        {/* Progress Bar */}
-                                        <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl mb-4">
-                                            <div className="flex justify-between text-xs font-black text-navy mb-1.5">
-                                                <span>Compiled</span>
-                                                <span>{totalAdded} / {totalTarget} Qs ({overallPct}%)</span>
-                                            </div>
-                                            <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden p-0.5 shadow-inner">
-                                                <div
-                                                    style={{ width: `${overallPct}%` }}
-                                                    className={`h-full rounded-full transition-all duration-500 ${
-                                                        overallPct >= 100 ? 'bg-emerald-500' : overallPct >= 50 ? 'bg-blue-600' : 'bg-amber-500'
-                                                    }`}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Card Action Footer */}
-                                    <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
-                                        <button
-                                            onClick={() => setExpandedExamId(exam._id)}
-                                            className="w-full bg-navy text-gold hover:bg-gold hover:text-navy py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span>📊 View Department Progress ({subAssignments.length} Boxes)</span>
-                                            <span>→</span>
-                                        </button>
-                                        <div className="flex items-center justify-between gap-2 pt-1">
-                                            <button
-                                                onClick={() => setSelectedViewExam(exam)}
-                                                className="text-[11px] font-bold text-navy hover:underline"
-                                            >
-                                                👁 Full Paper
-                                            </button>
-                                            <button
-                                                onClick={() => setSelectedAnalysisExam(exam)}
-                                                className="text-[11px] font-bold text-gold hover:underline"
-                                            >
-                                                📊 Analysis
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteExam(exam._id)}
-                                                className="text-[11px] font-bold text-rose-500 hover:underline"
-                                            >
-                                                ✕ Delete
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
                     </div>
                 )}
             </div>
