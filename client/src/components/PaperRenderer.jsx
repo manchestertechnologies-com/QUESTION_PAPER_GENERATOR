@@ -1,20 +1,17 @@
 /**
  * PaperRenderer.jsx
  *
- * The central layout engine for question papers and assignments.
- * Shared between SavedPapers, AssignmentGenerator, and AdminPaperPreview.
+ * Professional Unified A4 Layout & Preview System
  *
- * Features:
- *  - Proper 2-column layout using explicit flex divs (not CSS column-count)
- *  - No text overflow — word-break + overflow-wrap everywhere
- *  - Smart question distribution across columns
- *  - All question types via QuestionBlock
- *  - Configurable start/end question numbers
- *  - Marks OFF by default
- *  - Full customization panel (font, size, spacing, columns, margins, visibility)
- *  - Print CSS for clean A4 PDF via window.print()
+ * Requirements fulfilled:
+ * - True A4 Paper Rendering with discrete Page-by-Page pagination
+ * - Intelligent Diagram Placement & Spacing via QuestionBlock & A4PaperEngine
+ * - Preview Mode with Page Navigation (Page X of Y, Prev, Next, Zoom, Fit-to-screen)
+ * - Separate Alignment Step / Panel (not shown prematurely on create screen)
+ * - 100% fidelity match between Preview and PDF print
  */
 import React, { useState, useMemo } from 'react';
+import A4PaperEngine, { paginateQuestions } from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
 import { optionLabel } from '../utils/sanitize';
 
@@ -50,15 +47,15 @@ export function calcTotal(questions = [], classes = []) {
 const DEFAULT_SETTINGS = {
     fontFamily: 'Georgia, "Times New Roman", serif',
     fontSize: '13px',
-    lineHeight: '1.5',
+    lineHeight: '1.45',
     columns: 1,
-    columnGap: '28px',
-    showMarks: false,         // OFF by default per requirements
+    columnGap: '24px',
+    showMarks: false,
     showAnswerKey: false,
     showDifficulty: false,
-    showCoverPage: true,      // Page 1 standard instructions cover
+    showCoverPage: true,
     startQNo: 1,
-    endQNo: null,             // null = use all questions
+    endQNo: null,
     pageSize: 'A4',
     orientation: 'portrait',
     marginTop: '15mm',
@@ -66,16 +63,14 @@ const DEFAULT_SETTINGS = {
     marginLeft: '18mm',
     marginRight: '18mm',
     questionSpacing: '14px',
-    optionSpacing: '3px',
-    paragraphSpacing: '6px',
-    diagramMaxHeight: '170px',
-    diagramMaxWidthPct: 90,
+    optionSpacing: '4px',
+    diagramMaxHeight: '150px',
 };
 
-// ─── Settings Panel ───────────────────────────────────────────────────────────
-const labelStyle = { fontSize: '11px', fontWeight: 700, color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' };
-const selectStyle = { height: '32px', padding: '0 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#374151', fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%' };
-const inputStyle = { height: '32px', padding: '0 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#fff', color: '#374151', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box' };
+// ─── Settings / Alignment Panel ───────────────────────────────────────────────
+const labelStyle = { fontSize: '11px', fontWeight: 800, color: '#001f6d', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' };
+const selectStyle = { height: '34px', padding: '0 10px', fontSize: '12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', background: '#fff', color: '#1e293b', fontFamily: 'inherit', cursor: 'pointer', outline: 'none', width: '100%', fontWeight: 600 };
+const inputStyle = { height: '34px', padding: '0 10px', fontSize: '12px', borderRadius: '8px', border: '1.5px solid #cbd5e1', background: '#fff', color: '#1e293b', fontFamily: 'inherit', outline: 'none', width: '100%', boxSizing: 'border-box', fontWeight: 600 };
 
 function SettingField({ label, children }) {
     return (
@@ -91,140 +86,97 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
     const endMax = settings.startQNo + totalQuestions - 1;
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '14px', padding: '16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-
-            {/* ── Numbering ── */}
-            <div style={{ gridColumn: '1 / -1', fontSize: '10px', fontWeight: 800, color: '#001f6d', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px' }}>
-                📐 Numbering
+        <div className="bg-white p-6 rounded-2xl border-2 border-navy/20 shadow-md mb-6 animate-fade-in no-print">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-gray-200">
+                <div className="flex items-center gap-2">
+                    <span className="text-base font-black text-gold">⚙️</span>
+                    <h3 className="font-black text-sm text-navy uppercase tracking-wider">Paper Alignment & Layout Controls</h3>
+                </div>
+                <span className="text-[11px] font-bold text-gray-500">Fine-tune spacing, typography, and page setup</span>
             </div>
-            <SettingField label="Start Q. No">
-                <input type="number" min={1} style={inputStyle} value={settings.startQNo}
-                    onChange={e => {
-                        const v = Math.max(1, parseInt(e.target.value) || 1);
-                        update('startQNo', v);
-                    }} />
-            </SettingField>
-            <SettingField label={`End Q. No (max ${endMax})`}>
-                <input type="number" min={settings.startQNo} style={inputStyle}
-                    value={settings.endQNo ?? endMax}
-                    onChange={e => {
-                        const v = parseInt(e.target.value) || endMax;
-                        update('endQNo', Math.max(settings.startQNo, Math.min(v, endMax)));
-                    }} />
-            </SettingField>
 
-            {/* ── Layout ── */}
-            <div style={{ gridColumn: '1 / -1', fontSize: '10px', fontWeight: 800, color: '#001f6d', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginTop: '6px' }}>
-                📄 Layout
-            </div>
-            <SettingField label="Columns">
-                <select style={selectStyle} value={settings.columns} onChange={e => update('columns', parseInt(e.target.value))}>
-                    <option value={1}>Single Column</option>
-                    <option value={2}>Two Columns</option>
-                </select>
-            </SettingField>
-            <SettingField label="Cover Page">
-                <select style={selectStyle} value={settings.showCoverPage !== false ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
-                    <option value="yes">Page 1 Instructions</option>
-                    <option value="no">Skip Cover Page</option>
-                </select>
-            </SettingField>
-            <SettingField label="Page Size">
-                <select style={selectStyle} value={settings.pageSize} onChange={e => update('pageSize', e.target.value)}>
-                    <option value="A4">A4</option>
-                    <option value="A3">A3</option>
-                    <option value="letter">US Letter</option>
-                </select>
-            </SettingField>
-            <SettingField label="Orientation">
-                <select style={selectStyle} value={settings.orientation} onChange={e => update('orientation', e.target.value)}>
-                    <option value="portrait">Portrait</option>
-                    <option value="landscape">Landscape</option>
-                </select>
-            </SettingField>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '14px' }}>
+                {/* ── Spacing & Layout ── */}
+                <SettingField label="Question Spacing">
+                    <select style={selectStyle} value={settings.questionSpacing} onChange={e => update('questionSpacing', e.target.value)}>
+                        <option value="10px">Compact (10px)</option>
+                        <option value="14px">Standard (14px)</option>
+                        <option value="18px">Relaxed (18px)</option>
+                        <option value="24px">Wide (24px)</option>
+                    </select>
+                </SettingField>
 
-            {/* ── Font ── */}
-            <div style={{ gridColumn: '1 / -1', fontSize: '10px', fontWeight: 800, color: '#001f6d', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginTop: '6px' }}>
-                🔤 Font
-            </div>
-            <SettingField label="Font Style">
-                <select style={selectStyle} value={settings.fontFamily} onChange={e => update('fontFamily', e.target.value)}>
-                    <option value='Georgia, "Times New Roman", serif'>Georgia (Classic)</option>
-                    <option value='"Times New Roman", Times, serif'>Times New Roman</option>
-                    <option value='Cambria, Georgia, serif'>Cambria</option>
-                    <option value='Calibri, Candara, Segoe, sans-serif'>Calibri</option>
-                    <option value='Arial, Helvetica, sans-serif'>Arial</option>
-                    <option value="'Inter', system-ui, sans-serif">Inter (Modern)</option>
-                </select>
-            </SettingField>
-            <SettingField label="Font Size">
-                <select style={selectStyle} value={settings.fontSize} onChange={e => update('fontSize', e.target.value)}>
-                    <option value="11px">Small (11px)</option>
-                    <option value="12px">Compact (12px)</option>
-                    <option value="13px">Standard (13px)</option>
-                    <option value="14px">Large (14px)</option>
-                    <option value="15px">X-Large (15px)</option>
-                </select>
-            </SettingField>
-            <SettingField label="Line Spacing">
-                <select style={selectStyle} value={settings.lineHeight} onChange={e => update('lineHeight', e.target.value)}>
-                    <option value="1.2">Compact (1.2)</option>
-                    <option value="1.4">Tight (1.4)</option>
-                    <option value="1.5">Standard (1.5)</option>
-                    <option value="1.8">Relaxed (1.8)</option>
-                    <option value="2.0">Double (2.0)</option>
-                </select>
-            </SettingField>
-            <SettingField label="Q. Spacing">
-                <select style={selectStyle} value={settings.questionSpacing} onChange={e => update('questionSpacing', e.target.value)}>
-                    <option value="8px">Compact (8px)</option>
-                    <option value="12px">Tight (12px)</option>
-                    <option value="14px">Standard (14px)</option>
-                    <option value="20px">Relaxed (20px)</option>
-                    <option value="28px">Wide (28px)</option>
-                </select>
-            </SettingField>
+                <SettingField label="Columns Mode">
+                    <select style={selectStyle} value={settings.columns} onChange={e => update('columns', parseInt(e.target.value))}>
+                        <option value={1}>Single Column</option>
+                        <option value={2}>Two Columns</option>
+                    </select>
+                </SettingField>
 
-            {/* ── Visibility ── */}
-            <div style={{ gridColumn: '1 / -1', fontSize: '10px', fontWeight: 800, color: '#001f6d', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginTop: '6px' }}>
-                👁 Visibility
+                <SettingField label="Diagram Max Height">
+                    <select style={selectStyle} value={settings.diagramMaxHeight} onChange={e => update('diagramMaxHeight', e.target.value)}>
+                        <option value="120px">Small (120px)</option>
+                        <option value="150px">Standard (150px)</option>
+                        <option value="180px">Large (180px)</option>
+                        <option value="220px">Extra Large (220px)</option>
+                    </select>
+                </SettingField>
+
+                <SettingField label="Cover Page (Page 1)">
+                    <select style={selectStyle} value={settings.showCoverPage !== false ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
+                        <option value="yes">Include Instructions Cover</option>
+                        <option value="no">Directly Start Questions</option>
+                    </select>
+                </SettingField>
+
+                {/* ── Typography ── */}
+                <SettingField label="Font Style">
+                    <select style={selectStyle} value={settings.fontFamily} onChange={e => update('fontFamily', e.target.value)}>
+                        <option value='Georgia, "Times New Roman", serif'>Georgia (Classic)</option>
+                        <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+                        <option value='Calibri, Candara, Segoe, sans-serif'>Calibri</option>
+                        <option value='Arial, Helvetica, sans-serif'>Arial</option>
+                        <option value="'Inter', system-ui, sans-serif">Inter (Modern)</option>
+                    </select>
+                </SettingField>
+
+                <SettingField label="Font Size">
+                    <select style={selectStyle} value={settings.fontSize} onChange={e => update('fontSize', e.target.value)}>
+                        <option value="12px">Compact (12px)</option>
+                        <option value="13px">Standard (13px)</option>
+                        <option value="14px">Large (14px)</option>
+                    </select>
+                </SettingField>
+
+                <SettingField label="Line Height">
+                    <select style={selectStyle} value={settings.lineHeight} onChange={e => update('lineHeight', e.target.value)}>
+                        <option value="1.35">Compact (1.35)</option>
+                        <option value="1.45">Standard (1.45)</option>
+                        <option value="1.6">Relaxed (1.6)</option>
+                    </select>
+                </SettingField>
+
+                <SettingField label="Show Marks on Qs">
+                    <select style={selectStyle} value={settings.showMarks ? 'yes' : 'no'} onChange={e => update('showMarks', e.target.value === 'yes')}>
+                        <option value="no">Hidden (Standard)</option>
+                        <option value="yes">Display Marks</option>
+                    </select>
+                </SettingField>
             </div>
-            <SettingField label="Show Marks">
-                <select style={selectStyle} value={settings.showMarks ? 'yes' : 'no'} onChange={e => update('showMarks', e.target.value === 'yes')}>
-                    <option value="no">Hidden (Default)</option>
-                    <option value="yes">Show Marks</option>
-                </select>
-            </SettingField>
-            <SettingField label="Show Answer Key">
-                <select style={selectStyle} value={settings.showAnswerKey ? 'yes' : 'no'} onChange={e => update('showAnswerKey', e.target.value === 'yes')}>
-                    <option value="no">Hidden (Default)</option>
-                    <option value="yes">Show Answers</option>
-                </select>
-            </SettingField>
         </div>
     );
 }
 
-// ─── Instruction Cover Page (Page 1 Standard / Merged Instructions) ─────────
+// ─── Instruction Cover Page ───────────────────────────────────────────────────
 export function InstructionCoverPage({ paper, questions = [], duration, totalMarks, classes = [] }) {
-    // Collect distinct subjects and their chapters
-    const subjectMap = {};
-    questions.forEach(q => {
-        const sub = (q.subject || paper?.subject || 'General').toUpperCase();
-        if (!subjectMap[sub]) subjectMap[sub] = new Set();
-        if (q.chapter) subjectMap[sub].add(q.chapter);
-    });
-
-    const subjectEntries = Object.entries(subjectMap);
     const totalQCount = questions.length || 60;
 
     return (
-        <div style={{ pageBreakAfter: 'always', breakAfter: 'page', marginBottom: '28px', paddingBottom: '20px', borderBottom: '2px dashed #999' }}>
-            
+        <div style={{ paddingBottom: '16px', borderBottom: '2px dashed #666', marginBottom: '20px' }}>
             {/* Candidate Name and Reg No Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 16px 0', fontSize: '13px', fontWeight: 800 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 14px 0', fontSize: '12px', fontWeight: 800 }}>
                 <div style={{ flex: 1 }}>
-                    Name of the candidate: <span style={{ display: 'inline-block', borderBottom: '1.5px solid #000', width: '220px', marginLeft: '6px' }}>&nbsp;</span>
+                    Name of the candidate: <span style={{ display: 'inline-block', borderBottom: '1.5px solid #000', width: '240px', marginLeft: '6px' }}>&nbsp;</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontWeight: 800 }}>Reg. No.</span>
@@ -237,132 +189,76 @@ export function InstructionCoverPage({ paper, questions = [], duration, totalMar
             </div>
 
             {/* Instructions Title */}
-            <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px', color: '#000' }}>
                 IMPORTANT INSTRUCTIONS TO CANDIDATES :
             </div>
 
             {/* Instructions Body */}
-            <div style={{ fontSize: '12px', lineHeight: '1.55', color: '#111' }}>
-                <p style={{ margin: '4px 0' }}>
-                    <strong>1)</strong> This question paper contains <strong>{totalQCount} questions</strong> and each question will have one statement and four distracters. (Four different options / choices).
+            <div style={{ fontSize: '11.5px', lineHeight: '1.5', color: '#111' }}>
+                <p style={{ margin: '3px 0' }}>
+                    <strong>1)</strong> This question paper contains <strong>{totalQCount} questions</strong>. Each question consists of a question stem and 4 choices/options.
                 </p>
-                <p style={{ margin: '4px 0' }}>
-                    <strong>2)</strong> During the subsequent <strong>{duration || '180 Minutes / 3 Hours'}</strong>:
-                    <br />• Read each question carefully.
-                    <br />• Choose the correct answer from out of the four available distracters (options / choices) given under each question / statement.
-                    <br />• Completely <strong>darken / shade</strong> the relevant circle with a <strong>blue or black ink ballpoint pen</strong> against the question number on the <strong>OMR answer sheet</strong>.
+                <p style={{ margin: '3px 0' }}>
+                    <strong>2)</strong> Duration: <strong>{duration || '180 Minutes / 3 Hours'}</strong>. Read each question carefully and shade the corresponding circle completely on the OMR answer sheet using a blue/black ballpoint pen.
                 </p>
 
                 {/* OMR Demonstration Box */}
-                <div style={{ border: '1.5px solid #000', margin: '10px 0', padding: '8px', background: '#fafafa', borderRadius: '4px' }}>
+                <div style={{ border: '1.5px solid #000', margin: '8px 0', padding: '6px', background: '#fafafa', borderRadius: '4px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', border: '1px solid #777', background: '#fff' }}>
-                        <div style={{ padding: '6px 10px', borderRight: '1px solid #777', textAlign: 'center' }}>
-                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '6px', color: '#111' }}>ಸರಿಯಾದ ಕ್ರಮ / CORRECT METHOD</div>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', alignItems: 'center' }}>
-                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>A</span>
-                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, background: '#000', color: '#fff' }}>B</span>
-                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>C</span>
-                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700 }}>D</span>
+                        <div style={{ padding: '5px 8px', borderRight: '1px solid #777', textAlign: 'center' }}>
+                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '4px', color: '#111' }}>ಸರಿಯಾದ ಕ್ರಮ / CORRECT METHOD</div>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700 }}>A</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, background: '#000', color: '#fff' }}>B</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700 }}>C</span>
+                                <span style={{ border: '1.5px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700 }}>D</span>
                             </div>
                         </div>
-                        <div style={{ padding: '6px 10px', textAlign: 'center' }}>
-                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '6px', color: '#111' }}>ತಪ್ಪು ಕ್ರಮಗಳು / WRONG METHODS</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                                <div style={{ display: 'flex', gap: '3px' }}>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: '#c00' }}>✖</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>B</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>C</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>D</span>
+                        <div style={{ padding: '5px 8px', textAlign: 'center' }}>
+                            <div style={{ fontSize: '10px', fontWeight: 800, marginBottom: '4px', color: '#111' }}>ತಪ್ಪು ಕ್ರಮಗಳು / WRONG METHODS</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                <div style={{ display: 'flex', gap: '2px' }}>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 800, color: '#c00' }}>✖</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px' }}>B</span>
                                 </div>
-                                <div style={{ display: 'flex', gap: '3px' }}>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>A</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>B</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>C</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 800, color: '#090' }}>✔</span>
-                                </div>
-                                <div style={{ display: 'flex', gap: '3px' }}>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>A</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', background: '#000', color: '#fff' }}>B</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', background: '#000', color: '#fff' }}>C</span>
-                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' }}>D</span>
+                                <div style={{ display: 'flex', gap: '2px' }}>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px' }}>A</span>
+                                    <span style={{ border: '1px solid #000', borderRadius: '50%', width: '16px', height: '16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 800, color: '#090' }}>✔</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <p style={{ margin: '4px 0' }}>
-                    <strong>3)</strong> Please note that even a minute unintended ink dot on the OMR answer sheet will also be recognized and recorded by the scanner. Therefore, avoid multiple marking of any kind on the OMR answer sheet.
+                <p style={{ margin: '3px 0' }}>
+                    <strong>3)</strong> Avoid stray marks or multiple responses on the OMR sheet. Hand over the sheet to the room invigilator at conclusion of exam.
                 </p>
-                <p style={{ margin: '4px 0' }}>
-                    <strong>4)</strong> Hand over the <strong>OMR answer sheet</strong> to the room invigilator as it is.
-                </p>
-            </div>
-
-            {/* Syllabus / Subject Breakdown Table */}
-            <div style={{ marginTop: '14px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1.5px solid #000', fontSize: '11px' }}>
-                    <thead>
-                        <tr style={{ background: '#f0f0f0', borderBottom: '1.5px solid #000' }}>
-                            {subjectEntries.length > 0 ? (
-                                subjectEntries.map(([sub]) => (
-                                    <th key={sub} style={{ border: '1px solid #000', padding: '6px 8px', fontWeight: 800, textAlign: 'center', textTransform: 'uppercase' }}>
-                                        {sub}
-                                    </th>
-                                ))
-                            ) : (
-                                <th style={{ border: '1px solid #000', padding: '6px 8px', fontWeight: 800, textAlign: 'center', textTransform: 'uppercase' }}>
-                                    {paper?.subject || 'SYLLABUS'}
-                                </th>
-                            )}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            {subjectEntries.length > 0 ? (
-                                subjectEntries.map(([sub, chaptersSet]) => {
-                                    const list = Array.from(chaptersSet);
-                                    return (
-                                        <td key={sub} style={{ border: '1px solid #000', padding: '8px', verticalAlign: 'top', fontSize: '11px', lineHeight: '1.4' }}>
-                                            {list.length > 0 ? list.join(' • ') : 'All Prescribed Syllabus'}
-                                        </td>
-                                    );
-                                })
-                            ) : (
-                                <td style={{ border: '1px solid #000', padding: '8px', verticalAlign: 'top', fontSize: '11px', lineHeight: '1.4' }}>
-                                    All Prescribed Syllabus & Concepts
-                                </td>
-                            )}
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
     );
 }
 
 // ─── Paper Header ─────────────────────────────────────────────────────────────
-
 export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false }) {
     return (
         <div style={{ marginBottom: '10px' }}>
             {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
-                    <img src={templateUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '88px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '2px solid #000', paddingBottom: '4px' }}>
+                    <img src={templateUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
                 </div>
             )}
             <div style={{ textAlign: 'center', marginBottom: '4px' }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0' }}>
-                    {title || subject || 'Question Paper'}
+                <div style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0', color: '#000' }}>
+                    {title || subject || 'Assessment Question Paper'}
                 </div>
                 {!isAssignment && (
-                    <div style={{ fontSize: '12px', color: '#333', fontWeight: 500 }}>
+                    <div style={{ fontSize: '12px', color: '#222', fontWeight: 600 }}>
                         Subject: {subject}{classes && classes.length > 0 ? ` | Class: ${classes.join(', ')}` : ''}
                     </div>
                 )}
             </div>
             {!isAssignment && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #000', borderBottom: '2px solid #000', padding: '3px 0', fontWeight: 700, fontSize: '13px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', borderBottom: '2px solid #000', padding: '3px 0', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>
                     <span>Time: {duration || '3 Hours'}</span>
                     <span>Max. Marks: {totalMarks}</span>
                 </div>
@@ -374,288 +270,154 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
     );
 }
 
-// ─── Section header (for blueprint-based sections) ───────────────────────────
-function SectionHeader({ name, description }) {
-    return (
-        <div style={{ textAlign: 'center', margin: '16px 0 10px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-            <div style={{ fontWeight: 700, fontSize: '14px', textDecoration: 'underline' }}>{name}</div>
-            {description && <div style={{ fontSize: '11px', color: '#555', fontStyle: 'italic', marginTop: '2px' }}>{description}</div>}
-        </div>
-    );
-}
-
-// ─── Two-column distributor ───────────────────────────────────────────────────
-/**
- * Splits a flat list of questions into two roughly equal halves.
- * Unlike CSS column-count, this gives us explicit control so we
- * can prevent overflow and control break points per column.
- */
-function splitIntoColumns(items) {
-    const half = Math.ceil(items.length / 2);
-    return [items.slice(0, half), items.slice(half)];
-}
-
-// ─── Question renderer helper ─────────────────────────────────────────────────
-function renderQList(qs, startNum, classes, settings, singleColMode = false) {
-    return qs.map((q, i) => (
-        <QuestionBlock
-            key={q._id || i}
-            q={q}
-            displayNum={startNum + i}
-            classes={classes}
-            showMarks={settings.showMarks}
-            singleColMode={singleColMode}
-            fontSize={settings.fontSize}
-            lineHeight={settings.lineHeight}
-            formatMarks={formatMarks}
-            extraStyle={{ marginBottom: settings.questionSpacing }}
-        />
-    ));
-}
-
-// ─── Main PaperRenderer ───────────────────────────────────────────────────────
-/**
- * Props:
- *   paper              - full paper object {title, subject, classes, questions, pattern, duration}
- *   activeTemplate     - template object {fileUrl}
- *   isAssignment       - boolean: hides time/marks header row
- *   settings           - settings state object
- *   setSettings        - settings setter
- *   showSettingsPanel  - boolean
- *   printAreaId        - id for the print area div (default "qp-print-area")
- */
-const PaperRenderer = ({
+// ─── Main PaperRenderer Component ─────────────────────────────────────────────
+export default function PaperRenderer({
     paper,
     activeTemplate,
     isAssignment = false,
     settings: externalSettings,
     setSettings: externalSetSettings,
     showSettingsPanel = false,
-    printAreaId = 'qp-print-area',
-}) => {
-    // Use internal state if no external state provided
+    onProceedToAlignment,
+    onProceedToFinalize,
+}) {
     const [internalSettings, setInternalSettings] = useState(DEFAULT_SETTINGS);
     const settings = externalSettings || internalSettings;
     const setSettings = externalSetSettings || setInternalSettings;
 
+    // Preview Controls state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [zoom, setZoom] = useState(100);
+    const [singlePageMode, setSinglePageMode] = useState(false); // false = continuous A4 pages stack, true = single page navigation
+
     const questions = useMemo(() => paper?.questions || [], [paper]);
-    const classes = useMemo(() => paper?.classes || [], [paper]);
-    const totalMarks = useMemo(() => {
-        if (paper?.pattern?.length) return paper.pattern.reduce((s, sec) => s + (sec.marks || 0), 0);
-        return calcTotal(questions, classes);
-    }, [paper, questions, classes]);
+    const showCover = !isAssignment && settings.showCoverPage !== false;
 
-    // Slice questions by start/end Q no.
-    const startQNo = settings.startQNo || 1;
-    const endQNo = settings.endQNo ?? (startQNo + questions.length - 1);
-    const count = Math.max(0, endQNo - startQNo + 1);
-    const visibleQuestions = questions.slice(0, count);
+    // Calculate total pages
+    const questionPages = useMemo(() => {
+        return paginateQuestions(questions, {
+            showCover,
+            columns: settings.columns || 1,
+            startQNo: settings.startQNo || 1,
+        });
+    }, [questions, showCover, settings.columns, settings.startQNo]);
 
-    // Compute display questions grouped by section if pattern exists
-    const sections = useMemo(() => {
-        if (!paper?.pattern?.length) return null;
-        let pool = [...visibleQuestions];
-        const result = paper.pattern.map(sec => {
-            const num = sec.numQuestions || 0;
-            const secType = (sec.type || '').toUpperCase();
-            let secQs = [];
-            if (secType) {
-                secQs = pool.filter(q => {
-                    const qType = (q.type || q.q_type || '').toUpperCase();
-                    return qType === secType || (secType.includes('MCQ') && (qType.includes('MCQ') || !qType));
-                }).slice(0, num || pool.length);
-            } else {
-                secQs = pool.slice(0, num || pool.length);
-            }
-            if (secQs.length === 0 && pool.length > 0) {
-                secQs = pool.slice(0, num || pool.length);
-            }
-            const usedIds = new Set(secQs.map(q => q._id || q.id));
-            pool = pool.filter(q => !usedIds.has(q._id || q.id));
-            return { ...sec, questions: secQs };
-        }).filter(s => s.questions.length > 0);
+    const totalPages = (showCover ? 1 : 0) + (questionPages.length || 1);
 
-        // If leftover questions remain in pool, attach them to the last section or fallback
-        if (pool.length > 0) {
-            if (result.length > 0) {
-                result[result.length - 1].questions.push(...pool);
-            } else {
-                return null;
-            }
-        }
-
-        return result.length > 0 ? result : null;
-    }, [paper, visibleQuestions]);
-
-    const pageStyle = {
-        background: '#fff',
-        padding: '40px 44px',
-        maxWidth: settings.columns === 2 ? '1000px' : '840px',
-        margin: '0 auto',
-        border: '1px solid #e2e8f0',
-        borderRadius: '10px',
-        fontFamily: settings.fontFamily,
-        fontSize: settings.fontSize,
-        lineHeight: settings.lineHeight,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-        boxSizing: 'border-box',
-        color: '#111',
-        wordBreak: 'break-word',
-        overflowWrap: 'break-word',
-    };
-
-    const twoColContainerStyle = {
-        display: 'flex',
-        gap: settings.columnGap || '28px',
-        alignItems: 'flex-start',
-    };
-
-    const colStyle = {
-        flex: 1,
-        minWidth: 0,
-        wordBreak: 'break-word',
-        overflowWrap: 'break-word',
-        overflow: 'hidden',
-    };
-
-    // Render all questions as a flat list, then split if 2-col
-    const renderAllQuestions = () => {
-        if (sections && sections.length > 0) {
-            // Pattern-based sections
-            let runningNum = startQNo;
-            return sections.map((sec, si) => {
-                const secStart = runningNum;
-                runningNum += sec.questions.length;
-                return (
-                    <div key={si} style={{ breakInside: 'avoid-page' }}>
-                        <SectionHeader name={sec.sectionName} description={sec.description} />
-                        {renderQList(sec.questions, secStart, classes, settings, settings.columns === 2)}
-                    </div>
-                );
-            });
-        }
-        return renderQList(visibleQuestions, startQNo, classes, settings, settings.columns === 2);
-    };
-
-    const questionsContent = renderAllQuestions();
-
-    const renderColumns = () => {
-        if (settings.columns === 2) {
-            if (sections && sections.length > 0) {
-                // Split sections between columns
-                const [left, right] = splitIntoColumns(sections);
-                let leftNum = startQNo;
-                let rightNum = startQNo + left.reduce((s, sec) => s + sec.questions.length, 0);
-                return (
-                    <div style={twoColContainerStyle}>
-                        <div style={{ ...colStyle, borderRight: '1px solid #ddd', paddingRight: settings.columnGap || '28px' }}>
-                            {left.map((sec, si) => {
-                                const n = leftNum;
-                                leftNum += sec.questions.length;
-                                return (
-                                    <div key={si}>
-                                        <SectionHeader name={sec.sectionName} description={sec.description} />
-                                        {renderQList(sec.questions, n, classes, settings, true)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        <div style={colStyle}>
-                            {right.map((sec, si) => {
-                                const n = rightNum;
-                                rightNum += sec.questions.length;
-                                return (
-                                    <div key={si}>
-                                        <SectionHeader name={sec.sectionName} description={sec.description} />
-                                        {renderQList(sec.questions, n, classes, settings, true)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            }
-            const [leftQs, rightQs] = splitIntoColumns(visibleQuestions);
-            const rightStart = startQNo + leftQs.length;
-            return (
-                <div style={twoColContainerStyle}>
-                    <div style={{ ...colStyle, borderRight: '1px solid #ddd', paddingRight: settings.columnGap || '28px' }}>
-                        {renderQList(leftQs, startQNo, classes, settings, true)}
-                    </div>
-                    <div style={colStyle}>
-                        {renderQList(rightQs, rightStart, classes, settings, true)}
-                    </div>
-                </div>
-            );
-        }
-        return <div style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{questionsContent}</div>;
+    const handlePrint = () => {
+        window.print();
     };
 
     return (
-        <>
-            {/* Print CSS */}
-            <style>{`
-                @media print {
-                    body * { visibility: hidden; }
-                    #${printAreaId}, #${printAreaId} * { visibility: visible; }
-                    #${printAreaId} {
-                        position: fixed !important;
-                        top: 0; left: 0; right: 0;
-                        box-shadow: none !important;
-                        border: none !important;
-                        border-radius: 0 !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        max-width: 100% !important;
-                        width: 100% !important;
-                        background: #fff !important;
-                    }
-                    .no-print { display: none !important; }
-                    @page {
-                        size: ${settings.pageSize} ${settings.orientation};
-                        margin: ${settings.marginTop} ${settings.marginRight} ${settings.marginBottom} ${settings.marginLeft};
-                    }
-                }
-            `}</style>
+        <div className="paper-renderer-wrapper w-full flex flex-col items-center">
+            
+            {/* ── PREVIEW TOOLBAR ── */}
+            <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-xl border-2 border-navy/20 flex flex-wrap items-center justify-between gap-4 mb-6 w-full max-w-5xl no-print">
+                {/* Page Navigation */}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                        className="bg-navy text-gold hover:bg-gold hover:text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                    >
+                        ← Prev
+                    </button>
+                    <span className="text-xs font-black text-navy px-2">
+                        PAGE {currentPage} OF {totalPages}
+                    </span>
+                    <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage >= totalPages}
+                        className="bg-navy text-gold hover:bg-gold hover:text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                    >
+                        Next →
+                    </button>
+                </div>
 
-            {/* Settings panel */}
-            {showSettingsPanel && (
-                <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={questions.length} />
-            )}
+                {/* View Controls (Zoom, Mode) */}
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
+                        <button
+                            onClick={() => setZoom(z => Math.max(60, z - 15))}
+                            className="px-2.5 py-1 text-xs font-black text-gray-700 hover:bg-white rounded-lg transition"
+                            title="Zoom Out"
+                        >
+                            −
+                        </button>
+                        <span className="text-xs font-bold text-navy px-1">{zoom}%</span>
+                        <button
+                            onClick={() => setZoom(z => Math.min(150, z + 15))}
+                            className="px-2.5 py-1 text-xs font-black text-gray-700 hover:bg-white rounded-lg transition"
+                            title="Zoom In"
+                        >
+                            +
+                        </button>
+                        <button
+                            onClick={() => setZoom(100)}
+                            className="px-2 py-1 text-[10px] font-bold bg-white text-gray-700 rounded-lg shadow-sm"
+                        >
+                            Reset
+                        </button>
+                    </div>
 
-            {/* Paper body */}
-            <div id={printAreaId} style={pageStyle}>
-                
-                {/* ── Page 1: Standard / Merged Instructions Cover Page ── */}
-                {!isAssignment && settings.showCoverPage !== false && (
-                    <InstructionCoverPage
-                        paper={paper}
-                        questions={visibleQuestions}
-                        duration={paper?.duration}
-                        totalMarks={totalMarks}
-                        classes={classes}
-                    />
-                )}
+                    <button
+                        onClick={() => setSinglePageMode(!singlePageMode)}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition cursor-pointer ${
+                            singlePageMode ? 'bg-navy text-gold border-navy' : 'bg-white text-gray-700 border-gray-300'
+                        }`}
+                    >
+                        {singlePageMode ? 'Single Page View' : 'All Pages View'}
+                    </button>
 
-                <PaperHeader
-                    title={paper?.title}
-                    subject={paper?.subject}
-                    classes={classes}
-                    duration={paper?.duration}
-                    totalMarks={totalMarks}
-                    templateUrl={activeTemplate?.fileUrl}
-                    isAssignment={isAssignment}
-                />
+                    <button
+                        onClick={handlePrint}
+                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                    >
+                        <span>🖨</span> Print / Save PDF
+                    </button>
+                </div>
 
-                {renderColumns()}
-
-                <div style={{ textAlign: 'center', fontWeight: 700, borderTop: '2px solid #000', paddingTop: '12px', marginTop: '32px', fontSize: '12px' }}>
-                    *** End of Paper ***
+                {/* Next Workflow Action Button */}
+                <div className="flex items-center gap-2">
+                    {onProceedToAlignment && (
+                        <button
+                            onClick={onProceedToAlignment}
+                            className="bg-navy text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>⚙️</span> Proceed to Alignment →
+                        </button>
+                    )}
+                    {onProceedToFinalize && (
+                        <button
+                            onClick={onProceedToFinalize}
+                            className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>✓</span> Finalize & Save →
+                        </button>
+                    )}
                 </div>
             </div>
-        </>
+
+            {/* Alignment / Settings Panel (Shown only in Alignment step) */}
+            {showSettingsPanel && (
+                <div className="w-full max-w-5xl no-print">
+                    <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={questions.length} />
+                </div>
+            )}
+
+            {/* ── TRUE A4 ENGINE RENDERING ── */}
+            <A4PaperEngine
+                paper={paper}
+                activeTemplate={activeTemplate}
+                isAssignment={isAssignment}
+                settings={settings}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                zoom={zoom}
+                singlePageMode={singlePageMode}
+            />
+        </div>
     );
-};
+}
 
 export { DEFAULT_SETTINGS };
-export default PaperRenderer;

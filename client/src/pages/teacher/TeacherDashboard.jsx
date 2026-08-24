@@ -1,13 +1,164 @@
-import React, { useContext, useState, useEffect } from 'react';
+/**
+ * TeacherDashboard.jsx
+ *
+ * Streamlined Teacher Workspace
+ * Features:
+ * - Teacher Notification Bell with live unread counts & assignment pre-fill
+ * - Simplified clean top navigation (Grand Test Papers, Previous Year Papers, Template cart)
+ * - Direct assignment continuation
+ * - Academic modules
+ */
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AddQuestion from './AddQuestion';
 import SavedPapers from './SavedPapers';
 import TemplateCart from './TemplateCart';
 import GrandTestList from '../admin/GrandTestList';
+import PreviousYearPapers from '../admin/PreviousYearPapers';
 import AssignmentGenerator from './AssignmentGenerator';
 import api from '../../api';
 
+// ── Teacher Notification Bell Component ──────────────────────────────────────
+const TeacherNotificationBell = () => {
+    const navigate = useNavigate();
+    const [notifications, setNotifications] = useState([]);
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    const fetchNotifications = async () => {
+        try {
+            const res = await api.get('/api/notifications');
+            if (Array.isArray(res.data)) {
+                setNotifications(res.data);
+            }
+        } catch (err) {
+            console.error('Error fetching teacher notifications:', err);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 20000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const unreadCount = notifications.filter(n => !n.is_read).length;
+
+    const handleMarkAllRead = async () => {
+        try {
+            await api.put('/api/notifications/read-all');
+            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+        } catch (err) {
+            console.error('Error marking read:', err);
+        }
+    };
+
+    const handleNotificationClick = async (notif) => {
+        try {
+            if (!notif.is_read) {
+                await api.put(`/api/notifications/${notif.id}/read`);
+                setNotifications(prev => prev.map(n => (n.id === notif.id ? { ...n, is_read: true } : n)));
+            }
+            setIsOpen(false);
+
+            // If it's an exam assignment notification, navigate with metadata pre-filled
+            const meta = typeof notif.metadata === 'string' ? JSON.parse(notif.metadata || '{}') : (notif.metadata || {});
+            if (meta.examId) {
+                navigate(`/teacher/create-paper?examId=${meta.examId}`);
+            } else if (notif.related_paper_id) {
+                navigate(`/teacher/create-paper?paperId=${notif.related_paper_id}`);
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="relative bg-white/10 hover:bg-white/20 text-gold w-10 h-10 rounded-xl flex items-center justify-center transition border border-gold/30 cursor-pointer"
+                title="Notifications from Admin"
+            >
+                <span className="text-lg">🔔</span>
+                {unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                )}
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-50 overflow-hidden animate-fade-in-up text-left">
+                    <div className="p-4 bg-navy text-white flex justify-between items-center border-b border-gold/30">
+                        <div className="flex items-center gap-2">
+                            <span className="text-gold font-bold">🔔</span>
+                            <span className="font-black text-xs uppercase tracking-wider">Admin Notifications</span>
+                        </div>
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={handleMarkAllRead}
+                                className="text-[10px] text-gold hover:underline font-bold"
+                            >
+                                Mark all read
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                        {notifications.length === 0 ? (
+                            <div className="p-6 text-center text-xs text-gray-400 font-bold">
+                                No notifications yet.
+                            </div>
+                        ) : (
+                            notifications.map((n) => (
+                                <div
+                                    key={n.id}
+                                    onClick={() => handleNotificationClick(n)}
+                                    className={`p-3.5 hover:bg-gray-50 transition cursor-pointer ${
+                                        !n.is_read ? 'bg-blue-50/60 border-l-4 border-gold' : ''
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h4 className="font-bold text-xs text-navy leading-snug">{n.title}</h4>
+                                        <span className="text-[9px] text-gray-400 font-semibold whitespace-nowrap">
+                                            {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                                        {n.message}
+                                    </p>
+                                    <div className="flex justify-between items-center mt-2 pt-1 border-t border-gray-100/60">
+                                        <span className="text-[9px] font-bold text-gray-400">
+                                            From: {n.sender_name || 'Admin'}
+                                        </span>
+                                        <span className="text-[10px] font-black text-navy uppercase tracking-wider">
+                                            Open →
+                                        </span>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ── Teacher Active Assignments Section ────────────────────────────────────────
 const TeacherAssignmentsSection = () => {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
@@ -18,8 +169,7 @@ const TeacherAssignmentsSection = () => {
         try {
             const res = await api.get('/api/exams/my-assignments');
             const examList = Array.isArray(res.data) ? res.data : [];
-            
-            // Flatten assignments specifically relevant for this teacher
+
             const myAssignedList = [];
             examList.forEach(exam => {
                 const subAssignments = Array.isArray(exam.subjectAssignments) ? exam.subjectAssignments : [];
@@ -31,13 +181,13 @@ const TeacherAssignmentsSection = () => {
                             examId: exam._id,
                             examTitle: exam.title,
                             examType: exam.examType || 'CET',
+                            classes: exam.classes || ['12'],
                             subject: sa.subject,
                             targetQuestions: sa.targetQuestions || 60,
                             difficultyDistribution: sa.difficultyDistribution || { easy: 40, medium: 40, hard: 20 },
                             status: sa.status || 'Not Started',
                             submittedPaperId: sa.submittedPaperId?._id || sa.submittedPaperId,
                             assignedDate: sa.assignedDate || exam.createdAt,
-                            instructions: exam.instructions
                         });
                     }
                 });
@@ -72,7 +222,7 @@ const TeacherAssignmentsSection = () => {
                 <div className="flex items-center gap-3">
                     <span className="w-3 h-3 rounded-full bg-gold animate-ping"></span>
                     <h2 className="text-sm font-black text-navy uppercase tracking-[0.2em]">
-                        Assignments & Commissioned Exams ({assignments.length})
+                        Commissioned Paper Requests ({assignments.length})
                     </h2>
                 </div>
                 <span className="text-[10px] font-bold text-slate/50 uppercase tracking-widest">
@@ -82,14 +232,14 @@ const TeacherAssignmentsSection = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {assignments.map((item, idx) => {
-                    const statusColor = 
+                    const statusColor =
                         item.status === 'Completed' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
                         item.status === 'In Progress' ? 'bg-amber-100 text-amber-800 border-amber-300' :
                         'bg-blue-100 text-blue-800 border-blue-300';
 
                     return (
-                        <div 
-                            key={idx} 
+                        <div
+                            key={idx}
                             className="bg-white p-6 rounded-3xl shadow-md border-2 border-gray-100 hover:border-gold transition-all relative overflow-hidden flex flex-col justify-between"
                         >
                             <div className="absolute top-0 right-0 px-3 py-1 bg-navy text-gold text-[10px] font-black rounded-bl-xl uppercase tracking-widest">
@@ -112,34 +262,28 @@ const TeacherAssignmentsSection = () => {
 
                                 <div className="space-y-1.5 mb-4 text-xs font-semibold text-slate/70">
                                     <div className="flex justify-between">
-                                        <span className="text-slate/50">Required Qs:</span>
-                                        <span className="font-bold text-navy">{item.targetQuestions} Questions</span>
+                                        <span className="text-slate/50">Target Questions:</span>
+                                        <span className="font-bold text-navy">{item.targetQuestions} Qs</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-slate/50">Difficulty Split:</span>
+                                        <span className="text-slate/50">Target Split:</span>
                                         <span className="font-bold text-slate/80">
                                             {item.difficultyDistribution?.easy || 40}%E / {item.difficultyDistribution?.medium || 40}%M / {item.difficultyDistribution?.hard || 20}%H
                                         </span>
                                     </div>
-                                    {item.assignedDate && (
-                                        <div className="flex justify-between text-[10px] text-slate/40">
-                                            <span>Assigned:</span>
-                                            <span>{new Date(item.assignedDate).toLocaleDateString()}</span>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
                             <button
                                 onClick={() => {
-                                    const targetUrl = item.submittedPaperId 
+                                    const targetUrl = item.submittedPaperId
                                         ? `/teacher/create-paper?examId=${item.examId}&paperId=${item.submittedPaperId}`
                                         : `/teacher/create-paper?examId=${item.examId}`;
                                     navigate(targetUrl);
                                 }}
-                                className="w-full mt-2 bg-navy text-gold hover:bg-gold hover:text-navy py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 group"
+                                className="w-full mt-2 bg-navy text-gold hover:bg-gold hover:text-navy py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer group"
                             >
-                                <span>{item.status === 'In Progress' ? '⚡ Continue Paper' : '✍️ Create Paper'}</span>
+                                <span>{item.status === 'In Progress' ? '⚡ Continue Creation' : '✍️ Create Paper'}</span>
                                 <span className="group-hover:translate-x-1 transition-transform">→</span>
                             </button>
                         </div>
@@ -150,6 +294,7 @@ const TeacherAssignmentsSection = () => {
     );
 };
 
+// ── Teacher Dashboard Home ────────────────────────────────────────────────────
 const TeacherDashboardHome = () => {
     return (
         <div className="animate-fade-in-up">
@@ -168,7 +313,7 @@ const TeacherDashboardHome = () => {
                 <h2 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Academic Modules</h2>
                 <div className="h-px flex-1 bg-gray-100"></div>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {/* Question Bank */}
                 <Link
@@ -194,7 +339,7 @@ const TeacherDashboardHome = () => {
                     </div>
                     <div>
                         <h2 className="text-lg font-black text-white">Create Paper</h2>
-                        <p className="text-xs text-gold/60 mt-2 font-bold uppercase tracking-widest">Generation Engine</p>
+                        <p className="text-xs text-gold/60 mt-2 font-bold uppercase tracking-widest">Step-by-Step Wizard</p>
                     </div>
                 </Link>
 
@@ -241,10 +386,7 @@ const TeacherDashboard = () => {
         'Chemistry': '/chemistrylogo.jpeg',
         'Biology': '/biologylogo.jpeg',
         'Maths': '/mathslogo.jpeg',
-        'Computer Science': '/computersciencelogo.png',
-        'Kannada': '/kannadalogo.jpg',
-        'English': '/englishlogo.jpg',
-        'Hindi': '/hindilogo.jpg'
+        'Mathematics': '/mathslogo.jpeg',
     };
 
     return (
@@ -267,42 +409,59 @@ const TeacherDashboard = () => {
                                 <img src={logoMap[user.subject]} alt={user.subject} className="w-5 h-5 object-contain rounded-sm" />
                             )}
                             <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em]">
-                                {user?.subject || 'Science'} Department
+                                {user?.subject || 'Faculty'} Department
                             </span>
                         </div>
                     </div>
                 </div>
 
+                {/* Top Navigation Options */}
                 <div className="space-x-3 flex items-center mr-4">
                     {location.pathname !== '/teacher/dashboard' && (
                         <button
                             onClick={() => navigate('/teacher/dashboard')}
-                            className="bg-white/5 border border-gold/30 text-gold px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2"
+                            className="bg-white/5 border border-gold/30 text-gold px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2 cursor-pointer"
                         >
                             <span>←</span> Back
                         </button>
                     )}
-                    <Link 
-                        to="/teacher/dashboard/grand-tests" 
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${location.pathname.includes('grand-tests') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'}`}
+                    <Link
+                        to="/teacher/dashboard/grand-tests"
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
+                            location.pathname.includes('grand-tests') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
+                        }`}
                     >
                         GT Papers
                     </Link>
-                    {/* Templates Cart Button */}
+                    <Link
+                        to="/teacher/dashboard/previous-year-papers"
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
+                            location.pathname.includes('previous-year-papers') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
+                        }`}
+                    >
+                        PYQs
+                    </Link>
+
+                    {/* Teacher Notification Bell */}
+                    <TeacherNotificationBell />
+
+                    {/* Template Cart */}
                     <button
                         id="teacher-template-cart-btn"
                         onClick={() => setShowTemplateCart(true)}
                         title="Browse Templates"
-                        className="relative bg-gold text-navy w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg hover:scale-110 transition-all shadow-lg"
+                        className="relative bg-gold text-navy w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg hover:scale-110 transition-all shadow-lg cursor-pointer"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                         </svg>
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">T</span>
                     </button>
+
+                    <div className="w-px h-8 bg-gold/20 mx-1"></div>
                     <button
                         onClick={() => { logout(); navigate('/'); }}
-                        className="bg-red-500/10 border border-red-500/30 text-red-500 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                        className="bg-red-500/10 border border-red-500/30 text-red-500 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm cursor-pointer"
                     >
                         Logout
                     </button>
@@ -315,6 +474,7 @@ const TeacherDashboard = () => {
                     <Route path="add-question" element={<AddQuestion />} />
                     <Route path="saved-papers" element={<SavedPapers />} />
                     <Route path="grand-tests" element={<GrandTestList />} />
+                    <Route path="previous-year-papers" element={<PreviousYearPapers />} />
                     <Route path="assignments" element={<AssignmentGenerator onBack={() => navigate('/teacher/dashboard')} />} />
                 </Routes>
             </div>

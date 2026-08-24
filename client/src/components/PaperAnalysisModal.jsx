@@ -1,5 +1,3 @@
-import React, { useState, useMemo } from 'react';
-
 /**
  * PaperAnalysisModal.jsx
  *
@@ -8,9 +6,12 @@ import React, { useState, useMemo } from 'react';
  * 1. Subject-wise Difficulty Level Analysis (Table, Bar Chart, Donut Charts)
  * 2. Class-wise Question Distribution (Table, Grouped Bar Chart, Donut Charts)
  * 3. Question Type Analysis (Table, Multi-bar Chart, Donut Charts, Matrix)
+ *
+ * Preserves 100% full vibrant colors, legends, and styling when printed or downloaded as PDF.
  */
+import React, { useState, useMemo } from 'react';
 
-// Helper to draw clean SVG Donut Segments
+// Helper to draw clean SVG Donut Segments with vibrant persistent colors
 const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
     const total = data.reduce((sum, d) => sum + (d.value || 0), 0);
     if (total === 0) {
@@ -55,7 +56,7 @@ const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
             `A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`,
             `L ${x3} ${y3}`,
             `A ${holeRadius} ${holeRadius} 0 ${largeArc} 0 ${x4} ${y4}`,
-            'Z'
+            'Z',
         ].join(' ');
 
         const pct = Math.round(fraction * 1000) / 10;
@@ -64,15 +65,15 @@ const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
             ...d,
             pathData,
             pct,
-            midAngle: startAngle + angle / 2
+            midAngle: startAngle + angle / 2,
         };
     });
 
     return (
-        <div className="flex flex-col items-center">
-            {title && <h5 className="text-base font-black text-gray-700 mb-2">{title}</h5>}
+        <div className="flex flex-col items-center print-color-safe">
+            {title && <h5 className="text-sm font-black text-gray-800 mb-2">{title}</h5>}
             <div className="relative flex items-center justify-center">
-                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-md">
+                <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="drop-shadow-sm">
                     {slices.map((s, idx) => (
                         <path
                             key={idx}
@@ -80,7 +81,7 @@ const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
                             fill={s.color}
                             stroke="#ffffff"
                             strokeWidth="2"
-                            className="transition-transform duration-300 hover:opacity-90 cursor-pointer"
+                            style={{ fill: s.color }}
                         >
                             <title>{`${s.label}: ${s.value} Qs (${s.pct}%)`}</title>
                         </path>
@@ -88,9 +89,9 @@ const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
                     <circle cx={center} cy={center} r={holeRadius} fill="#ffffff" />
                 </svg>
             </div>
-            <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-2.5 mt-2">
                 {slices.map((s, idx) => (
-                    <div key={idx} className="flex items-center gap-1 text-[11px] font-bold text-gray-600">
+                    <div key={idx} className="flex items-center gap-1 text-[11px] font-bold text-gray-700">
                         <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: s.color }}></span>
                         <span>{s.label}: {s.pct}%</span>
                     </div>
@@ -100,7 +101,7 @@ const DonutChart = ({ data, size = 160, holeRadius = 45, title = '' }) => {
     );
 };
 
-// Bar chart component
+// Bar chart component with inline colored bars for 100% print color preservation
 const GroupedBarChart = ({ categories, series, height = 180 }) => {
     let maxVal = 1;
     categories.forEach((_, cIdx) => {
@@ -112,7 +113,7 @@ const GroupedBarChart = ({ categories, series, height = 180 }) => {
     maxVal = Math.ceil(maxVal * 1.15);
 
     return (
-        <div className="w-full bg-white p-4 rounded-2xl border border-gray-200">
+        <div className="w-full bg-white p-4 rounded-2xl border border-gray-200 print-color-safe">
             <div className="flex justify-center items-center gap-6 mb-4">
                 {series.map((s, idx) => (
                     <div key={idx} className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
@@ -128,13 +129,17 @@ const GroupedBarChart = ({ categories, series, height = 180 }) => {
                         <div className="flex items-end justify-center gap-1.5 w-full h-[85%] border-b border-gray-300 pb-1">
                             {series.map((s, sIdx) => {
                                 const val = s.data[cIdx] || 0;
-                                const pctHeight = Math.max(4, Math.round((val / maxVal) * 100));
+                                const pctHeight = Math.max(6, Math.round((val / maxVal) * 100));
                                 return (
-                                    <div key={sIdx} className="flex-1 max-w-[22px] flex flex-col items-center h-full justify-end group relative">
-                                        <span className="text-[9px] font-black text-gray-600 mb-0.5 opacity-0 group-hover:opacity-100 transition">{val}</span>
+                                    <div key={sIdx} className="flex-1 max-w-[24px] flex flex-col items-center h-full justify-end relative">
+                                        <span className="text-[9px] font-black text-gray-700 mb-0.5">{val}</span>
                                         <div
-                                            style={{ height: `${pctHeight}%`, backgroundColor: s.color }}
-                                            className="w-full rounded-t transition-all duration-500 shadow-sm"
+                                            style={{
+                                                height: `${pctHeight}%`,
+                                                backgroundColor: s.color,
+                                                minHeight: '4px',
+                                            }}
+                                            className="w-full rounded-t shadow-sm"
                                         />
                                     </div>
                                 );
@@ -148,7 +153,7 @@ const GroupedBarChart = ({ categories, series, height = 180 }) => {
     );
 };
 
-const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question Paper', questions = [], examType = 'NEET' }) => {
+const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'Assessment Paper', questions = [], examType = 'NEET' }) => {
     const [activeTab, setActiveTab] = useState('difficulty');
 
     const subjects = useMemo(() => {
@@ -170,7 +175,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return subjects[0];
     };
 
-    // 1. Difficulty Level Breakdown (100% genuine data, 0 fake fallback)
+    // 1. Difficulty Level Breakdown
     const diffData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -200,7 +205,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
-    // 2. Class-Wise Question Distribution (100% genuine data)
+    // 2. Class Distribution Breakdown
     const classData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -209,9 +214,10 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
 
         questions.forEach(q => {
             const sub = matchSubject(q.subject);
-            const cls = String(q.classes?.[0] || q.class || (Array.isArray(q.classes) ? q.classes.join(' ') : '') || '12');
+            const classes = Array.isArray(q.classes) ? q.classes : [q.class || '12'];
+            const is11 = classes.some(c => String(c).includes('11') || String(c).toLowerCase().includes('xi') || String(c).toLowerCase().includes('i puc'));
             if (result[sub]) {
-                if (cls.includes('11')) result[sub].class11 += 1;
+                if (is11) result[sub].class11 += 1;
                 else result[sub].class12 += 1;
                 result[sub].total += 1;
             }
@@ -228,7 +234,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
-    // 3. Question Type Breakdown (100% genuine data)
+    // 3. Question Type Breakdown
     const typeData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -237,12 +243,13 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
 
         questions.forEach(q => {
             const sub = matchSubject(q.subject);
-            const t = (q.type || 'MCQ').toUpperCase();
+            const t = (q.type || q.q_type || 'MCQ').toUpperCase();
             if (result[sub]) {
                 if (t.includes('ASSERTION')) result[sub].assertion += 1;
                 else if (t.includes('MATCH')) result[sub].match += 1;
-                else if (t.includes('DIAGRAM') || t.includes('IMAGE') || t.includes('NUMERICAL')) result[sub].diagram += 1;
-                else if (t.includes('STATEMENT') || t.includes('STMT')) result[sub].stmt += 1;
+                else if (t.includes('MULTIPLE_STATEMENT')) result[sub].multi += 1;
+                else if (t.includes('STATEMENT')) result[sub].stmt += 1;
+                else if (t.includes('DIAGRAM') || q.imageUrl || q.image_url) result[sub].diagram += 1;
                 else result[sub].single += 1;
                 result[sub].total += 1;
             }
@@ -250,252 +257,200 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
 
         const grand = { single: 0, stmt: 0, multi: 0, assertion: 0, match: 0, diagram: 0, total: 0 };
         subjects.forEach(s => {
-            const subObj = result[s];
-            grand.single += subObj.single;
-            grand.stmt += subObj.stmt;
-            grand.multi += subObj.multi;
-            grand.assertion += subObj.assertion;
-            grand.match += subObj.match;
-            grand.diagram += subObj.diagram;
-            grand.total += subObj.total;
+            const r = result[s];
+            grand.single += r.single;
+            grand.stmt += r.stmt;
+            grand.multi += r.multi;
+            grand.assertion += r.assertion;
+            grand.match += r.match;
+            grand.diagram += r.diagram;
+            grand.total += r.total;
         });
 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
+    const handleDownloadPdf = () => {
+        window.print();
+    };
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-navy/80 flex items-center justify-center z-50 backdrop-blur-md p-4 overflow-y-auto print:p-0 print:bg-white animate-fade-in">
-            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-5xl max-h-[94vh] flex flex-col border-b-8 border-gold overflow-hidden my-auto print:border-none print:shadow-none print:max-h-full">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto print-analysis-container">
                 
-                {/* Modal Navigation Top Bar */}
-                <div className="flex justify-between items-center px-8 py-5 border-b border-gray-200 bg-gray-50/80 no-print">
-                    <div className="flex items-center gap-3">
-                        <span className="bg-navy text-gold w-10 h-10 rounded-2xl flex items-center justify-center text-xl shadow">📊</span>
-                        <div>
-                            <h2 className="text-xl font-black text-navy uppercase tracking-tight">Institutional Paper Analysis</h2>
-                            <p className="text-[11px] font-bold text-gray-500">{paperTitle} • {questions.length} Total Questions</p>
-                        </div>
+                {/* Modal Header */}
+                <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80 no-print">
+                    <div>
+                        <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Academic Analytics</span>
+                        <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">{paperTitle}</h2>
+                        <p className="text-xs text-gray-500 font-bold">{questions.length} Questions Analyzed</p>
                     </div>
-
                     <div className="flex items-center gap-3">
-                        {/* Section Tabs */}
-                        <div className="flex bg-gray-200 p-1 rounded-xl">
-                            <button
-                                onClick={() => setActiveTab('difficulty')}
-                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${activeTab === 'difficulty' ? 'bg-navy text-gold shadow' : 'text-gray-600 hover:text-navy'}`}
-                            >
-                                1. Difficulty Level
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('class')}
-                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${activeTab === 'class' ? 'bg-navy text-gold shadow' : 'text-gray-600 hover:text-navy'}`}
-                            >
-                                2. Class Distribution
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('types')}
-                                className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition ${activeTab === 'types' ? 'bg-navy text-gold shadow' : 'text-gray-600 hover:text-navy'}`}
-                            >
-                                3. Question Types
-                            </button>
-                        </div>
-
                         <button
-                            onClick={() => window.print()}
-                            className="bg-gold text-navy px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:scale-105 transition shadow flex items-center gap-1.5 cursor-pointer"
+                            onClick={handleDownloadPdf}
+                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-2 cursor-pointer"
                         >
-                            <span>🖨</span> Download / Print PDF
+                            <span>🖨</span> Download / Print Full Color Analysis
                         </button>
                         <button
                             onClick={onClose}
-                            className="bg-gray-100 hover:bg-red-500 hover:text-white w-9 h-9 rounded-full flex items-center justify-center font-black transition"
+                            className="text-slate/30 hover:text-red-500 bg-white rounded-full w-9 h-9 flex items-center justify-center text-lg font-bold border border-gray-200 shadow transition"
                         >
                             ✕
                         </button>
                     </div>
                 </div>
 
-                {/* Printable Content Body */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8 print:p-0">
+                {/* Tabs for screen view */}
+                <div className="flex border-b border-gray-200 bg-white px-6 pt-3 gap-3 no-print">
+                    <button
+                        onClick={() => setActiveTab('difficulty')}
+                        className={`pb-3 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition ${
+                            activeTab === 'difficulty' ? 'border-navy text-navy' : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        1. Difficulty Level
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('class')}
+                        className={`pb-3 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition ${
+                            activeTab === 'class' ? 'border-navy text-navy' : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        2. Class-Wise Split
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('types')}
+                        className={`pb-3 px-4 font-black text-xs uppercase tracking-wider border-b-2 transition ${
+                            activeTab === 'types' ? 'border-navy text-navy' : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                    >
+                        3. Question Types
+                    </button>
+                </div>
 
-                    {/* Banner Title Box matching Reference Image 1 */}
-                    <div className="bg-blue-100 border-2 border-blue-400 p-3 rounded-lg text-center shadow-sm">
-                        <h1 className="text-2xl font-black text-navy uppercase tracking-wide">
-                            Analysis of {paperTitle}
-                        </h1>
-                    </div>
-
-                    {/* SECTION 1: DIFFICULTY LEVEL ANALYSIS */}
+                {/* Body Content */}
+                <div className="p-6 overflow-y-auto space-y-8 print-body-content">
+                    
+                    {/* SECTION 1: DIFFICULTY LEVEL */}
                     {(activeTab === 'difficulty' || window.matchMedia('print').matches) && (
                         <div className="space-y-6">
-                            
+                            <div className="flex items-center justify-between border-b pb-2">
+                                <h3 className="font-black text-base text-navy uppercase">Subject-Wise Difficulty Level Breakdown</h3>
+                                <span className="text-xs font-bold text-gray-500">Target Standard Split: 40% Easy / 40% Medium / 20% Hard</span>
+                            </div>
+
                             {/* Table */}
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse border border-gray-400 text-center text-xs font-bold">
+                                <table className="w-full border-collapse border border-gray-300 text-center text-xs font-bold">
                                     <thead>
-                                        <tr className="bg-amber-100 border-b border-gray-400">
-                                            <th colSpan="5" className="p-2 text-sm font-black text-navy uppercase tracking-wider">
-                                                Subject-wise Difficulty Level Analysis
-                                            </th>
-                                        </tr>
-                                        <tr className="bg-purple-200 border-b border-gray-400 text-purple-950 font-black">
-                                            <th className="p-2 border-r border-gray-400 text-left pl-4">Subject</th>
-                                            <th className="p-2 border-r border-gray-400">Easy</th>
-                                            <th className="p-2 border-r border-gray-400">Medium</th>
-                                            <th className="p-2 border-r border-gray-400">Hard</th>
-                                            <th className="p-2">Grand Total</th>
+                                        <tr className="bg-navy text-gold">
+                                            <th className="p-2.5 text-left pl-4 border border-gray-400">Subject</th>
+                                            <th className="p-2.5 border border-gray-400">Easy (40%)</th>
+                                            <th className="p-2.5 border border-gray-400">Medium (40%)</th>
+                                            <th className="p-2.5 border border-gray-400">Hard (20%)</th>
+                                            <th className="p-2.5 border border-gray-400">Total Questions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {subjects.map((sub, idx) => {
-                                            const row = diffData.subjects[sub] || { easy: 0, medium: 0, hard: 0, total: 0 };
+                                            const d = diffData.subjects[sub] || { easy: 0, medium: 0, hard: 0, total: 0 };
                                             return (
                                                 <tr key={sub} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                    <td className="p-2 border border-gray-300 text-left pl-4 font-black text-navy">{sub}</td>
-                                                    <td className="p-2 border border-gray-300 text-emerald-700">{row.easy}</td>
-                                                    <td className="p-2 border border-gray-300 text-amber-700">{row.medium}</td>
-                                                    <td className="p-2 border border-gray-300 text-rose-700">{row.hard}</td>
-                                                    <td className="p-2 border border-gray-300 font-black text-navy">{row.total}</td>
+                                                    <td className="p-2.5 border border-gray-300 text-left pl-4 font-black text-navy">{sub}</td>
+                                                    <td className="p-2.5 border border-gray-300 text-emerald-700">{d.easy} ({d.total ? Math.round((d.easy / d.total) * 100) : 0}%)</td>
+                                                    <td className="p-2.5 border border-gray-300 text-amber-700">{d.medium} ({d.total ? Math.round((d.medium / d.total) * 100) : 0}%)</td>
+                                                    <td className="p-2.5 border border-gray-300 text-rose-700">{d.hard} ({d.total ? Math.round((d.hard / d.total) * 100) : 0}%)</td>
+                                                    <td className="p-2.5 border border-gray-300 font-black text-navy">{d.total}</td>
                                                 </tr>
                                             );
                                         })}
-                                        <tr className="bg-purple-100 font-black text-navy border-t-2 border-gray-400">
-                                            <td className="p-2 border border-gray-400 text-left pl-4">Overall Difficulty Level Analysis</td>
-                                            <td className="p-2 border border-gray-400 text-emerald-800">{diffData.grand.easy}</td>
-                                            <td className="p-2 border border-gray-400 text-amber-800">{diffData.grand.medium}</td>
-                                            <td className="p-2 border border-gray-400 text-rose-800">{diffData.grand.hard}</td>
-                                            <td className="p-2 border border-gray-400 font-black">{diffData.grand.total}</td>
+                                        <tr className="bg-amber-50 font-black text-navy border-t-2 border-gray-400">
+                                            <td className="p-2.5 border border-gray-400 text-left pl-4">GRAND TOTAL</td>
+                                            <td className="p-2.5 border border-gray-400 text-emerald-700">{diffData.grand.easy} ({diffData.grand.total ? Math.round((diffData.grand.easy / diffData.grand.total) * 100) : 0}%)</td>
+                                            <td className="p-2.5 border border-gray-400 text-amber-700">{diffData.grand.medium} ({diffData.grand.total ? Math.round((diffData.grand.medium / diffData.grand.total) * 100) : 0}%)</td>
+                                            <td className="p-2.5 border border-gray-400 text-rose-700">{diffData.grand.hard} ({diffData.grand.total ? Math.round((diffData.grand.hard / diffData.grand.total) * 100) : 0}%)</td>
+                                            <td className="p-2.5 border border-gray-400 font-black">{diffData.grand.total}</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
 
-                            {/* Top 2 Visuals */}
+                            {/* Charts Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                                 <div>
-                                    <h4 className="text-center font-black text-gray-700 text-sm mb-2">Subject Wise Analysis</h4>
+                                    <h4 className="text-center font-black text-gray-700 text-xs mb-2 uppercase tracking-wider">Difficulty Distribution Across Subjects</h4>
                                     <GroupedBarChart
                                         categories={subjects}
                                         series={[
-                                            { name: 'Easy', color: '#16a34a', data: subjects.map(s => diffData.subjects[s]?.easy || 0) },
-                                            { name: 'Medium', color: '#eab308', data: subjects.map(s => diffData.subjects[s]?.medium || 0) },
-                                            { name: 'Hard', color: '#dc2626', data: subjects.map(s => diffData.subjects[s]?.hard || 0) },
+                                            { name: 'Easy', color: '#10b981', data: subjects.map(s => diffData.subjects[s]?.easy || 0) },
+                                            { name: 'Medium', color: '#f59e0b', data: subjects.map(s => diffData.subjects[s]?.medium || 0) },
+                                            { name: 'Hard', color: '#ef4444', data: subjects.map(s => diffData.subjects[s]?.hard || 0) },
                                         ]}
                                     />
                                 </div>
                                 <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
                                     <DonutChart
-                                        title="Overall Difficulty Analysis"
+                                        title="Overall Paper Difficulty"
                                         data={[
-                                            { label: 'Easy', value: diffData.grand.easy, color: '#16a34a' },
-                                            { label: 'Medium', value: diffData.grand.medium, color: '#eab308' },
-                                            { label: 'Hard', value: diffData.grand.hard, color: '#dc2626' },
+                                            { label: 'Easy', value: diffData.grand.easy, color: '#10b981' },
+                                            { label: 'Medium', value: diffData.grand.medium, color: '#f59e0b' },
+                                            { label: 'Hard', value: diffData.grand.hard, color: '#ef4444' },
                                         ]}
                                     />
                                 </div>
-                            </div>
-
-                            {/* Per-Subject 4 Donut Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-                                {subjects.map(s => {
-                                    const d = diffData.subjects[s] || { easy: 0, medium: 0, hard: 0 };
-                                    return (
-                                        <div key={s} className="bg-gray-50/70 p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
-                                            <DonutChart
-                                                title={s}
-                                                size={140}
-                                                holeRadius={38}
-                                                data={[
-                                                    { label: 'Easy', value: d.easy, color: '#16a34a' },
-                                                    { label: 'Medium', value: d.medium, color: '#eab308' },
-                                                    { label: 'Hard', value: d.hard, color: '#dc2626' },
-                                                ]}
-                                            />
-                                        </div>
-                                    );
-                                })}
                             </div>
                         </div>
                     )}
 
-                    {/* SECTION 2: CLASS-WISE QUESTION DISTRIBUTION */}
+                    {/* SECTION 2: CLASS-WISE DISTRIBUTION */}
                     {(activeTab === 'class' || window.matchMedia('print').matches) && (
                         <div className="space-y-6">
-                            
+                            <div className="flex items-center justify-between border-b pb-2">
+                                <h3 className="font-black text-base text-navy uppercase">Class-Wise Question Distribution (11th vs 12th)</h3>
+                            </div>
+
                             {/* Table */}
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse border border-gray-400 text-center text-xs font-bold">
+                                <table className="w-full border-collapse border border-gray-300 text-center text-xs font-bold">
                                     <thead>
-                                        <tr className="bg-amber-100 border-b border-gray-400">
-                                            <th colSpan="5" className="p-2 text-sm font-black text-navy uppercase tracking-wider">
-                                                Class-wise Question Distribution
-                                            </th>
-                                        </tr>
-                                        <tr className="bg-purple-200 border-b border-gray-400 text-purple-950 font-black">
-                                            <th className="p-2 border-r border-gray-400 text-left pl-4">Subject</th>
-                                            <th className="p-2 border-r border-gray-400">Class 11th</th>
-                                            <th className="p-2 border-r border-gray-400">Class 12th</th>
-                                            <th className="p-2 border-r border-gray-400">11th %age</th>
-                                            <th className="p-2">12th %age</th>
+                                        <tr className="bg-navy text-gold">
+                                            <th className="p-2.5 text-left pl-4 border border-gray-400">Subject</th>
+                                            <th className="p-2.5 border border-gray-400">Class 11 (XI / I PUC)</th>
+                                            <th className="p-2.5 border border-gray-400">Class 12 (XII / II PUC)</th>
+                                            <th className="p-2.5 border border-gray-400">Total Questions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {subjects.map((sub, idx) => {
-                                            const row = classData.subjects[sub] || { class11: 0, class12: 0, total: 1 };
-                                            const pct11 = Math.round((row.class11 / (row.total || 1)) * 100);
-                                            const pct12 = 100 - pct11;
+                                            const d = classData.subjects[sub] || { class11: 0, class12: 0, total: 0 };
                                             return (
                                                 <tr key={sub} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                    <td className="p-2 border border-gray-300 text-left pl-4 font-black text-navy">{sub}</td>
-                                                    <td className="p-2 border border-gray-300 text-blue-700">{row.class11}</td>
-                                                    <td className="p-2 border border-gray-300 text-red-700">{row.class12}</td>
-                                                    <td className="p-2 border border-gray-300 font-bold">{pct11}%</td>
-                                                    <td className="p-2 border border-gray-300 font-bold">{pct12}%</td>
+                                                    <td className="p-2.5 border border-gray-300 text-left pl-4 font-black text-navy">{sub}</td>
+                                                    <td className="p-2.5 border border-gray-300 text-blue-700">{d.class11} ({d.total ? Math.round((d.class11 / d.total) * 100) : 0}%)</td>
+                                                    <td className="p-2.5 border border-gray-300 text-red-700">{d.class12} ({d.total ? Math.round((d.class12 / d.total) * 100) : 0}%)</td>
+                                                    <td className="p-2.5 border border-gray-300 font-black text-navy">{d.total}</td>
                                                 </tr>
                                             );
                                         })}
-                                        <tr className="bg-purple-100 font-black text-navy border-t-2 border-gray-400">
-                                            <td className="p-2 border border-gray-400 text-left pl-4">Class-wise Question Distribution</td>
-                                            <td className="p-2 border border-gray-400 text-blue-800">{classData.grand.class11}</td>
-                                            <td className="p-2 border border-gray-400 text-red-800">{classData.grand.class12}</td>
-                                            <td className="p-2 border border-gray-400">{Math.round((classData.grand.class11 / (classData.grand.total || 1)) * 100)}%</td>
-                                            <td className="p-2 border border-gray-400">{Math.round((classData.grand.class12 / (classData.grand.total || 1)) * 100)}%</td>
+                                        <tr className="bg-amber-50 font-black text-navy border-t-2 border-gray-400">
+                                            <td className="p-2.5 border border-gray-400 text-left pl-4">GRAND TOTAL</td>
+                                            <td className="p-2.5 border border-gray-400 text-blue-700">{classData.grand.class11}</td>
+                                            <td className="p-2.5 border border-gray-400 text-red-700">{classData.grand.class12}</td>
+                                            <td className="p-2.5 border border-gray-400 font-black">{classData.grand.total}</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
 
-                            {/* Top 2 Visuals */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                                <div>
-                                    <h4 className="text-center font-black text-gray-700 text-sm mb-2">Class-wise Analysis</h4>
-                                    <GroupedBarChart
-                                        categories={subjects}
-                                        series={[
-                                            { name: '11th', color: '#2563eb', data: subjects.map(s => classData.subjects[s]?.class11 || 0) },
-                                            { name: '12th', color: '#dc2626', data: subjects.map(s => classData.subjects[s]?.class12 || 0) },
-                                        ]}
-                                    />
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
-                                    <DonutChart
-                                        title="Overall Class-wise Analysis"
-                                        data={[
-                                            { label: '11th', value: classData.grand.class11, color: '#2563eb' },
-                                            { label: '12th', value: classData.grand.class12, color: '#dc2626' },
-                                        ]}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Per-Subject 4 Donut Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+                            {/* Donut Grid */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                                 {subjects.map(s => {
                                     const d = classData.subjects[s] || { class11: 0, class12: 0 };
                                     return (
-                                        <div key={s} className="bg-gray-50/70 p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
+                                        <div key={s} className="bg-gray-50 p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
                                             <DonutChart
                                                 title={s}
                                                 size={140}
@@ -512,28 +467,25 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
                         </div>
                     )}
 
-                    {/* SECTION 3: QUESTION TYPE ANALYSIS */}
+                    {/* SECTION 3: QUESTION TYPES */}
                     {(activeTab === 'types' || window.matchMedia('print').matches) && (
                         <div className="space-y-6">
-                            
+                            <div className="flex items-center justify-between border-b pb-2">
+                                <h3 className="font-black text-base text-navy uppercase">Question Type Breakdown</h3>
+                            </div>
+
                             {/* Table */}
                             <div className="overflow-x-auto">
-                                <table className="w-full border-collapse border border-gray-400 text-center text-[11px] font-bold">
+                                <table className="w-full border-collapse border border-gray-300 text-center text-xs font-bold">
                                     <thead>
-                                        <tr className="bg-amber-100 border-b border-gray-400">
-                                            <th colSpan="8" className="p-2 text-sm font-black text-navy uppercase tracking-wider">
-                                                Question Type Analysis ({paperTitle})
-                                            </th>
-                                        </tr>
-                                        <tr className="bg-blue-100 border-b border-gray-400 text-navy font-black">
-                                            <th className="p-2 border-r border-gray-400 text-left pl-3">Subject</th>
-                                            <th className="p-2 border-r border-gray-400">Single Choice (MCQ)</th>
-                                            <th className="p-2 border-r border-gray-400">Statement I & II</th>
-                                            <th className="p-2 border-r border-gray-400">Multi-Statement Based</th>
-                                            <th className="p-2 border-r border-gray-400">Assertion & Reason</th>
-                                            <th className="p-2 border-r border-gray-400">Match the column</th>
-                                            <th className="p-2 border-r border-gray-400">Diagram Based</th>
-                                            <th className="p-2">Grand Total</th>
+                                        <tr className="bg-navy text-gold">
+                                            <th className="p-2 border border-gray-400 text-left pl-3">Subject</th>
+                                            <th className="p-2 border border-gray-400">MCQ</th>
+                                            <th className="p-2 border border-gray-400">Statement</th>
+                                            <th className="p-2 border border-gray-400">Assertion-Reason</th>
+                                            <th className="p-2 border border-gray-400">Match Col</th>
+                                            <th className="p-2 border border-gray-400">Diagram Based</th>
+                                            <th className="p-2 border border-gray-400">Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -543,8 +495,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
                                                 <tr key={sub} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                                     <td className="p-2 border border-gray-300 text-left pl-3 font-black text-navy">{sub}</td>
                                                     <td className="p-2 border border-gray-300">{r.single}</td>
-                                                    <td className="p-2 border border-gray-300">{r.stmt}</td>
-                                                    <td className="p-2 border border-gray-300">{r.multi}</td>
+                                                    <td className="p-2 border border-gray-300">{r.stmt + r.multi}</td>
                                                     <td className="p-2 border border-gray-300">{r.assertion}</td>
                                                     <td className="p-2 border border-gray-300">{r.match}</td>
                                                     <td className="p-2 border border-gray-300">{r.diagram}</td>
@@ -552,11 +503,10 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
                                                 </tr>
                                             );
                                         })}
-                                        <tr className="bg-blue-50 font-black text-navy border-t-2 border-gray-400">
+                                        <tr className="bg-amber-50 font-black text-navy border-t-2 border-gray-400">
                                             <td className="p-2 border border-gray-400 text-left pl-3">Total</td>
                                             <td className="p-2 border border-gray-400">{typeData.grand.single}</td>
-                                            <td className="p-2 border border-gray-400">{typeData.grand.stmt}</td>
-                                            <td className="p-2 border border-gray-400">{typeData.grand.multi}</td>
+                                            <td className="p-2 border border-gray-400">{typeData.grand.stmt + typeData.grand.multi}</td>
                                             <td className="p-2 border border-gray-400">{typeData.grand.assertion}</td>
                                             <td className="p-2 border border-gray-400">{typeData.grand.match}</td>
                                             <td className="p-2 border border-gray-400">{typeData.grand.diagram}</td>
@@ -565,80 +515,46 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'NEET 2025 Question 
                                     </tbody>
                                 </table>
                             </div>
-
-                            {/* Top Visuals */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                                <div>
-                                    <h4 className="text-center font-black text-gray-700 text-sm mb-2">Question Type Analysis</h4>
-                                    <GroupedBarChart
-                                        categories={subjects}
-                                        series={[
-                                            { name: 'MCQ', color: '#2563eb', data: subjects.map(s => typeData.subjects[s]?.single || 0) },
-                                            { name: 'Statement', color: '#dc2626', data: subjects.map(s => typeData.subjects[s]?.stmt || 0) },
-                                            { name: 'Match', color: '#eab308', data: subjects.map(s => typeData.subjects[s]?.match || 0) },
-                                            { name: 'Assertion', color: '#16a34a', data: subjects.map(s => typeData.subjects[s]?.assertion || 0) },
-                                        ]}
-                                    />
-                                </div>
-                                <div className="bg-white p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
-                                    <DonutChart
-                                        title="Overall Question Type Analysis"
-                                        data={[
-                                            { label: 'MCQ', value: typeData.grand.single, color: '#2563eb' },
-                                            { label: 'Statement', value: typeData.grand.stmt + typeData.grand.multi, color: '#ea580c' },
-                                            { label: 'Assertion', value: typeData.grand.assertion, color: '#eab308' },
-                                            { label: 'Match', value: typeData.grand.match, color: '#16a34a' },
-                                            { label: 'Diagram', value: typeData.grand.diagram, color: '#06b6d4' },
-                                        ]}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Per-Subject 4 Donut Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-                                {subjects.map(s => {
-                                    const d = typeData.subjects[s] || { single: 0, stmt: 0, assertion: 0, match: 0, diagram: 0 };
-                                    return (
-                                        <div key={s} className="bg-gray-50/70 p-4 rounded-2xl border border-gray-200 flex flex-col items-center">
-                                            <DonutChart
-                                                title={s}
-                                                size={140}
-                                                holeRadius={38}
-                                                data={[
-                                                    { label: 'MCQ', value: d.single, color: '#2563eb' },
-                                                    { label: 'Statement', value: d.stmt + d.multi, color: '#ea580c' },
-                                                    { label: 'Assertion', value: d.assertion, color: '#eab308' },
-                                                    { label: 'Match', value: d.match, color: '#16a34a' },
-                                                    { label: 'Diagram', value: d.diagram, color: '#06b6d4' },
-                                                ]}
-                                            />
-                                        </div>
-                                    );
-                                })}
-                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* Modal Footer */}
-                <div className="flex justify-between items-center p-6 border-t border-gray-200 bg-gray-50/80 no-print">
+                {/* Footer */}
+                <div className="flex justify-between items-center p-5 border-t border-gray-200 bg-gray-50/80 no-print">
                     <div className="text-xs font-bold text-gray-500">
-                        Academic Audit & Blueprint Compliance System • Manchester College
+                        Academic Audit & Assessment Analysis System • Manchester College
                     </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={onClose}
-                            className="bg-navy text-gold px-8 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow"
-                        >
-                            Close Analysis
-                        </button>
-                    </div>
+                    <button
+                        onClick={onClose}
+                        className="bg-navy text-gold px-7 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition shadow"
+                    >
+                        Close Analysis
+                    </button>
                 </div>
             </div>
+
+            {/* Print Styles with Explicit Full Color Enforcement */}
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
-                    body { background: white !important; }
+                    body * { visibility: hidden; }
+                    .print-analysis-container, .print-analysis-container * {
+                        visibility: visible !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        color-adjust: exact !important;
+                    }
+                    .print-analysis-container {
+                        position: absolute !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        box-shadow: none !important;
+                        border: none !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
                 }
             `}</style>
         </div>

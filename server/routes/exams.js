@@ -12,6 +12,8 @@ const { detectLabIp } = require('../middleware/labIp');
 const supabaseQuestions = require('../services/supabaseQuestions');
 
 // ─────────────────────────────────────────────────────────────────
+const { createNotification } = require('./notifications');
+
 // ADMIN: Commission a new Exam Assignment to Faculty
 // POST /api/exams/commission
 // ─────────────────────────────────────────────────────────────────
@@ -32,6 +34,36 @@ router.post('/commission', [auth, checkRole(['admin'])], async (req, res) => {
         });
 
         await newExam.save();
+
+        // Dispatch notifications to assigned teachers
+        if (Array.isArray(subjectAssignments)) {
+            for (const sa of subjectAssignments) {
+                if (sa.teacherId) {
+                    try {
+                        await createNotification({
+                            recipient_role: 'teacher',
+                            recipient_id: sa.teacherId.toString(),
+                            sender_id: req.user.id,
+                            sender_name: req.user.name || 'Admin Office',
+                            type: 'exam_assignment',
+                            title: `New Paper Assignment: ${title}`,
+                            message: `Admin assigned you to compile ${sa.targetQuestions || 60} ${sa.subject} questions for ${title} (${examType || 'CET'}).`,
+                            metadata: {
+                                examId: newExam._id.toString(),
+                                examTitle: title,
+                                subject: sa.subject,
+                                targetQuestions: sa.targetQuestions || 60,
+                                examType: examType || 'CET',
+                                classes: classes || ['12']
+                            }
+                        });
+                    } catch (notifErr) {
+                        console.error('Teacher notification error:', notifErr.message);
+                    }
+                }
+            }
+        }
+
         res.json({ msg: 'Exam successfully commissioned and dispatched to teachers', exam: newExam });
     } catch (err) {
         console.error('Commission Error:', err);
