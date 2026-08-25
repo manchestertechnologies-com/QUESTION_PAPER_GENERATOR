@@ -108,17 +108,24 @@ export default function CreatePaper() {
         fetchTemplates();
     }, [examId, user]);
 
-    // Fetch Questions Bank based on subject (limit=5000 to get full pool)
+    // Meta chapters from backend RPC
+    const [metaChapters, setMetaChapters] = useState([]);
+
+    // Fetch Questions Bank based on subject (limit=20000 to get entire pool and meta)
     const fetchQuestionsPool = async () => {
         setLoadingQuestions(true);
         try {
-            const params = new URLSearchParams();
-            if (subject) params.append('subject', subject);
-            params.append('limit', '5000');
+            const [qsRes, metaRes] = await Promise.all([
+                api.get(`/api/questions?subject=${encodeURIComponent(subject)}&limit=20000`),
+                api.get(`/api/questions/meta?subject=${encodeURIComponent(subject)}`).catch(() => ({ data: { chapters: [] } }))
+            ]);
 
-            const res = await api.get(`/api/questions?${params.toString()}`);
-            const qs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+            const qs = Array.isArray(qsRes.data) ? qsRes.data : (qsRes.data?.questions || []);
             setAvailableQuestions(qs);
+
+            if (metaRes.data?.chapters && Array.isArray(metaRes.data.chapters)) {
+                setMetaChapters(metaRes.data.chapters);
+            }
         } catch (err) {
             console.error('Error fetching questions pool:', err);
         } finally {
@@ -132,9 +139,9 @@ export default function CreatePaper() {
         }
     }, [subject]);
 
-    // Extract distinct chapters and chapter-to-concepts hierarchy
+    // Extract distinct chapters (combined from DB metadata and full pool) and chapter-to-concepts hierarchy
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
-        const chaptersSet = new Set();
+        const chaptersSet = new Set(metaChapters.filter(Boolean));
         const map = {};
 
         availableQuestions.forEach(q => {
@@ -148,14 +155,14 @@ export default function CreatePaper() {
             }
         });
 
-        const sortedChapters = Array.from(chaptersSet).sort();
+        const sortedChapters = Array.from(chaptersSet).filter(Boolean).sort();
         const cleanMap = {};
         sortedChapters.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();
         });
 
         return { distinctChapters: sortedChapters, chapterConceptsMap: cleanMap };
-    }, [availableQuestions]);
+    }, [availableQuestions, metaChapters]);
 
     // Concepts available for current filter selection (avoids mixing concepts from other chapters)
     const availableConceptsForFilter = useMemo(() => {
@@ -425,19 +432,34 @@ export default function CreatePaper() {
                                 />
                             </div>
 
-                            {/* Duration */}
+                            {/* Duration (Variable according to setter/teacher) */}
                             <div>
-                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Exam Duration</label>
-                                <select
-                                    value={duration}
-                                    onChange={e => setDuration(e.target.value)}
-                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
-                                >
-                                    <option value="60 Minutes">60 Minutes (1 Hour)</option>
-                                    <option value="90 Minutes">90 Minutes (1.5 Hours)</option>
-                                    <option value="180 Minutes">180 Minutes (3 Hours)</option>
-                                    <option value="200 Minutes">200 Minutes (3 Hrs 20 Min)</option>
-                                </select>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    Exam Duration (Variable)
+                                </label>
+                                <div className="space-y-2">
+                                    <input
+                                        type="text"
+                                        value={duration}
+                                        onChange={e => setDuration(e.target.value)}
+                                        placeholder="e.g. 180 Minutes, 3 Hours, 45 Mins"
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
+                                    />
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {['45 Minutes', '60 Minutes', '90 Minutes', '120 Minutes', '180 Minutes', '200 Minutes', '3 Hours'].map(preset => (
+                                            <button
+                                                key={preset}
+                                                type="button"
+                                                onClick={() => setDuration(preset)}
+                                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                                                    duration === preset ? 'bg-navy text-gold font-black' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {preset}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

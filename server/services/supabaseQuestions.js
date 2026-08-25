@@ -219,7 +219,7 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
         };
     }
 
-    const requestedLimit = Math.max(1, Math.min(500, Number(limit) || 50));
+    const requestedLimit = Math.max(1, Math.min(20000, Number(limit) || 50));
     const requestedPage = Math.max(1, Number(page) || 1);
     const offset = (requestedPage - 1) * requestedLimit;
 

@@ -114,7 +114,7 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
-        const limit = Math.max(1, Math.min(500, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
+        const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
 
         const result = await supabaseQuestions.getQuestions(filters, page, limit);
 
