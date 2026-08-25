@@ -1,15 +1,15 @@
 /**
  * CreatePaper.jsx
  *
- * Streamlined Step-by-Step Question Paper Generation Wizard
+ * Professional Assessment & Assignment Generation Suite
  *
  * Workflow:
- *  Step 1: Academic Requirements (Class, Subject, Chapter selection & Concept selection)
- *  Step 2: Choose Method (Manual Pick vs Auto Fetch)
- *  Step 3: Question Selection / Auto Generation (Filtered strictly by Chapter & Concept, no mixing)
- *  Step 4: True A4 Page-by-Page Preview
- *  Step 5: Alignment & Fine-tuning
- *  Step 6: Finalize, Validate & Save
+ *  Step 1: Scope & Mode Setup (Test vs Assignment, Multi-Select Chapters & Concepts via Checkbox Boxes, Manual Duration)
+ *  Step 2: Choose Acquisition Method (Manual Question Pick vs Auto Fetch Generator)
+ *  Step 3: Question Selection / Auto Assembly from Multi-Topic Pool
+ *  Step 4: True A4 Paginated Preview (Page-by-Page, Balanced Distribution)
+ *  Step 5: Layout Alignment & Fine-tuning
+ *  Step 6: Finalize, Validate & Save / PDF Export
  */
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { AuthContext } from '../../context/AuthContext';
@@ -24,22 +24,30 @@ export default function CreatePaper() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
-    // Query params if coming from Admin assignment
+    // Query params
     const examId = searchParams.get('examId');
     const paperId = searchParams.get('paperId');
+    const initialCategory = searchParams.get('category') === 'assignment' ? 'assignment' : 'test';
 
-    // Wizard Step: 1 (Academic Req) -> 2 (Choose Method) -> 3 (Select/Fetch Qs) -> 4 (Preview) -> 5 (Alignment)
+    // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions) -> 4 (Preview) -> 5 (Alignment)
     const [currentStep, setCurrentStep] = useState(1);
 
-    // Step 1: Academic Metadata
-    const [title, setTitle] = useState('');
-    const [examType, setExamType] = useState('CET');
-    const [selectedClass, setSelectedClass] = useState('12');
+    // Step 1: Mode & Academic Metadata
+    const [paperCategory, setPaperCategory] = useState(initialCategory); // 'test' | 'assignment'
     const [subject, setSubject] = useState(user?.subject || 'Physics');
-    const [selectedChapters, setSelectedChapters] = useState([]);
-    const [selectedConcepts, setSelectedConcepts] = useState([]);
+    const [selectedClass, setSelectedClass] = useState('12');
+    const [examType, setExamType] = useState('CET');
+    const [title, setTitle] = useState('');
     const [duration, setDuration] = useState('180 Minutes');
     const [targetCount, setTargetCount] = useState(60);
+
+    // Assignment custom question numbering
+    const [startQNo, setStartQNo] = useState(1);
+    const [endQNo, setEndQNo] = useState(null);
+
+    // Multi-Select Checkbox States for Chapters & Concepts
+    const [selectedChapters, setSelectedChapters] = useState([]);
+    const [selectedConcepts, setSelectedConcepts] = useState([]);
 
     // Step 2: Method selection ('manual' | 'auto')
     const [method, setMethod] = useState('manual');
@@ -52,21 +60,40 @@ export default function CreatePaper() {
 
     // Manual Selection Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterChapter, setFilterChapter] = useState('');
-    const [filterConcept, setFilterConcept] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [singleFilterChapter, setSingleFilterChapter] = useState('');
+    const [singleFilterConcept, setSingleFilterConcept] = useState('');
 
     // Auto Fetch Configuration
     const [autoQty, setAutoQty] = useState(60);
     const [autoDist, setAutoDist] = useState({ easy: 40, medium: 40, hard: 20 });
 
     // Alignment Settings
-    const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+    const [settings, setSettings] = useState({
+        ...DEFAULT_SETTINGS,
+        showCoverPage: initialCategory !== 'assignment',
+        startQNo: 1,
+    });
 
     // Validation State
     const [validationResult, setValidationResult] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
+
+    // Meta chapters from backend RPC
+    const [metaChapters, setMetaChapters] = useState([]);
+
+    // Auto default title when category or subject changes
+    useEffect(() => {
+        if (!title || title.includes('Assessment') || title.includes('Assignment') || title.includes('Paper')) {
+            if (paperCategory === 'assignment') {
+                setTitle(`${subject} Assignment`);
+            } else {
+                setTitle(`${subject} Assessment`);
+            }
+        }
+    }, [paperCategory, subject]);
 
     // Load Admin Commissioned Exam metadata if examId is present
     useEffect(() => {
@@ -84,6 +111,7 @@ export default function CreatePaper() {
                     );
                     if (myAssignment) {
                         setTargetCount(myAssignment.targetQuestions || 60);
+                        setAutoQty(myAssignment.targetQuestions || 60);
                         if (myAssignment.difficultyDistribution) setAutoDist(myAssignment.difficultyDistribution);
                         if (myAssignment.subject) setSubject(myAssignment.subject);
                     }
@@ -107,9 +135,6 @@ export default function CreatePaper() {
         fetchExamDetails();
         fetchTemplates();
     }, [examId, user]);
-
-    // Meta chapters from backend RPC
-    const [metaChapters, setMetaChapters] = useState([]);
 
     // Fetch Questions Bank based on subject (limit=20000 to get entire pool and meta)
     const fetchQuestionsPool = async () => {
@@ -139,7 +164,7 @@ export default function CreatePaper() {
         }
     }, [subject]);
 
-    // Extract distinct chapters (combined from DB metadata and full pool) and chapter-to-concepts hierarchy
+    // Extract distinct chapters and chapter-to-concepts hierarchy
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
         const chaptersSet = new Set(metaChapters.filter(Boolean));
         const map = {};
@@ -164,48 +189,95 @@ export default function CreatePaper() {
         return { distinctChapters: sortedChapters, chapterConceptsMap: cleanMap };
     }, [availableQuestions, metaChapters]);
 
-    // Concepts available for current filter selection (avoids mixing concepts from other chapters)
-    const availableConceptsForFilter = useMemo(() => {
-        if (filterChapter && chapterConceptsMap[filterChapter]) {
-            return chapterConceptsMap[filterChapter];
-        }
-        // If no chapter filtered, collect all distinct concepts
-        const allCpts = new Set();
-        Object.values(chapterConceptsMap).forEach(list => list.forEach(c => allCpts.add(c)));
-        return Array.from(allCpts).sort();
-    }, [filterChapter, chapterConceptsMap]);
+    // Extract concepts available for currently checked chapters
+    const availableConceptsForSelectedChapters = useMemo(() => {
+        const conceptsList = [];
+        const chs = selectedChapters.length > 0 ? selectedChapters : distinctChapters;
+        
+        chs.forEach(ch => {
+            const cList = chapterConceptsMap[ch] || [];
+            cList.forEach(c => {
+                if (!conceptsList.some(item => item.concept === c && item.chapter === ch)) {
+                    conceptsList.push({ concept: c, chapter: ch });
+                }
+            });
+        });
 
-    // Handle chapter filter change: reset concept filter if not valid for selected chapter
-    const handleChapterFilterChange = (newChapter) => {
-        setFilterChapter(newChapter);
-        if (newChapter && chapterConceptsMap[newChapter] && !chapterConceptsMap[newChapter].includes(filterConcept)) {
-            setFilterConcept('');
-        }
+        return conceptsList;
+    }, [selectedChapters, distinctChapters, chapterConceptsMap]);
+
+    // ── Checkbox Toggle Handlers ──
+    const toggleChapter = (ch) => {
+        setSelectedChapters(prev => {
+            if (prev.includes(ch)) {
+                // If unchecking chapter, also remove concepts belonging to this chapter
+                const chapterConcepts = chapterConceptsMap[ch] || [];
+                setSelectedConcepts(cPrev => cPrev.filter(c => !chapterConcepts.includes(c)));
+                return prev.filter(item => item !== ch);
+            } else {
+                return [...prev, ch];
+            }
+        });
     };
 
-    // Modal to review all selected questions across concepts
-    const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
+    const selectAllChapters = () => {
+        setSelectedChapters([...distinctChapters]);
+    };
 
-    // Filter available questions for Manual Pick (Strict Concept-Wise drilldown)
-    const filteredQuestions = useMemo(() => {
-        if (!filterChapter || !filterConcept) {
-            return [];
-        }
+    const deselectAllChapters = () => {
+        setSelectedChapters([]);
+        setSelectedConcepts([]);
+    };
 
+    const toggleConcept = (cpt) => {
+        setSelectedConcepts(prev => 
+            prev.includes(cpt) ? prev.filter(c => c !== cpt) : [...prev, cpt]
+        );
+    };
+
+    const selectAllConcepts = () => {
+        const allCpts = availableConceptsForSelectedChapters.map(i => i.concept);
+        setSelectedConcepts([...new Set(allCpts)]);
+    };
+
+    const deselectAllConcepts = () => {
+        setSelectedConcepts([]);
+    };
+
+    // ── Matched Question Pool (Filtered strictly by multi-selected chapters & concepts) ──
+    const scopedQuestionPool = useMemo(() => {
         return availableQuestions.filter(q => {
+            // Chapter check
+            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) {
+                return false;
+            }
+            // Concept check
+            if (selectedConcepts.length > 0) {
+                const qConcept = q.concept || q.topic;
+                if (!selectedConcepts.includes(qConcept)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+    }, [availableQuestions, selectedChapters, selectedConcepts]);
+
+    // Filtered questions for Manual Selection (includes search, difficulty, and type)
+    const filteredQuestions = useMemo(() => {
+        return scopedQuestionPool.filter(q => {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = q.chapter === filterChapter;
-            const matchesConcept = (q.concept === filterConcept || q.topic === filterConcept);
+            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter;
+            const matchesSingleConcept = !singleFilterConcept || (q.concept === singleFilterConcept || q.topic === singleFilterConcept);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
-            return matchesSearch && matchesChapter && matchesConcept && matchesDifficulty && matchesType;
+            return matchesSearch && matchesSingleChapter && matchesSingleConcept && matchesDifficulty && matchesType;
         });
-    }, [availableQuestions, searchTerm, filterChapter, filterConcept, filterDifficulty, filterType]);
+    }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType]);
 
     // Toggle single question selection
     const toggleQuestion = (question) => {
@@ -220,8 +292,7 @@ export default function CreatePaper() {
         });
     };
 
-    // Select all questions in the currently loaded concept
-    const selectAllInConcept = () => {
+    const selectAllMatching = () => {
         setSelectedQuestions(prev => {
             const prevIds = new Set(prev.map(q => q._id || q.id));
             const newToAdd = filteredQuestions.filter(q => !prevIds.has(q._id || q.id));
@@ -229,34 +300,25 @@ export default function CreatePaper() {
         });
     };
 
-    // Deselect all questions in the currently loaded concept
-    const deselectAllInConcept = () => {
-        const currentConceptIds = new Set(filteredQuestions.map(q => q._id || q.id));
-        setSelectedQuestions(prev => prev.filter(q => !currentConceptIds.has(q._id || q.id)));
+    const deselectAllMatching = () => {
+        const matchingIds = new Set(filteredQuestions.map(q => q._id || q.id));
+        setSelectedQuestions(prev => prev.filter(q => !matchingIds.has(q._id || q.id)));
     };
 
-    // Auto Fetch Generator with exact concept & difficulty distribution
+    // Auto Fetch Generator
     const handleGenerateAuto = () => {
-        let pool = [...availableQuestions];
-        if (filterChapter) {
-            pool = pool.filter(q => q.chapter === filterChapter);
-        }
-        if (filterConcept) {
-            pool = pool.filter(q => q.concept === filterConcept || q.topic === filterConcept);
+        if (scopedQuestionPool.length === 0) {
+            return alert('No questions found in the selected multi-chapter and concept pool.');
         }
 
-        if (pool.length === 0) {
-            return alert('No questions found matching the selected chapter/concept criteria.');
-        }
-
-        const count = Math.min(autoQty, pool.length);
+        const count = Math.min(autoQty, scopedQuestionPool.length);
         const easyTarget = Math.round(count * (autoDist.easy / 100));
         const medTarget = Math.round(count * (autoDist.medium / 100));
         const hardTarget = count - easyTarget - medTarget;
 
-        const easyPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-        const medPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-        const hardPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
 
         const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
 
@@ -267,9 +329,8 @@ export default function CreatePaper() {
         let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
         const usedIds = new Set(combined.map(q => q._id || q.id));
 
-        // Fill remaining if pools fell short
         if (combined.length < count) {
-            const remainder = pool.filter(q => !usedIds.has(q._id || q.id));
+            const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
             combined.push(...shuffle(remainder).slice(0, count - combined.length));
         }
 
@@ -277,7 +338,7 @@ export default function CreatePaper() {
         setCurrentStep(4); // Move to Preview
     };
 
-    // Validate paper before previewing
+    // Pre-finalize check
     const handlePreFinalizeCheck = () => {
         if (selectedQuestions.length === 0) {
             alert('Please select at least 1 question before proceeding.');
@@ -295,11 +356,14 @@ export default function CreatePaper() {
 
         try {
             const payload = {
-                title: title || `${subject} ${examType} Assessment`,
+                title: title || (paperCategory === 'assignment' ? `${subject} Assignment` : `${subject} Assessment`),
                 subject,
                 classes: [selectedClass],
                 examId: examId || undefined,
-                duration,
+                duration: duration || (paperCategory === 'assignment' ? null : '180 Minutes'),
+                isAssignment: paperCategory === 'assignment',
+                startQNo: startQNo || 1,
+                endQNo: endQNo || (startQNo + selectedQuestions.length - 1),
                 questions: selectedQuestions.map(q => q._id || q.id),
                 questionObjects: selectedQuestions,
                 difficultyDistribution: autoDist,
@@ -313,7 +377,7 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
-            alert('✓ Question Paper successfully finalized and saved!');
+            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved!`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
             } else {
@@ -328,15 +392,22 @@ export default function CreatePaper() {
     };
 
     // Prepared paper object for preview renderer
-    const currentPaperObject = useMemo(() => ({
-        _id: paperId || 'new-paper',
-        title: title || `${subject} ${examType} Paper`,
-        subject,
-        classes: [selectedClass],
-        duration,
-        questions: selectedQuestions,
-        examType,
-    }), [paperId, title, subject, selectedClass, duration, selectedQuestions, examType]);
+    const currentPaperObject = useMemo(() => {
+        const effectiveEnd = endQNo || (startQNo + selectedQuestions.length - 1);
+        const requiredCount = Math.max(0, effectiveEnd - startQNo + 1);
+        const displayQuestions = selectedQuestions.slice(0, requiredCount || selectedQuestions.length);
+
+        return {
+            _id: paperId || 'new-paper',
+            title: title || (paperCategory === 'assignment' ? `${subject} Assignment` : `${subject} Assessment`),
+            subject,
+            classes: [selectedClass],
+            duration: duration || null,
+            questions: displayQuestions,
+            examType: paperCategory === 'assignment' ? 'ASSIGNMENT' : examType,
+            isAssignment: paperCategory === 'assignment',
+        };
+    }, [paperId, title, paperCategory, subject, selectedClass, duration, selectedQuestions, examType, startQNo, endQNo]);
 
     return (
         <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -352,7 +423,7 @@ export default function CreatePaper() {
                     </button>
                     <div>
                         <h1 className="text-base font-black uppercase tracking-tight leading-none text-white">
-                            Paper Generation Wizard
+                            {paperCategory === 'assignment' ? 'Assignment Generator' : 'Question Paper Generator'}
                         </h1>
                         <span className="text-[10px] text-gold font-bold uppercase tracking-widest mt-0.5 block">
                             {title || `${subject} Assessment`}
@@ -363,7 +434,7 @@ export default function CreatePaper() {
                 {/* Step Indicators */}
                 <div className="hidden md:flex items-center gap-2 mr-4">
                     {[
-                        { num: 1, label: 'Configure' },
+                        { num: 1, label: 'Scope & Setup' },
                         { num: 2, label: 'Method' },
                         { num: 3, label: 'Questions' },
                         { num: 4, label: 'Preview' },
@@ -390,45 +461,111 @@ export default function CreatePaper() {
             <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
                 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 1: ACADEMIC REQUIREMENTS & CONFIGURATION
+                    STEP 1: SCOPE, MODE & MULTI-SELECT CHAPTERS / CONCEPTS
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 1 && (
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-6">
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
                             <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 1 of 5</span>
-                            <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Academic Requirements & Syllabus Setup</h2>
-                            <p className="text-xs text-gray-500 font-medium mt-1">Specify paper details, target exam format, and select syllabus chapters & concepts.</p>
+                            <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Academic Scope & Syllabus Setup</h2>
+                            <p className="text-xs text-gray-500 font-medium mt-1">
+                                Choose mode, specify details, and check multiple chapters and concepts to diversify questions.
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {/* Paper Title */}
+                        {/* ── MODE SELECTION: TEST VS ASSIGNMENT ── */}
+                        <div>
+                            <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Paper Type</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div
+                                    onClick={() => setPaperCategory('test')}
+                                    className={`p-5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-4 ${
+                                        paperCategory === 'test'
+                                            ? 'border-navy bg-blue-50/50 shadow-md ring-2 ring-navy/10'
+                                            : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-navy text-gold flex items-center justify-center text-xl font-bold">
+                                        🎓
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-navy uppercase">Standard Assessment / Test</h4>
+                                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                            Formal examination paper with manual timing, cover page, and institutional headers.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div
+                                    onClick={() => setPaperCategory('assignment')}
+                                    className={`p-5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-4 ${
+                                        paperCategory === 'assignment'
+                                            ? 'border-gold bg-amber-50/50 shadow-md ring-2 ring-gold/20'
+                                            : 'border-gray-200 bg-gray-50/50 hover:border-gray-300'
+                                    }`}
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-gold text-navy flex items-center justify-center text-xl font-bold">
+                                        📝
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-navy uppercase">Practice Assignment / Homework</h4>
+                                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                            Subject-focused practice sheet with custom question ranges and direct layout.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── METADATA INPUTS ── */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                            {/* Title */}
                             <div className="md:col-span-2">
-                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Paper Title <span className="text-red-500">*</span></label>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    {paperCategory === 'assignment' ? 'Assignment Title' : 'Paper Title'} <span className="text-red-500">*</span>
+                                </label>
                                 <input
                                     type="text"
                                     value={title}
                                     onChange={e => setTitle(e.target.value)}
-                                    placeholder="e.g. CET MOCK 1 or Chemistry Chapter Assessment"
-                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-gray-50/50"
+                                    placeholder={paperCategory === 'assignment' ? "e.g. Chemistry Assignment or Organic Practice Sheet" : "e.g. Physics Midterm Assessment"}
+                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
                                 />
                             </div>
 
-                            {/* Exam Format */}
-                            <div>
-                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Exam Format</label>
-                                <select
-                                    value={examType}
-                                    onChange={e => setExamType(e.target.value)}
-                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
-                                >
-                                    <option value="CET">CET Assessment</option>
-                                    <option value="NEET">NEET Examination</option>
-                                    <option value="JEE">JEE Examination</option>
-                                    <option value="BOARD">PUC Board Standard</option>
-                                </select>
-                            </div>
+                            {/* Format (Only for Tests) */}
+                            {paperCategory === 'test' ? (
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Exam Format</label>
+                                    <select
+                                        value={examType}
+                                        onChange={e => setExamType(e.target.value)}
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
+                                    >
+                                        <option value="CET">CET Standard</option>
+                                        <option value="NEET">NEET Standard</option>
+                                        <option value="JEE">JEE Standard</option>
+                                        <option value="BOARD">PUC Board Standard</option>
+                                    </select>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Target Questions Count</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        value={targetCount}
+                                        onChange={e => {
+                                            const v = parseInt(e.target.value) || 10;
+                                            setTargetCount(v);
+                                            setAutoQty(v);
+                                        }}
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
+                                    />
+                                </div>
+                            )}
 
-                            {/* Target Class */}
+                            {/* Class */}
                             <div>
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Target Class</label>
                                 <select
@@ -454,71 +591,194 @@ export default function CreatePaper() {
                                 />
                             </div>
 
-                            {/* Duration (Variable according to setter/teacher) */}
+                            {/* Duration (Manual Input Only) */}
                             <div>
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
-                                    Exam Duration (Variable)
+                                    Duration (Manual Entry)
                                 </label>
-                                <div className="space-y-2">
-                                    <input
-                                        type="text"
-                                        value={duration}
-                                        onChange={e => setDuration(e.target.value)}
-                                        placeholder="e.g. 180 Minutes, 3 Hours, 45 Mins"
-                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
-                                    />
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {['45 Minutes', '60 Minutes', '90 Minutes', '120 Minutes', '180 Minutes', '200 Minutes', '3 Hours'].map(preset => (
-                                            <button
-                                                key={preset}
-                                                type="button"
-                                                onClick={() => setDuration(preset)}
-                                                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                                                    duration === preset ? 'bg-navy text-gold font-black' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                                }`}
-                                            >
-                                                {preset}
-                                            </button>
-                                        ))}
+                                <input
+                                    type="text"
+                                    value={duration}
+                                    onChange={e => setDuration(e.target.value)}
+                                    placeholder="e.g. 180 Minutes, 45 Mins, 1 Hour 30 Mins"
+                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
+                                />
+                            </div>
+
+                            {/* Assignment Question Range */}
+                            {paperCategory === 'assignment' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Start Question No.</label>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            value={startQNo}
+                                            onChange={e => setStartQNo(parseInt(e.target.value) || 1)}
+                                            className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
+                                        />
                                     </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">End Question No. (Optional)</label>
+                                        <input
+                                            type="number"
+                                            min={startQNo}
+                                            placeholder={`Default: ${startQNo + targetCount - 1}`}
+                                            value={endQNo || ''}
+                                            onChange={e => setEndQNo(e.target.value ? parseInt(e.target.value) : null)}
+                                            className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* ── MULTI-SELECT CHAPTERS (CHECKBOX BOX GRID) ── */}
+                        <div className="space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                                <div>
+                                    <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                        <span>📚</span> Select Chapters ({selectedChapters.length} of {distinctChapters.length} Selected)
+                                    </h3>
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        Check one or multiple chapters to include in the question pool.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={selectAllChapters}
+                                        className="text-[11px] font-bold text-navy bg-navy/10 hover:bg-navy hover:text-gold px-3 py-1 rounded-xl transition cursor-pointer"
+                                    >
+                                        Select All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={deselectAllChapters}
+                                        className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
+                                    >
+                                        Clear
+                                    </button>
                                 </div>
                             </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
+                                {distinctChapters.map(ch => {
+                                    const isChecked = selectedChapters.includes(ch);
+                                    const cCount = (chapterConceptsMap[ch] || []).length;
+                                    return (
+                                        <div
+                                            key={ch}
+                                            onClick={() => toggleChapter(ch)}
+                                            className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                                isChecked
+                                                    ? 'border-navy bg-blue-50/60 shadow-xs'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => {}}
+                                                className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <span className="text-xs font-bold text-navy block truncate" title={ch}>
+                                                    {ch}
+                                                </span>
+                                                <span className="text-[10px] text-gray-500 font-medium">
+                                                    {cCount} {cCount === 1 ? 'Concept' : 'Concepts'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
 
-                        {/* Chapter and Concept Scope Summary */}
-                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-xs font-black text-navy uppercase tracking-wider">
-                                    📚 Available Syllabus Chapters ({distinctChapters.length})
-                                </span>
-                                <span className="text-[11px] font-bold text-gray-500">
-                                    {availableQuestions.length} Total Questions in Pool
-                                </span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pr-1">
-                                {distinctChapters.map(ch => (
-                                    <span
-                                        key={ch}
-                                        className="bg-white border border-gray-300 text-navy text-[11px] font-bold px-3 py-1 rounded-xl shadow-xs"
+                        {/* ── MULTI-SELECT CONCEPTS (CHECKBOX BOX GRID) ── */}
+                        <div className="space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                                <div>
+                                    <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                        <span>💡</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
+                                    </h3>
+                                    <p className="text-[11px] text-gray-500 font-medium">
+                                        {selectedChapters.length > 0
+                                            ? `Available concepts under the ${selectedChapters.length} selected chapter(s).`
+                                            : `Select specific concepts across all syllabus chapters.`}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={selectAllConcepts}
+                                        className="text-[11px] font-bold text-navy bg-navy/10 hover:bg-navy hover:text-gold px-3 py-1 rounded-xl transition cursor-pointer"
                                     >
-                                        {ch}
-                                        {chapterConceptsMap[ch]?.length > 0 && (
-                                            <span className="ml-1.5 text-[9px] bg-navy/10 text-navy px-1.5 py-0.5 rounded-md">
-                                                {chapterConceptsMap[ch].length} Concepts
-                                            </span>
-                                        )}
-                                    </span>
-                                ))}
+                                        Select All
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={deselectAllConcepts}
+                                        className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
                             </div>
+
+                            {availableConceptsForSelectedChapters.length === 0 ? (
+                                <div className="p-8 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
+                                    No concepts available. Please check one or more chapters above.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
+                                    {availableConceptsForSelectedChapters.map(({ concept: cpt, chapter: ch }) => {
+                                        const isChecked = selectedConcepts.includes(cpt);
+                                        return (
+                                            <div
+                                                key={`${ch}-${cpt}`}
+                                                onClick={() => toggleConcept(cpt)}
+                                                className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                                    isChecked
+                                                        ? 'border-emerald-600 bg-emerald-50/60 shadow-xs'
+                                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {}}
+                                                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="text-xs font-bold text-navy block truncate" title={cpt}>
+                                                        {cpt}
+                                                    </span>
+                                                    <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
+                                                        📖 {ch}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
-                        {/* Navigation Actions */}
-                        <div className="flex justify-end pt-4 border-t border-gray-100">
+                        {/* ── SCOPE SUMMARY BAR ── */}
+                        <div className="bg-navy text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <span className="text-[10px] text-gold font-bold uppercase tracking-widest">Active Scope Pool</span>
+                                <div className="text-sm font-black mt-0.5">
+                                    {scopedQuestionPool.length} Questions Available across {selectedChapters.length || 'All'} Chapters & {selectedConcepts.length || 'All'} Concepts
+                                </div>
+                            </div>
                             <button
                                 onClick={() => setCurrentStep(2)}
-                                className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
+                                className="bg-gold text-navy hover:scale-105 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                <span>Continue to Question Method</span>
+                                <span>Proceed to Method</span>
                                 <span>→</span>
                             </button>
                         </div>
@@ -526,14 +786,16 @@ export default function CreatePaper() {
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 2: CHOOSE QUESTION METHOD (MANUAL PICK VS AUTO FETCH)
+                    STEP 2: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 2 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
                             <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 2 of 5</span>
-                            <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Choose Question Acquisition Method</h2>
-                            <p className="text-xs text-gray-500 font-medium mt-1">Select questions manually with granular chapter & concept filters or auto-fetch a balanced set.</p>
+                            <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Choose Acquisition Method</h2>
+                            <p className="text-xs text-gray-500 font-medium mt-1">
+                                Pick questions individually from your selected topics or auto-generate a balanced set.
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -551,11 +813,11 @@ export default function CreatePaper() {
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Manual Question Pick</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                        Browse your repository with specific chapter & concept filters so questions and topics never get mixed. Inspect details and select exactly what you need.
+                                        Browse all {scopedQuestionPool.length} questions matching your checked chapters and concepts. Select exactly what you need.
                                     </p>
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
-                                    <span>Browse Questions ({availableQuestions.length} Available)</span>
+                                    <span>Browse Questions ({scopedQuestionPool.length} In Scope)</span>
                                     <span>→</span>
                                 </div>
                             </div>
@@ -574,11 +836,11 @@ export default function CreatePaper() {
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Auto Fetch Generator</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                        Automatically assemble a compliant question paper by specifying chapter, concept scope, question count, and difficulty distribution.
+                                        Automatically assemble questions across all your checked chapters and concepts with customized difficulty distribution.
                                     </p>
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
-                                    <span>Configure & Generate</span>
+                                    <span>Configure & Auto-Generate</span>
                                     <span>→</span>
                                 </div>
                             </div>
@@ -589,14 +851,14 @@ export default function CreatePaper() {
                                 onClick={() => setCurrentStep(1)}
                                 className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                             >
-                                ← Back to Requirements
+                                ← Back to Scope Setup
                             </button>
                         </div>
                     </div>
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 3: QUESTION SELECTION / AUTO GENERATION (WITH CONCEPT FILTER)
+                    STEP 3: QUESTION SELECTION / AUTO GENERATION
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 3 && (
                     <div className="space-y-6 animate-fade-in">
@@ -604,44 +866,14 @@ export default function CreatePaper() {
                             /* ── AUTO FETCH CONFIGURATION SCREEN ── */
                             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 space-y-6 max-w-3xl mx-auto">
                                 <div className="border-b border-gray-100 pb-4">
-                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Auto Fetch Engine</span>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Auto Engine</span>
                                     <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Auto Fetch Configuration</h2>
                                     <p className="text-xs text-gray-500 font-medium mt-1">
-                                        Select Chapter & Concept scope to target specific topics without mixing syllabus areas.
+                                        Assembling from {scopedQuestionPool.length} available questions across {selectedChapters.length || 'All'} chapters and {selectedConcepts.length || 'All'} concepts.
                                     </p>
                                 </div>
 
                                 <div className="space-y-5">
-                                    {/* Scope Filters */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-200">
-                                        <div>
-                                            <label className="block text-xs font-black text-navy uppercase mb-1">Target Chapter</label>
-                                            <select
-                                                value={filterChapter}
-                                                onChange={e => handleChapterFilterChange(e.target.value)}
-                                                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                            >
-                                                <option value="">All Prescribed Chapters ({distinctChapters.length})</option>
-                                                {distinctChapters.map(ch => (
-                                                    <option key={ch} value={ch}>{ch}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-black text-navy uppercase mb-1">Target Concept / Topic</label>
-                                            <select
-                                                value={filterConcept}
-                                                onChange={e => setFilterConcept(e.target.value)}
-                                                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                            >
-                                                <option value="">All Concepts in Chapter</option>
-                                                {availableConceptsForFilter.map(cpt => (
-                                                    <option key={cpt} value={cpt}>{cpt}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-
                                     {/* Quantity */}
                                     <div>
                                         <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Question Quantity</label>
@@ -649,12 +881,12 @@ export default function CreatePaper() {
                                             <input
                                                 type="number"
                                                 min={1}
-                                                max={availableQuestions.length || 100}
+                                                max={scopedQuestionPool.length || 100}
                                                 value={autoQty}
                                                 onChange={e => setAutoQty(parseInt(e.target.value) || 0)}
                                                 className="w-32 border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-lg font-black text-navy text-center outline-none"
                                             />
-                                            {[30, 45, 60, 90].map(cnt => (
+                                            {[15, 30, 45, 60].map(cnt => (
                                                 <button
                                                     key={cnt}
                                                     type="button"
@@ -667,7 +899,7 @@ export default function CreatePaper() {
                                         </div>
                                     </div>
 
-                                    {/* Difficulty Split Slider / Visual Bar */}
+                                    {/* Difficulty Split */}
                                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 space-y-4">
                                         <div className="flex justify-between items-center">
                                             <label className="text-xs font-black text-navy uppercase tracking-wider">Difficulty Distribution Split</label>
@@ -731,18 +963,18 @@ export default function CreatePaper() {
                                 </div>
                             </div>
                         ) : (
-                            /* ── MANUAL SELECTION SCREEN (STRICT CONCEPT-WISE DRILLDOWN: Class -> Subject -> Chapter -> Concept) ── */
+                            /* ── MANUAL SELECTION SCREEN ── */
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                     <div>
                                         <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                            Concept-Wise Question Picker
+                                            Multi-Topic Question Pool
                                         </span>
                                         <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                            Select Questions By Concept
+                                            Select Questions ({filteredQuestions.length} in Active Pool)
                                         </h2>
                                         <p className="text-xs text-gray-500 font-bold">
-                                            {selectedQuestions.length} of {targetCount} Questions Selected Across Concepts
+                                            {selectedQuestions.length} Questions Selected
                                         </p>
                                     </div>
 
@@ -771,241 +1003,121 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
-                                {/* ── DRILLDOWN HIERARCHY BAR: 1. CLASS -> 2. SUBJECT -> 3. CHAPTER -> 4. CONCEPT ── */}
-                                <div className="bg-slate-50 p-5 rounded-2xl border-2 border-navy/10 space-y-4">
-                                    <div className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                        <span>🎯</span> Hierarchical Syllabus Navigator (Select in sequence to view questions)
+                                {/* Quick Filters & Search within Active Multi-Selected Pool */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                    <input
+                                        type="text"
+                                        placeholder="🔍 Search in pool..."
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                    />
+                                    <select
+                                        value={singleFilterChapter}
+                                        onChange={e => setSingleFilterChapter(e.target.value)}
+                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                    >
+                                        <option value="">All Scoped Chapters ({selectedChapters.length || distinctChapters.length})</option>
+                                        {(selectedChapters.length > 0 ? selectedChapters : distinctChapters).map(ch => (
+                                            <option key={ch} value={ch}>{ch}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={filterDifficulty}
+                                        onChange={e => setFilterDifficulty(e.target.value)}
+                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                    >
+                                        <option value="">All Difficulties</option>
+                                        <option value="easy">🟢 Easy</option>
+                                        <option value="medium">🟡 Medium</option>
+                                        <option value="hard">🔴 Hard</option>
+                                    </select>
+                                    <select
+                                        value={filterType}
+                                        onChange={e => setFilterType(e.target.value)}
+                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                    >
+                                        <option value="">All Question Types</option>
+                                        <option value="MCQ">MCQ</option>
+                                        <option value="ASSERTION_REASON">Assertion & Reason</option>
+                                        <option value="MATCH_FOLLOWING">Match the Column</option>
+                                        <option value="STATEMENT_BASED">Statement Based</option>
+                                    </select>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={selectAllMatching}
+                                            className="flex-1 bg-navy text-gold text-[11px] font-bold py-2 rounded-xl cursor-pointer hover:bg-navy/90"
+                                        >
+                                            Select All ({filteredQuestions.length})
+                                        </button>
+                                        <button
+                                            onClick={deselectAllMatching}
+                                            className="bg-gray-200 text-gray-700 text-[11px] font-bold px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-300"
+                                        >
+                                            Clear
+                                        </button>
                                     </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                                        {/* 1. Class */}
-                                        <div>
-                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
-                                                1. Target Class
-                                            </label>
-                                            <select
-                                                value={selectedClass}
-                                                onChange={e => setSelectedClass(e.target.value)}
-                                                className="w-full border-2 border-gray-300 focus:border-navy rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer"
-                                            >
-                                                <option value="12">Class 12</option>
-                                                <option value="11">Class 11</option>
-                                                <option value="Both">Both (11th & 12th)</option>
-                                            </select>
-                                        </div>
-
-                                        {/* 2. Subject */}
-                                        <div>
-                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
-                                                2. Subject
-                                            </label>
-                                            <select
-                                                value={subject}
-                                                disabled={user?.role === 'teacher'}
-                                                onChange={e => setSubject(e.target.value)}
-                                                className="w-full border-2 border-gray-300 focus:border-navy rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer disabled:bg-gray-100"
-                                            >
-                                                <option value="Physics">Physics</option>
-                                                <option value="Chemistry">Chemistry</option>
-                                                <option value="Mathematics">Mathematics</option>
-                                                <option value="Biology">Biology</option>
-                                            </select>
-                                        </div>
-
-                                        {/* 3. Chapter */}
-                                        <div>
-                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
-                                                3. Chapter <span className="text-red-500">*</span>
-                                            </label>
-                                            <select
-                                                value={filterChapter}
-                                                onChange={e => handleChapterFilterChange(e.target.value)}
-                                                className={`w-full border-2 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer ${
-                                                    filterChapter ? 'border-navy bg-blue-50/20' : 'border-gold animate-pulse'
-                                                }`}
-                                            >
-                                                <option value="">-- Choose Chapter ({distinctChapters.length}) --</option>
-                                                {distinctChapters.map(ch => (
-                                                    <option key={ch} value={ch}>{ch}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        {/* 4. Concept */}
-                                        <div>
-                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
-                                                4. Concept / Topic <span className="text-red-500">*</span>
-                                            </label>
-                                            <select
-                                                disabled={!filterChapter}
-                                                value={filterConcept}
-                                                onChange={e => setFilterConcept(e.target.value)}
-                                                className={`w-full border-2 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer disabled:bg-gray-100 disabled:opacity-50 ${
-                                                    filterConcept ? 'border-emerald-500 bg-emerald-50/20' : filterChapter ? 'border-gold animate-pulse' : 'border-gray-300'
-                                                }`}
-                                            >
-                                                <option value="">
-                                                    {!filterChapter ? '-- Select Chapter First --' : `-- Choose Concept (${availableConceptsForFilter.length}) --`}
-                                                </option>
-                                                {availableConceptsForFilter.map(cpt => (
-                                                    <option key={cpt} value={cpt}>{cpt}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* Secondary Filters (Difficulty & Search) within Selected Concept */}
-                                    {filterChapter && filterConcept && (
-                                        <div className="pt-3 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
-                                            <input
-                                                type="text"
-                                                placeholder="🔍 Search in this concept..."
-                                                value={searchTerm}
-                                                onChange={e => setSearchTerm(e.target.value)}
-                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                            />
-                                            <select
-                                                value={filterDifficulty}
-                                                onChange={e => setFilterDifficulty(e.target.value)}
-                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                            >
-                                                <option value="">All Difficulties in Concept</option>
-                                                <option value="easy">🟢 Easy</option>
-                                                <option value="medium">🟡 Medium</option>
-                                                <option value="hard">🔴 Hard</option>
-                                            </select>
-                                            <select
-                                                value={filterType}
-                                                onChange={e => setFilterType(e.target.value)}
-                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                            >
-                                                <option value="">All Question Types</option>
-                                                <option value="MCQ">MCQ</option>
-                                                <option value="ASSERTION_REASON">Assertion & Reason</option>
-                                                <option value="MATCH_FOLLOWING">Match the Column</option>
-                                                <option value="STATEMENT_BASED">Statement Based</option>
-                                            </select>
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* ── QUESTIONS DISPLAY ACCORDING TO HIERARCHICAL SELECTION ── */}
+                                {/* Questions List */}
                                 {loadingQuestions ? (
-                                    <div className="p-12 text-center text-xs font-bold text-gray-400">
-                                        Loading questions repository...
-                                    </div>
-                                ) : !filterChapter ? (
-                                    <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-3xl bg-gray-50/50 space-y-3">
-                                        <div className="w-16 h-16 bg-navy/5 text-navy rounded-2xl flex items-center justify-center text-3xl mx-auto font-black">📖</div>
-                                        <h3 className="font-black text-base text-navy uppercase">Step 1: Select a Chapter</h3>
-                                        <p className="text-xs text-gray-500 max-w-md mx-auto">
-                                            Choose a chapter from the dropdown above to load available concepts and view questions.
-                                        </p>
-                                    </div>
-                                ) : !filterConcept ? (
-                                    <div className="p-10 text-center border-2 border-dashed border-gold/40 rounded-3xl bg-amber-50/30 space-y-3">
-                                        <div className="w-16 h-16 bg-gold/10 text-gold rounded-2xl flex items-center justify-center text-3xl mx-auto font-black">💡</div>
-                                        <h3 className="font-black text-base text-navy uppercase">Step 2: Select a Concept / Topic in "{filterChapter}"</h3>
-                                        <p className="text-xs text-gray-500 max-w-md mx-auto">
-                                            Click any concept below or choose from the dropdown above to view questions:
-                                        </p>
-                                        <div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto pt-2">
-                                            {availableConceptsForFilter.map(cpt => (
-                                                <button
-                                                    key={cpt}
-                                                    onClick={() => setFilterConcept(cpt)}
-                                                    className="bg-white border border-gray-300 hover:border-navy hover:text-navy text-gray-700 text-xs font-bold px-3.5 py-2 rounded-xl shadow-xs transition cursor-pointer"
-                                                >
-                                                    💡 {cpt}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    <div className="p-12 text-center text-xs font-bold text-gray-400">Loading questions pool...</div>
                                 ) : filteredQuestions.length === 0 ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                        No questions found matching criteria for Concept: "{filterConcept}".
+                                        No questions match the active filters in this pool.
                                     </div>
                                 ) : (
-                                    /* Concept Questions List */
-                                    <div className="space-y-4">
-                                        {/* Concept Header & Batch Selection Actions */}
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
-                                            <div>
-                                                <div className="text-xs font-black text-navy uppercase">
-                                                    Concept: <span className="text-blue-700">{filterConcept}</span>
-                                                </div>
-                                                <div className="text-[11px] text-gray-600 font-medium">
-                                                    {filteredQuestions.length} Questions Available in this Concept
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={selectAllInConcept}
-                                                    className="bg-navy text-gold px-3.5 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:scale-105 transition cursor-pointer"
+                                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                                        {filteredQuestions.map((q, idx) => {
+                                            const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
+                                            const conceptName = q.concept || q.topic;
+                                            return (
+                                                <div
+                                                    key={q._id || idx}
+                                                    onClick={() => toggleQuestion(q)}
+                                                    className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
+                                                        isSelected
+                                                            ? 'border-navy bg-blue-50/40 shadow-sm'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                                    }`}
                                                 >
-                                                    Select All in Concept
-                                                </button>
-                                                <button
-                                                    onClick={deselectAllInConcept}
-                                                    className="bg-white text-gray-700 border border-gray-300 px-3.5 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-gray-100 transition cursor-pointer"
-                                                >
-                                                    Deselect Concept Qs
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-                                            {filteredQuestions.map((q, idx) => {
-                                                const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
-                                                const conceptName = q.concept || q.topic;
-                                                return (
-                                                    <div
-                                                        key={q._id || idx}
-                                                        onClick={() => toggleQuestion(q)}
-                                                        className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
-                                                            isSelected
-                                                                ? 'border-navy bg-blue-50/40 shadow-sm'
-                                                                : 'border-gray-200 bg-white hover:border-gray-300'
-                                                        }`}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            onChange={() => {}}
-                                                            className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
-                                                        />
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                                                <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
-                                                                    {q.type || 'MCQ'}
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => {}}
+                                                        className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                            <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
+                                                                {q.type || 'MCQ'}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                                                📖 {q.chapter || 'General'}
+                                                            </span>
+                                                            {conceptName && conceptName !== 'General' && (
+                                                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                                    💡 {conceptName}
                                                                 </span>
-                                                                <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                                                                    📖 {q.chapter || 'General'}
-                                                                </span>
-                                                                {conceptName && conceptName !== 'General' && (
-                                                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                                        💡 {conceptName}
-                                                                    </span>
-                                                                )}
-                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                                                    (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
-                                                                    (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
-                                                                    'bg-amber-100 text-amber-800'
-                                                                }`}>
-                                                                    {q.level || 'Medium'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-xs font-bold text-navy line-clamp-2">
-                                                                <MathRenderer inline text={q.questionText || q.question} />
-                                                            </div>
-                                                            {q.imageUrl && (
-                                                                <span className="text-[10px] text-blue-600 font-bold mt-1 block">🖼 Diagram Included</span>
                                                             )}
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                                (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
+                                                                (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
+                                                                'bg-amber-100 text-amber-800'
+                                                            }`}>
+                                                                {q.level || 'Medium'}
+                                                            </span>
                                                         </div>
+                                                        <div className="text-xs font-bold text-navy line-clamp-2">
+                                                            <MathRenderer inline text={q.questionText || q.question} />
+                                                        </div>
+                                                        {q.imageUrl && (
+                                                            <span className="text-[10px] text-blue-600 font-bold mt-1 block">🖼 Diagram Included</span>
+                                                        )}
                                                     </div>
-                                                );
-                                            })}
-                                        </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -1013,17 +1125,17 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: REVIEW ALL SELECTED QUESTIONS ACROSS CONCEPTS ── */}
+                {/* ── MODAL: REVIEW SELECTED BASKET ── */}
                 {showReviewSelectedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
                             <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
                                 <div>
                                     <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                        Selected Questions Basket
+                                        Selected Basket
                                     </span>
                                     <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                        Currently Selected Questions ({selectedQuestions.length})
+                                        Selected Questions ({selectedQuestions.length})
                                     </h3>
                                 </div>
                                 <button
@@ -1045,7 +1157,7 @@ export default function CreatePaper() {
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                     <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
-                                                        Q.{idx + 1}
+                                                        Q.{startQNo + idx}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
                                                         📖 {q.chapter || 'General'}
@@ -1074,13 +1186,13 @@ export default function CreatePaper() {
 
                             <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
                                 <span className="text-xs font-bold text-gray-600">
-                                    Total: {selectedQuestions.length} Questions
+                                    Total Selected: {selectedQuestions.length} Questions
                                 </span>
                                 <button
                                     onClick={() => setShowReviewSelectedModal(false)}
                                     className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
                                 >
-                                    Close & Continue Picking
+                                    Close & Continue
                                 </button>
                             </div>
                         </div>
@@ -1121,7 +1233,7 @@ export default function CreatePaper() {
                                     disabled={saving}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>✓</span> {saving ? 'Saving...' : 'Finalize & Save Paper'}
+                                    <span>✓</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
                             </div>
                         </div>
@@ -1130,8 +1242,9 @@ export default function CreatePaper() {
                         <div className="w-full flex justify-center">
                             <PaperRenderer
                                 paper={currentPaperObject}
+                                isAssignment={paperCategory === 'assignment'}
                                 activeTemplate={activeTemplate}
-                                settings={settings}
+                                settings={{ ...settings, startQNo, endQNo }}
                                 setSettings={setSettings}
                                 showSettingsPanel={false}
                                 onProceedToAlignment={() => setCurrentStep(5)}
@@ -1158,7 +1271,7 @@ export default function CreatePaper() {
                                 disabled={saving}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
                             >
-                                <span>✓</span> {saving ? 'Finalizing...' : 'Finalize & Save Paper'}
+                                <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                             </button>
                         </div>
 
@@ -1166,8 +1279,9 @@ export default function CreatePaper() {
                         <div className="w-full flex justify-center">
                             <PaperRenderer
                                 paper={currentPaperObject}
+                                isAssignment={paperCategory === 'assignment'}
                                 activeTemplate={activeTemplate}
-                                settings={settings}
+                                settings={{ ...settings, startQNo, endQNo }}
                                 setSettings={setSettings}
                                 showSettingsPanel={true}
                                 onProceedToFinalize={handleFinalizeAndSave}
