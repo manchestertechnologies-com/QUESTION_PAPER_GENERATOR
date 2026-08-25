@@ -18,10 +18,10 @@ const Q = {
     wrap: {
         breakInside: 'avoid',
         pageBreakInside: 'avoid',
-        marginBottom: '14px',
+        marginBottom: '10px',
         color: '#111',
         fontSize: 'inherit',
-        lineHeight: '1.45',
+        lineHeight: '1.38',
         boxSizing: 'border-box',
     },
     row: {
@@ -35,7 +35,7 @@ const Q = {
         whiteSpace: 'nowrap',
         minWidth: '24px',
         fontSize: '1em',
-        lineHeight: '1.45',
+        lineHeight: '1.38',
         color: '#000',
     },
     body: {
@@ -46,7 +46,7 @@ const Q = {
         fontWeight: 700,
         color: '#000',
         display: 'inline',
-        lineHeight: '1.45',
+        lineHeight: '1.38',
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
     },
@@ -66,10 +66,10 @@ const Q = {
             : count <= 2
             ? '1fr 1fr'
             : count <= 4
-            ? 'repeat(auto-fit, minmax(130px, 1fr))'
+            ? 'repeat(auto-fit, minmax(110px, 1fr))'
             : '1fr',
-        gap: '3px 14px',
-        marginTop: '6px',
+        gap: '2px 12px',
+        marginTop: '4px',
         marginLeft: '2px',
         maxWidth: '100%',
         alignItems: 'start',

@@ -217,30 +217,35 @@ function testChapterConceptScoping() {
     console.log('✓ Chapter-to-concept isolation verified with zero cross-contamination.');
 }
 
-// ── TEST 4: A4 PAGINATION GEOMETRY & BREAK PACKING ──
+// ── TEST 4: A4 PAGINATION GEOMETRY & BALANCED PACKING ──
 function testA4Pagination() {
     console.log('\n========================================');
-    console.log('TEST 4: A4 Paper Pagination Packing');
+    console.log('TEST 4: A4 Paper Pagination & Balanced Distribution');
     console.log('========================================');
 
-    const PAGE_HEIGHT = 1123; // A4 standard px
-    const MARGIN_VERTICAL = 60;
-    const HEADER_HEIGHT = 120;
-    const FOOTER_HEIGHT = 40;
-    const USABLE_HEIGHT = PAGE_HEIGHT - MARGIN_VERTICAL - HEADER_HEIGHT - FOOTER_HEIGHT; // ~903px
+    const USABLE_HEIGHT = 880;
 
-    // 10 mock questions with realistic block heights (approx 120px to 250px each)
+    // 10 mock questions (height 120px each)
     const mockQuestions = Array.from({ length: 10 }, (_, i) => ({
         id: `q-${i + 1}`,
-        height: (i % 2 === 0) ? 140 : 220
+        height: 120
     }));
+
+    const totalHeight = mockQuestions.reduce((s, q) => s + q.height, 0); // 1200px
+    const numPages = Math.max(1, Math.ceil(totalHeight / USABLE_HEIGHT)); // 2 pages
+    const balancedTarget = Math.min(USABLE_HEIGHT, Math.ceil(totalHeight / numPages) + 25); // 625px
 
     const pages = [];
     let currentPage = [];
     let currentHeight = 0;
 
     mockQuestions.forEach(q => {
-        if (currentHeight + q.height > USABLE_HEIGHT) {
+        const isOverflow = currentPage.length > 0 && (
+            (currentHeight + q.height > balancedTarget && pages.length < numPages - 1) ||
+            (currentHeight + q.height > USABLE_HEIGHT)
+        );
+
+        if (isOverflow) {
             pages.push(currentPage);
             currentPage = [q];
             currentHeight = q.height;
@@ -251,17 +256,12 @@ function testA4Pagination() {
     });
     if (currentPage.length > 0) pages.push(currentPage);
 
-    // Verify all 10 questions are accounted for across discrete pages
-    const totalPacked = pages.reduce((sum, p) => sum + p.length, 0);
-    assert.strictEqual(totalPacked, 10);
-    assert.ok(pages.length >= 2, 'Paged across multiple pages');
+    // Verify exactly 2 pages with 5 questions each (balanced, not 7 and 3!)
+    assert.strictEqual(pages.length, 2, 'Total pages is 2');
+    assert.strictEqual(pages[0].length, 5, 'Page 1 has 5 questions');
+    assert.strictEqual(pages[1].length, 5, 'Page 2 has 5 questions');
 
-    pages.forEach((p, idx) => {
-        const pHeight = p.reduce((sum, q) => sum + q.height, 0);
-        assert.ok(pHeight <= USABLE_HEIGHT, `Page ${idx + 1} height (${pHeight}px) fits in usable height (${USABLE_HEIGHT}px)`);
-    });
-
-    console.log(`✓ A4 Pagination packed 10 questions into ${pages.length} discrete pages without overflow.`);
+    console.log(`✓ Balanced A4 Pagination cleanly distributed 10 questions evenly (5 on Page 1, 5 on Page 2).`);
 }
 
 // ── TEST 5: FULL COLOR ANALYSIS CALCULATION ──

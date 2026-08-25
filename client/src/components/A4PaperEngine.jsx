@@ -17,65 +17,90 @@ import QuestionBlock from './QuestionBlock';
 import { InstructionCoverPage, PaperHeader, formatMarks, calcTotal } from './PaperRenderer';
 
 // Standard A4 physical dimensions in standard web print points / mm
-// 210mm x 297mm. At 96 DPI: ~794px width x 1123px height.
-// Printable area with standard margins (15mm top/bottom, 18mm left/right): ~720px width x 1010px height.
-const PAGE_HEIGHT_PX = 1020;
-const PAGE_COVER_HEIGHT_PX = 940;
+// Standard A4 physical dimensions in standard web print points / mm
+// 210mm x 297mm. Printable height with standard margins: ~950px usable.
+const USABLE_PAGE_HEIGHT_1COL = 880;
+const USABLE_PAGE_HEIGHT_2COL = 1700;
 
 /**
  * Estimate question height in pixels for smart pagination
  */
 function estimateQuestionHeight(q, isTwoCol = false) {
-    let h = 40; // Base question statement + numbering
+    let h = 28; // Base question statement + numbering
     const textLen = (q.questionText || q.question || '').length;
-    h += Math.ceil(textLen / (isTwoCol ? 45 : 85)) * 18;
+    h += Math.ceil(textLen / (isTwoCol ? 42 : 80)) * 17;
 
     // Diagram height
     if (q.imageUrl || q.image_url) {
-        h += 130;
+        h += 110;
     }
 
     // Options height
     const options = Array.isArray(q.options) ? q.options : [];
     if (options.length > 0) {
-        if (isTwoCol || options.length > 4) {
-            h += options.length * 24;
-        } else {
-            const avgOptLen = options.reduce((s, o) => s + String(o || '').length, 0) / options.length;
-            if (avgOptLen > 40) {
-                h += options.length * 24;
+        const maxOptLen = options.reduce((m, o) => Math.max(m, String(o || '').length), 0);
+        if (isTwoCol) {
+            if (maxOptLen <= 25) {
+                h += Math.ceil(options.length / 2) * 20; // 2x2 grid
             } else {
-                h += Math.ceil(options.length / 2) * 26;
+                h += options.length * 20; // 1 column
+            }
+        } else {
+            if (maxOptLen <= 25 && options.length <= 4) {
+                h += 22; // 4 in a single horizontal row!
+            } else if (maxOptLen <= 55 && options.length <= 4) {
+                h += 44; // 2x2 grid
+            } else {
+                h += options.length * 20; // 1 column per option
             }
         }
     }
 
     // Statements / match table
-    if (q.matchPairs?.length) h += q.matchPairs.length * 26;
-    if (q.statements?.length) h += q.statements.length * 22;
+    if (q.matchPairs?.length) h += q.matchPairs.length * 22;
+    if (q.statements?.length) h += q.statements.length * 18;
 
-    return Math.max(70, h + 18); // + margin padding
+    return Math.max(50, h + 10); // + question margin
 }
 
 /**
- * Smart Question Paginator:
- * Groups questions into discrete pages based on accumulated height
+ * Smart Balanced Question Paginator:
+ * Groups questions into discrete pages and balances question distribution
+ * evenly across pages (e.g. 5 + 5 instead of 7 + 3).
  */
 export function paginateQuestions(questions, { showCover = true, columns = 1, startQNo = 1 }) {
-    const pages = [];
-    const isTwoCol = columns === 2;
-    const maxPageHeight = isTwoCol ? PAGE_HEIGHT_PX * 1.85 : PAGE_HEIGHT_PX; // 2 cols holds ~85% more
+    if (!Array.isArray(questions) || questions.length === 0) return [];
 
+    const isTwoCol = columns === 2;
+    const maxPageHeight = isTwoCol ? USABLE_PAGE_HEIGHT_2COL : USABLE_PAGE_HEIGHT_1COL;
+
+    // 1. Calculate each question's estimated height
+    const qHeights = questions.map(q => estimateQuestionHeight(q, isTwoCol));
+    const totalContentHeight = qHeights.reduce((sum, h) => sum + h, 0);
+
+    // 2. Determine ideal page count
+    const numPages = Math.max(1, Math.ceil(totalContentHeight / maxPageHeight));
+
+    // 3. Balanced target height per page so questions don't pile up on page 1 leaving page 2 almost empty
+    const balancedTargetHeight = numPages > 1 
+        ? Math.min(maxPageHeight, Math.ceil(totalContentHeight / numPages) + 25)
+        : maxPageHeight;
+
+    const pages = [];
     let currentPageQuestions = [];
     let currentHeight = 0;
-    let runningNum = startQNo;
 
     questions.forEach((q, idx) => {
-        const qHeight = estimateQuestionHeight(q, isTwoCol);
-        const effectiveQNum = runningNum + idx;
+        const qHeight = qHeights[idx];
+        const effectiveQNum = startQNo + idx;
 
-        // If this question would overflow the current page, start a new page
-        if (currentPageQuestions.length > 0 && currentHeight + qHeight > maxPageHeight) {
+        // Check if starting a new page is needed
+        const isOverflow = currentPageQuestions.length > 0 && (
+            (currentHeight + qHeight > balancedTargetHeight && pages.length < numPages - 1) ||
+            (currentHeight + qHeight > maxPageHeight)
+        );
+
+        if (isOverflow) {
             pages.push({
                 pageIndex: pages.length + (showCover ? 2 : 1),
                 questions: currentPageQuestions,
@@ -308,12 +333,12 @@ export default function A4PaperEngine({
                     overflow: hidden;
                 }
                 .a4-page-inner {
-                    padding: ${settings.marginTop || '15mm'} ${settings.marginRight || '18mm'} ${settings.marginBottom || '15mm'} ${settings.marginLeft || '18mm'};
+                    padding: ${settings.marginTop || '12mm'} ${settings.marginRight || '14mm'} ${settings.marginBottom || '12mm'} ${settings.marginLeft || '14mm'};
                     height: 100%;
                     box-sizing: border-box;
                     display: flex;
                     flex-direction: column;
-                    justifyContent: space-between;
+                    justifyContent: flex-start;
                 }
                 .a4-questions-body {
                     flex: 1;
@@ -329,12 +354,12 @@ export default function A4PaperEngine({
                     margin-bottom: 12px;
                 }
                 .a4-page-footer {
+                    margin-top: auto;
                     display: flex;
                     justifyContent: space-between;
                     align-items: center;
                     border-top: 1.5px solid #000;
                     padding-top: 5px;
-                    margin-top: 10px;
                     font-size: 11px;
                     color: #222;
                 }
