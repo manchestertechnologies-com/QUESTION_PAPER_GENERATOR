@@ -183,16 +183,23 @@ export default function CreatePaper() {
         }
     };
 
-    // Filter available questions for Manual Pick
+    // Modal to review all selected questions across concepts
+    const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
+
+    // Filter available questions for Manual Pick (Strict Concept-Wise drilldown)
     const filteredQuestions = useMemo(() => {
+        if (!filterChapter || !filterConcept) {
+            return [];
+        }
+
         return availableQuestions.filter(q => {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = !filterChapter || q.chapter === filterChapter;
-            const matchesConcept = !filterConcept || (q.concept === filterConcept || q.topic === filterConcept);
+            const matchesChapter = q.chapter === filterChapter;
+            const matchesConcept = (q.concept === filterConcept || q.topic === filterConcept);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
@@ -211,6 +218,21 @@ export default function CreatePaper() {
                 return [...prev, question];
             }
         });
+    };
+
+    // Select all questions in the currently loaded concept
+    const selectAllInConcept = () => {
+        setSelectedQuestions(prev => {
+            const prevIds = new Set(prev.map(q => q._id || q.id));
+            const newToAdd = filteredQuestions.filter(q => !prevIds.has(q._id || q.id));
+            return [...prev, ...newToAdd];
+        });
+    };
+
+    // Deselect all questions in the currently loaded concept
+    const deselectAllInConcept = () => {
+        const currentConceptIds = new Set(filteredQuestions.map(q => q._id || q.id));
+        setSelectedQuestions(prev => prev.filter(q => !currentConceptIds.has(q._id || q.id)));
     };
 
     // Auto Fetch Generator with exact concept & difficulty distribution
@@ -709,14 +731,18 @@ export default function CreatePaper() {
                                 </div>
                             </div>
                         ) : (
-                            /* ── MANUAL SELECTION SCREEN WITH DEDICATED CHAPTER & CONCEPT FILTERS ── */
+                            /* ── MANUAL SELECTION SCREEN (STRICT CONCEPT-WISE DRILLDOWN: Class -> Subject -> Chapter -> Concept) ── */
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                     <div>
-                                        <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Question Bank</span>
-                                        <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">Select Assessment Questions</h2>
+                                        <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                            Concept-Wise Question Picker
+                                        </span>
+                                        <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                            Select Questions By Concept
+                                        </h2>
                                         <p className="text-xs text-gray-500 font-bold">
-                                            {selectedQuestions.length} of {targetCount} Questions Selected • {filteredQuestions.length} Matched Filters
+                                            {selectedQuestions.length} of {targetCount} Questions Selected Across Concepts
                                         </p>
                                     </div>
 
@@ -729,6 +755,12 @@ export default function CreatePaper() {
                                             ← Back
                                         </button>
                                         <button
+                                            onClick={() => setShowReviewSelectedModal(true)}
+                                            className="bg-slate-100 text-navy hover:bg-slate-200 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gray-300"
+                                        >
+                                            👁 Review Selected ({selectedQuestions.length})
+                                        </button>
+                                        <button
                                             onClick={handlePreFinalizeCheck}
                                             disabled={selectedQuestions.length === 0}
                                             className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2 cursor-pointer"
@@ -739,125 +771,319 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
-                                {/* Granular Filters Bar with Chapter AND Concept separation */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
-                                    <input
-                                        type="text"
-                                        placeholder="🔍 Search text / formula..."
-                                        value={searchTerm}
-                                        onChange={e => setSearchTerm(e.target.value)}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    />
-                                    {/* Chapter Filter */}
-                                    <select
-                                        value={filterChapter}
-                                        onChange={e => handleChapterFilterChange(e.target.value)}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    >
-                                        <option value="">All Chapters ({distinctChapters.length})</option>
-                                        {distinctChapters.map(ch => (
-                                            <option key={ch} value={ch}>{ch}</option>
-                                        ))}
-                                    </select>
-                                    {/* Concept Filter (Dynamically scoped to selected chapter) */}
-                                    <select
-                                        value={filterConcept}
-                                        onChange={e => setFilterConcept(e.target.value)}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    >
-                                        <option value="">All Concepts ({availableConceptsForFilter.length})</option>
-                                        {availableConceptsForFilter.map(cpt => (
-                                            <option key={cpt} value={cpt}>{cpt}</option>
-                                        ))}
-                                    </select>
-                                    {/* Difficulty Filter */}
-                                    <select
-                                        value={filterDifficulty}
-                                        onChange={e => setFilterDifficulty(e.target.value)}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    >
-                                        <option value="">All Difficulties</option>
-                                        <option value="easy">🟢 Easy</option>
-                                        <option value="medium">🟡 Medium</option>
-                                        <option value="hard">🔴 Hard</option>
-                                    </select>
-                                    {/* Question Type Filter */}
-                                    <select
-                                        value={filterType}
-                                        onChange={e => setFilterType(e.target.value)}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    >
-                                        <option value="">All Types</option>
-                                        <option value="MCQ">MCQ</option>
-                                        <option value="ASSERTION_REASON">Assertion & Reason</option>
-                                        <option value="MATCH_FOLLOWING">Match the Column</option>
-                                        <option value="STATEMENT_BASED">Statement Based</option>
-                                    </select>
+                                {/* ── DRILLDOWN HIERARCHY BAR: 1. CLASS -> 2. SUBJECT -> 3. CHAPTER -> 4. CONCEPT ── */}
+                                <div className="bg-slate-50 p-5 rounded-2xl border-2 border-navy/10 space-y-4">
+                                    <div className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                        <span>🎯</span> Hierarchical Syllabus Navigator (Select in sequence to view questions)
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                        {/* 1. Class */}
+                                        <div>
+                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
+                                                1. Target Class
+                                            </label>
+                                            <select
+                                                value={selectedClass}
+                                                onChange={e => setSelectedClass(e.target.value)}
+                                                className="w-full border-2 border-gray-300 focus:border-navy rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer"
+                                            >
+                                                <option value="12">Class 12</option>
+                                                <option value="11">Class 11</option>
+                                                <option value="Both">Both (11th & 12th)</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 2. Subject */}
+                                        <div>
+                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
+                                                2. Subject
+                                            </label>
+                                            <select
+                                                value={subject}
+                                                disabled={user?.role === 'teacher'}
+                                                onChange={e => setSubject(e.target.value)}
+                                                className="w-full border-2 border-gray-300 focus:border-navy rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer disabled:bg-gray-100"
+                                            >
+                                                <option value="Physics">Physics</option>
+                                                <option value="Chemistry">Chemistry</option>
+                                                <option value="Mathematics">Mathematics</option>
+                                                <option value="Biology">Biology</option>
+                                            </select>
+                                        </div>
+
+                                        {/* 3. Chapter */}
+                                        <div>
+                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
+                                                3. Chapter <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={filterChapter}
+                                                onChange={e => handleChapterFilterChange(e.target.value)}
+                                                className={`w-full border-2 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer ${
+                                                    filterChapter ? 'border-navy bg-blue-50/20' : 'border-gold animate-pulse'
+                                                }`}
+                                            >
+                                                <option value="">-- Choose Chapter ({distinctChapters.length}) --</option>
+                                                {distinctChapters.map(ch => (
+                                                    <option key={ch} value={ch}>{ch}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* 4. Concept */}
+                                        <div>
+                                            <label className="block text-[11px] font-black text-navy uppercase tracking-wider mb-1">
+                                                4. Concept / Topic <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                disabled={!filterChapter}
+                                                value={filterConcept}
+                                                onChange={e => setFilterConcept(e.target.value)}
+                                                className={`w-full border-2 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer disabled:bg-gray-100 disabled:opacity-50 ${
+                                                    filterConcept ? 'border-emerald-500 bg-emerald-50/20' : filterChapter ? 'border-gold animate-pulse' : 'border-gray-300'
+                                                }`}
+                                            >
+                                                <option value="">
+                                                    {!filterChapter ? '-- Select Chapter First --' : `-- Choose Concept (${availableConceptsForFilter.length}) --`}
+                                                </option>
+                                                {availableConceptsForFilter.map(cpt => (
+                                                    <option key={cpt} value={cpt}>{cpt}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Secondary Filters (Difficulty & Search) within Selected Concept */}
+                                    {filterChapter && filterConcept && (
+                                        <div className="pt-3 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
+                                            <input
+                                                type="text"
+                                                placeholder="🔍 Search in this concept..."
+                                                value={searchTerm}
+                                                onChange={e => setSearchTerm(e.target.value)}
+                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                            />
+                                            <select
+                                                value={filterDifficulty}
+                                                onChange={e => setFilterDifficulty(e.target.value)}
+                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                            >
+                                                <option value="">All Difficulties in Concept</option>
+                                                <option value="easy">🟢 Easy</option>
+                                                <option value="medium">🟡 Medium</option>
+                                                <option value="hard">🔴 Hard</option>
+                                            </select>
+                                            <select
+                                                value={filterType}
+                                                onChange={e => setFilterType(e.target.value)}
+                                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                            >
+                                                <option value="">All Question Types</option>
+                                                <option value="MCQ">MCQ</option>
+                                                <option value="ASSERTION_REASON">Assertion & Reason</option>
+                                                <option value="MATCH_FOLLOWING">Match the Column</option>
+                                                <option value="STATEMENT_BASED">Statement Based</option>
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {/* Questions List */}
+                                {/* ── QUESTIONS DISPLAY ACCORDING TO HIERARCHICAL SELECTION ── */}
                                 {loadingQuestions ? (
-                                    <div className="p-12 text-center text-xs font-bold text-gray-400">Loading questions repository...</div>
+                                    <div className="p-12 text-center text-xs font-bold text-gray-400">
+                                        Loading questions repository...
+                                    </div>
+                                ) : !filterChapter ? (
+                                    <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-3xl bg-gray-50/50 space-y-3">
+                                        <div className="w-16 h-16 bg-navy/5 text-navy rounded-2xl flex items-center justify-center text-3xl mx-auto font-black">📖</div>
+                                        <h3 className="font-black text-base text-navy uppercase">Step 1: Select a Chapter</h3>
+                                        <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                            Choose a chapter from the dropdown above to load available concepts and view questions.
+                                        </p>
+                                    </div>
+                                ) : !filterConcept ? (
+                                    <div className="p-10 text-center border-2 border-dashed border-gold/40 rounded-3xl bg-amber-50/30 space-y-3">
+                                        <div className="w-16 h-16 bg-gold/10 text-gold rounded-2xl flex items-center justify-center text-3xl mx-auto font-black">💡</div>
+                                        <h3 className="font-black text-base text-navy uppercase">Step 2: Select a Concept / Topic in "{filterChapter}"</h3>
+                                        <p className="text-xs text-gray-500 max-w-md mx-auto">
+                                            Click any concept below or choose from the dropdown above to view questions:
+                                        </p>
+                                        <div className="flex flex-wrap gap-2 justify-center max-w-2xl mx-auto pt-2">
+                                            {availableConceptsForFilter.map(cpt => (
+                                                <button
+                                                    key={cpt}
+                                                    onClick={() => setFilterConcept(cpt)}
+                                                    className="bg-white border border-gray-300 hover:border-navy hover:text-navy text-gray-700 text-xs font-bold px-3.5 py-2 rounded-xl shadow-xs transition cursor-pointer"
+                                                >
+                                                    💡 {cpt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ) : filteredQuestions.length === 0 ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                        No questions match the selected chapter/concept filter criteria.
+                                        No questions found matching criteria for Concept: "{filterConcept}".
                                     </div>
                                 ) : (
-                                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-                                        {filteredQuestions.map((q, idx) => {
-                                            const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
-                                            const conceptName = q.concept || q.topic;
-                                            return (
-                                                <div
-                                                    key={q._id || idx}
-                                                    onClick={() => toggleQuestion(q)}
-                                                    className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
-                                                        isSelected
-                                                            ? 'border-navy bg-blue-50/40 shadow-sm'
-                                                            : 'border-gray-200 bg-white hover:border-gray-300'
-                                                    }`}
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isSelected}
-                                                        onChange={() => {}}
-                                                        className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                                            <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
-                                                                {q.type || 'MCQ'}
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                                                                📖 {q.chapter || 'General'}
-                                                            </span>
-                                                            {conceptName && conceptName !== 'General' && (
-                                                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                                    💡 {conceptName}
-                                                                </span>
-                                                            )}
-                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                                                (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
-                                                                (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
-                                                                'bg-amber-100 text-amber-800'
-                                                            }`}>
-                                                                {q.level || 'Medium'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-xs font-bold text-navy line-clamp-2">
-                                                            <MathRenderer inline text={q.questionText || q.question} />
-                                                        </div>
-                                                        {q.imageUrl && (
-                                                            <span className="text-[10px] text-blue-600 font-bold mt-1 block">🖼 Diagram Included</span>
-                                                        )}
-                                                    </div>
+                                    /* Concept Questions List */
+                                    <div className="space-y-4">
+                                        {/* Concept Header & Batch Selection Actions */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
+                                            <div>
+                                                <div className="text-xs font-black text-navy uppercase">
+                                                    Concept: <span className="text-blue-700">{filterConcept}</span>
                                                 </div>
-                                            );
-                                        })}
+                                                <div className="text-[11px] text-gray-600 font-medium">
+                                                    {filteredQuestions.length} Questions Available in this Concept
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={selectAllInConcept}
+                                                    className="bg-navy text-gold px-3.5 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:scale-105 transition cursor-pointer"
+                                                >
+                                                    Select All in Concept
+                                                </button>
+                                                <button
+                                                    onClick={deselectAllInConcept}
+                                                    className="bg-white text-gray-700 border border-gray-300 px-3.5 py-1.5 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-gray-100 transition cursor-pointer"
+                                                >
+                                                    Deselect Concept Qs
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                                            {filteredQuestions.map((q, idx) => {
+                                                const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
+                                                const conceptName = q.concept || q.topic;
+                                                return (
+                                                    <div
+                                                        key={q._id || idx}
+                                                        onClick={() => toggleQuestion(q)}
+                                                        className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
+                                                            isSelected
+                                                                ? 'border-navy bg-blue-50/40 shadow-sm'
+                                                                : 'border-gray-200 bg-white hover:border-gray-300'
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => {}}
+                                                            className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                                <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
+                                                                    {q.type || 'MCQ'}
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                                                                    📖 {q.chapter || 'General'}
+                                                                </span>
+                                                                {conceptName && conceptName !== 'General' && (
+                                                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                                        💡 {conceptName}
+                                                                    </span>
+                                                                )}
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                                    (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
+                                                                    (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
+                                                                    'bg-amber-100 text-amber-800'
+                                                                }`}>
+                                                                    {q.level || 'Medium'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs font-bold text-navy line-clamp-2">
+                                                                <MathRenderer inline text={q.questionText || q.question} />
+                                                            </div>
+                                                            {q.imageUrl && (
+                                                                <span className="text-[10px] text-blue-600 font-bold mt-1 block">🖼 Diagram Included</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* ── MODAL: REVIEW ALL SELECTED QUESTIONS ACROSS CONCEPTS ── */}
+                {showReviewSelectedModal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+                                <div>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                        Selected Questions Basket
+                                    </span>
+                                    <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                        Currently Selected Questions ({selectedQuestions.length})
+                                    </h3>
+                                </div>
+                                <button
+                                    onClick={() => setShowReviewSelectedModal(false)}
+                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto space-y-3">
+                                {selectedQuestions.length === 0 ? (
+                                    <div className="p-12 text-center text-xs font-bold text-gray-400">
+                                        No questions selected yet.
+                                    </div>
+                                ) : (
+                                    selectedQuestions.map((q, idx) => (
+                                        <div key={idx} className="border border-gray-200 p-4 rounded-2xl bg-gray-50/40 flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                                    <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
+                                                        Q.{idx + 1}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
+                                                        📖 {q.chapter || 'General'}
+                                                    </span>
+                                                    {(q.concept || q.topic) && (
+                                                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                                                            💡 {q.concept || q.topic}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs font-bold text-navy line-clamp-2">
+                                                    <MathRenderer inline text={q.questionText || q.question} />
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => toggleQuestion(q)}
+                                                className="text-rose-500 hover:bg-rose-50 p-2 rounded-xl text-xs font-black transition cursor-pointer"
+                                                title="Remove this question"
+                                            >
+                                                ✕ Remove
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+                                <span className="text-xs font-bold text-gray-600">
+                                    Total: {selectedQuestions.length} Questions
+                                </span>
+                                <button
+                                    onClick={() => setShowReviewSelectedModal(false)}
+                                    className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                                >
+                                    Close & Continue Picking
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
 
