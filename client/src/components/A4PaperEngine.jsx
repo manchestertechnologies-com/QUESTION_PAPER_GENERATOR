@@ -216,8 +216,23 @@ export default function A4PaperEngine({
                     page-break-inside: avoid;
                 }
                 .question-print-item {
+                    display: inline-block !important;
+                    width: 100% !important;
                     break-inside: avoid !important;
+                    -webkit-column-break-inside: avoid !important;
                     page-break-inside: avoid !important;
+                    vertical-align: top;
+                    box-sizing: border-box;
+                }
+                .katex-display {
+                    overflow-x: auto !important;
+                    overflow-y: hidden !important;
+                    max-width: 100% !important;
+                    margin: 3px 0 !important;
+                }
+                .katex {
+                    text-rendering: auto !important;
+                    font-size: 1.02em !important;
                 }
 
                 @media print {

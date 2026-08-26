@@ -16,13 +16,17 @@ import { optionLabel } from '../utils/sanitize';
 
 const Q = {
     wrap: {
+        display: 'inline-block',
+        width: '100%',
         breakInside: 'avoid',
+        WebkitColumnBreakInside: 'avoid',
         pageBreakInside: 'avoid',
         marginBottom: '10px',
         color: '#111',
         fontSize: 'inherit',
         lineHeight: '1.38',
         boxSizing: 'border-box',
+        verticalAlign: 'top',
     },
     row: {
         display: 'flex',
@@ -62,13 +66,13 @@ const Q = {
     optGrid: (count, forceSingleCol = false) => ({
         display: 'grid',
         gridTemplateColumns: forceSingleCol
-            ? '1fr'
+            ? 'repeat(auto-fit, minmax(110px, 1fr))'
             : count <= 2
             ? '1fr 1fr'
             : count <= 4
             ? 'repeat(auto-fit, minmax(110px, 1fr))'
             : '1fr',
-        gap: '2px 12px',
+        gap: '2px 10px',
         marginTop: '4px',
         marginLeft: '2px',
         maxWidth: '100%',
