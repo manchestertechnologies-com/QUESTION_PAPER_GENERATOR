@@ -191,10 +191,9 @@ export default function CreatePaper() {
 
     // Extract concepts available for currently checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
+        if (selectedChapters.length === 0) return [];
         const conceptsList = [];
-        const chs = selectedChapters.length > 0 ? selectedChapters : distinctChapters;
-        
-        chs.forEach(ch => {
+        selectedChapters.forEach(ch => {
             const cList = chapterConceptsMap[ch] || [];
             cList.forEach(c => {
                 if (!conceptsList.some(item => item.concept === c && item.chapter === ch)) {
@@ -204,7 +203,7 @@ export default function CreatePaper() {
         });
 
         return conceptsList;
-    }, [selectedChapters, distinctChapters, chapterConceptsMap]);
+    }, [selectedChapters, chapterConceptsMap]);
 
     // ── Checkbox Toggle Handlers ──
     const toggleChapter = (ch) => {
@@ -696,75 +695,82 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* ── MULTI-SELECT CONCEPTS (CHECKBOX BOX GRID) ── */}
-                        <div className="space-y-3">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
-                                <div>
-                                    <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                        <span>💡</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
-                                    </h3>
-                                    <p className="text-[11px] text-gray-500 font-medium">
-                                        {selectedChapters.length > 0
-                                            ? `Available concepts under the ${selectedChapters.length} selected chapter(s).`
-                                            : `Select specific concepts across all syllabus chapters.`}
-                                    </p>
+                        {/* ── MULTI-SELECT CONCEPTS (ONLY VISIBLE AFTER CHAPTER SELECTION) ── */}
+                        {selectedChapters.length > 0 ? (
+                            <div className="space-y-3 animate-fade-in">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                                    <div>
+                                        <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                            <span>💡</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
+                                        </h3>
+                                        <p className="text-[11px] text-gray-500 font-medium">
+                                            Available concepts under the {selectedChapters.length} selected chapter(s).
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={selectAllConcepts}
+                                            className="text-[11px] font-bold text-navy bg-navy/10 hover:bg-navy hover:text-gold px-3 py-1 rounded-xl transition cursor-pointer"
+                                        >
+                                            Select All
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={deselectAllConcepts}
+                                            className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={selectAllConcepts}
-                                        className="text-[11px] font-bold text-navy bg-navy/10 hover:bg-navy hover:text-gold px-3 py-1 rounded-xl transition cursor-pointer"
-                                    >
-                                        Select All
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={deselectAllConcepts}
-                                        className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            </div>
 
-                            {availableConceptsForSelectedChapters.length === 0 ? (
-                                <div className="p-8 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                    No concepts available. Please check one or more chapters above.
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
-                                    {availableConceptsForSelectedChapters.map(({ concept: cpt, chapter: ch }) => {
-                                        const isChecked = selectedConcepts.includes(cpt);
-                                        return (
-                                            <div
-                                                key={`${ch}-${cpt}`}
-                                                onClick={() => toggleConcept(cpt)}
-                                                className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
-                                                    isChecked
-                                                        ? 'border-emerald-600 bg-emerald-50/60 shadow-xs'
-                                                        : 'border-gray-200 bg-white hover:border-gray-300'
-                                                }`}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => {}}
-                                                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
-                                                />
-                                                <div className="flex-1 min-w-0">
-                                                    <span className="text-xs font-bold text-navy block truncate" title={cpt}>
-                                                        {cpt}
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
-                                                        📖 {ch}
-                                                    </span>
+                                {availableConceptsForSelectedChapters.length === 0 ? (
+                                    <div className="p-6 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                                        No specific sub-concepts mapped under selected chapters. Questions will be drawn from all chapter topics.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
+                                        {availableConceptsForSelectedChapters.map(({ concept: cpt, chapter: ch }) => {
+                                            const isChecked = selectedConcepts.includes(cpt);
+                                            return (
+                                                <div
+                                                    key={`${ch}-${cpt}`}
+                                                    onClick={() => toggleConcept(cpt)}
+                                                    className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                                        isChecked
+                                                            ? 'border-emerald-600 bg-emerald-50/60 shadow-xs'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => {}}
+                                                        className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <span className="text-xs font-bold text-navy block truncate" title={cpt}>
+                                                            {cpt}
+                                                        </span>
+                                                        <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
+                                                            📖 {ch}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 flex items-center gap-3">
+                                <span className="text-lg">💡</span>
+                                <span className="text-xs font-bold text-navy">
+                                    Select one or more chapters above to view and filter specific concepts & topics.
+                                </span>
+                            </div>
+                        )}
 
                         {/* ── SCOPE SUMMARY BAR ── */}
                         <div className="bg-navy text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
