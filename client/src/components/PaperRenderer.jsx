@@ -286,23 +286,10 @@ export default function PaperRenderer({
     const setSettings = externalSetSettings || setInternalSettings;
 
     // Preview Controls state
-    const [currentPage, setCurrentPage] = useState(1);
     const [zoom, setZoom] = useState(100);
-    const [singlePageMode, setSinglePageMode] = useState(false); // false = continuous A4 pages stack, true = single page navigation
 
     const questions = useMemo(() => paper?.questions || [], [paper]);
     const showCover = !isAssignment && settings.showCoverPage !== false;
-
-    // Calculate total pages
-    const questionPages = useMemo(() => {
-        return paginateQuestions(questions, {
-            showCover,
-            columns: settings.columns || 1,
-            startQNo: settings.startQNo || 1,
-        });
-    }, [questions, showCover, settings.columns, settings.startQNo]);
-
-    const totalPages = (showCover ? 1 : 0) + (questionPages.length || 1);
 
     const handlePrint = () => {
         window.print();
@@ -395,10 +382,7 @@ export default function PaperRenderer({
                 activeTemplate={activeTemplate}
                 isAssignment={isAssignment}
                 settings={settings}
-                currentPage={currentPage}
-                onPageChange={setCurrentPage}
                 zoom={zoom}
-                singlePageMode={singlePageMode}
             />
         </div>
     );
