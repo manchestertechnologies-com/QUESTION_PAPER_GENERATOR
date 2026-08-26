@@ -185,11 +185,20 @@ export default function A4PaperEngine({
                     vertical-align: top;
                     box-sizing: border-box;
                 }
+                .math-renderer {
+                    display: inline !important;
+                }
                 .katex-display {
+                    display: inline-block !important;
                     overflow-x: auto !important;
                     overflow-y: hidden !important;
                     max-width: 100% !important;
-                    margin: 3px 0 !important;
+                    margin: 1px 4px !important;
+                    text-align: left !important;
+                    vertical-align: middle !important;
+                }
+                .katex-display > .katex {
+                    text-align: left !important;
                 }
                 .katex {
                     text-rendering: auto !important;

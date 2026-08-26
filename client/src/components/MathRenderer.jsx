@@ -71,10 +71,10 @@ function processText(text, inline = false) {
         }
     });
 
-    // 3) Render display math: $$...$$
+    // 3) Render display math: $$...$$ (rendered inline-block to preserve sentence flow)
     result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
         try {
-            return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false, output: 'html' });
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
         } catch {
             return math; // fallback: show raw content without delimiters
         }
@@ -83,7 +83,7 @@ function processText(text, inline = false) {
     // 4) Render display math: \[...\]
     result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => {
         try {
-            return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false, output: 'html' });
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
         } catch {
             return math;
         }
@@ -119,20 +119,10 @@ const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
         return DOMPurify.sanitize(processed, KATEX_CONFIG);
     }, [safeText, inline]);
 
-    if (inline) {
-        return (
-            <span
-                className={`math-renderer inline-math ${className}`}
-                style={style}
-                dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
-        );
-    }
-
     return (
-        <div
-            className={`math-renderer ${className}`}
-            style={style}
+        <span
+            className={`math-renderer ${inline ? 'inline-math' : ''} ${className}`}
+            style={{ display: 'inline', ...style }}
             dangerouslySetInnerHTML={{ __html: renderedHtml }}
         />
     );

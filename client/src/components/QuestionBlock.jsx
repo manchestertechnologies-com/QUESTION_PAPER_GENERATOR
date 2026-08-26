@@ -211,11 +211,17 @@ function parseAssertionReason(q) {
     };
 }
 
+function cleanQuestionText(text) {
+    if (!text) return '';
+    // Strip redundant leading question numbers like "6. ", "Q6: ", "6) " that might be in raw database text
+    return String(text).replace(/^(\s*(?:Q\.?\s*)?\d+[\.\)\-:]\s*)+/i, '').trim();
+}
+
 /**
  * MCQ Body with Intelligent Diagram Placement
  */
 function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
-    const qText = q.questionText || q.question || '';
+    const qText = cleanQuestionText(q.questionText || q.question || '');
     const imageUrl = q.imageUrl || q.image_url;
     const options = Array.isArray(q.options) ? q.options : [];
     const isSideBySide = shouldRenderSideBySide(q, singleColMode);
@@ -243,7 +249,7 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
             <div style={Q.sideBySideContainer}>
                 <div style={Q.sideLeftContent}>
                     <div style={Q.qTextBold}>
-                        <MathRenderer text={qText} />
+                        <MathRenderer inline text={qText} />
                     </div>
                     {renderOptions(true)}
                 </div>
@@ -263,7 +269,7 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
     return (
         <>
             <div style={Q.qTextBold}>
-                <MathRenderer text={qText} />
+                <MathRenderer inline text={qText} />
             </div>
             {imageUrl && (
                 <div style={{ textAlign: 'center', margin: '6px 0' }}>
@@ -286,14 +292,14 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
 function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight }) {
     const { assertion, reason } = parseAssertionReason(q);
     const opts = q.options && q.options.length > 0 ? q.options : AR_OPTIONS;
-    const qText = q.questionText || q.question || '';
+    const qText = cleanQuestionText(q.questionText || q.question || '');
     const imageUrl = q.imageUrl || q.image_url;
 
     return (
         <>
             {qText && !q.assertion && (
                 <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
-                    <MathRenderer text={qText} />
+                    <MathRenderer inline text={qText} />
                 </div>
             )}
             <div style={Q.assertRow}>
@@ -340,14 +346,14 @@ function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight }) {
 function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
     const pairs = q.matchPairs || [];
     const opts = q.options || [];
-    const qText = q.questionText || q.question || '';
+    const qText = cleanQuestionText(q.questionText || q.question || '');
     const imageUrl = q.imageUrl || q.image_url;
 
     return (
         <>
             {qText && (
                 <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
-                    <MathRenderer text={qText} />
+                    <MathRenderer inline text={qText} />
                 </div>
             )}
             {imageUrl && (
@@ -405,14 +411,14 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
 function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight }) {
     const statements = q.statements || [];
     const opts = q.options || [];
-    const qText = q.questionText || q.question || '';
+    const qText = cleanQuestionText(q.questionText || q.question || '');
     const imageUrl = q.imageUrl || q.image_url;
 
     return (
         <>
             {qText && (
                 <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
-                    <MathRenderer text={qText} />
+                    <MathRenderer inline text={qText} />
                 </div>
             )}
             {statements.length > 0 && (
