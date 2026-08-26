@@ -11,7 +11,7 @@
  * - 100% fidelity match between Preview and PDF print
  */
 import React, { useState, useMemo } from 'react';
-import A4PaperEngine, { paginateQuestions } from './A4PaperEngine';
+import A4PaperEngine from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
 import { optionLabel } from '../utils/sanitize';
 
@@ -313,25 +313,18 @@ export default function PaperRenderer({
             
             {/* ── PREVIEW TOOLBAR ── */}
             <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-xl border-2 border-navy/20 flex flex-wrap items-center justify-between gap-4 mb-6 w-full max-w-5xl no-print">
-                {/* Page Navigation */}
-                <div className="flex items-center gap-3">
+                {/* Mode & Columns Switcher */}
+                <div className="flex items-center gap-2">
                     <button
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage <= 1}
-                        className="bg-navy text-gold hover:bg-gold hover:text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
+                        onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
+                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
                     >
-                        ← Prev
+                        <span>{settings.columns === 2 ? '📰 2-Columns (Dense)' : '📄 Single Column'}</span>
+                        <span className="text-[10px] bg-navy text-gold px-1.5 py-0.5 rounded">Switch</span>
                     </button>
-                    <span className="text-xs font-black text-navy px-2">
-                        PAGE {currentPage} OF {totalPages}
+                    <span className="text-xs font-bold text-gray-500">
+                        {questions.length} Questions
                     </span>
-                    <button
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage >= totalPages}
-                        className="bg-navy text-gold hover:bg-gold hover:text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition cursor-pointer"
-                    >
-                        Next →
-                    </button>
                 </div>
 
                 {/* View Controls (Zoom, Mode) */}
@@ -354,24 +347,15 @@ export default function PaperRenderer({
                         </button>
                         <button
                             onClick={() => setZoom(100)}
-                            className="px-2 py-1 text-[10px] font-bold bg-white text-gray-700 rounded-lg shadow-sm"
+                            className="px-2 py-1 text-[10px] font-bold bg-white text-gray-700 rounded-lg shadow-sm cursor-pointer"
                         >
                             Reset
                         </button>
                     </div>
 
                     <button
-                        onClick={() => setSinglePageMode(!singlePageMode)}
-                        className={`px-3 py-1.5 rounded-xl font-bold text-xs border transition cursor-pointer ${
-                            singlePageMode ? 'bg-navy text-gold border-navy' : 'bg-white text-gray-700 border-gray-300'
-                        }`}
-                    >
-                        {singlePageMode ? 'Single Page View' : 'All Pages View'}
-                    </button>
-
-                    <button
                         onClick={handlePrint}
-                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                     >
                         <span>🖨</span> Print / Save PDF
                     </button>
@@ -384,7 +368,7 @@ export default function PaperRenderer({
                             onClick={onProceedToAlignment}
                             className="bg-navy text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>⚙️</span> Proceed to Alignment →
+                            <span>⚙️</span> Alignment Controls →
                         </button>
                     )}
                     {onProceedToFinalize && (
