@@ -14,6 +14,85 @@ import React from 'react';
 import MathRenderer from './MathRenderer';
 import { optionLabel } from '../utils/sanitize';
 
+// Dynamic option grid calculator based on length:
+// - Very Short (<= 20 chars): all 4 in one line
+// - Medium (<= 52 chars): 2 on left, 2 on right (2x2 grid)
+// - Long (> 52 chars): 1 below one (vertical stack)
+function getDynamicOptGrid(options = [], singleColMode = false) {
+    if (!options || options.length === 0) return { display: 'none' };
+
+    const maxLen = Math.max(...options.map(opt => {
+        if (!opt) return 0;
+        const plain = String(opt)
+            .replace(/<[^>]+>/g, '')
+            .replace(/\$\$[\s\S]*?\$\$/g, 'formula')
+            .replace(/\$[^$]*\$/g, 'm')
+            .replace(/\\\[[\s\S]*?\\\]/g, 'formula')
+            .replace(/\\\([\s\S]*?\\\)/g, 'm')
+            .trim();
+        return plain.length;
+    }));
+
+    if (singleColMode) {
+        // Two-column paper mode
+        if (maxLen <= 12 && options.length <= 4) {
+            return {
+                display: 'grid',
+                gridTemplateColumns: `repeat(${options.length}, 1fr)`,
+                gap: '2px 8px',
+                marginTop: '4px',
+                alignItems: 'start',
+            };
+        }
+        if (maxLen <= 35 && options.length <= 4) {
+            return {
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '2px 10px',
+                marginTop: '4px',
+                alignItems: 'start',
+            };
+        }
+        return {
+            display: 'grid',
+            gridTemplateColumns: '1fr',
+            gap: '2px 6px',
+            marginTop: '4px',
+            alignItems: 'start',
+        };
+    }
+
+    // Full width Single Column mode
+    if (maxLen <= 20 && options.length <= 4) {
+        // Very short: all in 1 line
+        return {
+            display: 'grid',
+            gridTemplateColumns: `repeat(${options.length}, 1fr)`,
+            gap: '2px 16px',
+            marginTop: '4px',
+            alignItems: 'start',
+        };
+    }
+    if (maxLen <= 52 && options.length <= 4) {
+        // Medium: 2 on left, 2 on right (2x2)
+        return {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '2px 16px',
+            marginTop: '4px',
+            alignItems: 'start',
+        };
+    }
+    // Very long: 1 below another
+    return {
+        display: 'grid',
+        gridTemplateColumns: '1fr',
+        gap: '2px 6px',
+        marginTop: '4px',
+        alignItems: 'start',
+    };
+}
+
 const Q = {
     wrap: {
         display: 'inline-block',
@@ -62,24 +141,6 @@ const Q = {
         marginLeft: '6px',
         color: '#444',
     },
-    // Options grid container
-    optGrid: (count, forceSingleCol = false) => ({
-        display: 'grid',
-        gridTemplateColumns: forceSingleCol
-            ? 'repeat(auto-fit, minmax(110px, 1fr))'
-            : count <= 2
-            ? '1fr 1fr'
-            : count <= 4
-            ? 'repeat(auto-fit, minmax(110px, 1fr))'
-            : '1fr',
-        gap: '2px 10px',
-        marginTop: '4px',
-        marginLeft: '2px',
-        maxWidth: '100%',
-        alignItems: 'start',
-        wordBreak: 'break-word',
-        overflowWrap: 'break-word',
-    }),
     optRow: {
         display: 'flex',
         alignItems: 'baseline',
@@ -88,25 +149,28 @@ const Q = {
         overflowWrap: 'break-word',
         minWidth: 0,
         fontSize: '0.96em',
-        fontWeight: 400, // Explicitly normal weight per requirement
+        fontWeight: 400,
         color: '#111',
     },
     optLbl: {
-        fontWeight: 700, // Label (A), (B) is bold for clarity
+        fontWeight: 700,
         whiteSpace: 'nowrap',
         minWidth: '20px',
         lineHeight: '1.45',
         color: '#222',
     },
-    // Diagram image wrapper and styling
-    diagramImg: (maxH = '150px', maxW = '100%') => ({
+    // Standardized diagram image wrapper
+    diagramImg: (maxH = '135px', maxW = '240px') => ({
         display: 'block',
         maxWidth: maxW,
         maxHeight: maxH,
+        width: 'auto',
+        height: 'auto',
         objectFit: 'contain',
-        borderRadius: '3px',
+        borderRadius: '4px',
         backgroundColor: '#fff',
         boxSizing: 'border-box',
+        margin: '4px auto',
     }),
     sideBySideContainer: {
         display: 'flex',
@@ -230,7 +294,7 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
     const renderOptions = (forceSingle = false) => {
         if (options.length === 0) return null;
         return (
-            <div style={Q.optGrid(options.length, forceSingle || singleColMode)}>
+            <div style={forceSingle ? { display: 'grid', gridTemplateColumns: '1fr', gap: '2px 6px', marginTop: '4px' } : getDynamicOptGrid(options, singleColMode)}>
                 {options.map((opt, i) => (
                     <div key={i} style={Q.optRow}>
                         <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
@@ -276,7 +340,7 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
                     <img
                         src={imageUrl}
                         alt="Diagram"
-                        style={{ ...Q.diagramImg(diagramMaxHeight, '260px'), margin: '0 auto' }}
+                        style={{ ...Q.diagramImg(diagramMaxHeight, '240px'), margin: '0 auto' }}
                         loading="lazy"
                     />
                 </div>
@@ -326,7 +390,7 @@ function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight }) {
                     />
                 </div>
             )}
-            <div style={{ marginTop: '5px' }}>
+            <div style={{ marginTop: '5px', ...getDynamicOptGrid(opts, singleColMode) }}>
                 {opts.map((opt, i) => (
                     <div key={i} style={{ ...Q.optRow, marginBottom: '2px' }}>
                         <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
@@ -390,7 +454,7 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
                 </table>
             )}
             {opts.length > 0 && (
-                <div style={Q.optGrid(opts.length, true)}>
+                <div style={getDynamicOptGrid(opts, true)}>
                     {opts.map((opt, i) => (
                         <div key={i} style={Q.optRow}>
                             <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
@@ -440,7 +504,7 @@ function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight }) {
                 </div>
             )}
             {opts.length > 0 && (
-                <div style={Q.optGrid(opts.length, singleColMode)}>
+                <div style={getDynamicOptGrid(opts, singleColMode)}>
                     {opts.map((opt, i) => (
                         <div key={i} style={Q.optRow}>
                             <span style={Q.optLbl}>({optionLabel(i, classes)})</span>

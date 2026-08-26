@@ -72,7 +72,7 @@ export default function CreatePaper() {
     // Alignment Settings
     const [settings, setSettings] = useState({
         ...DEFAULT_SETTINGS,
-        showCoverPage: initialCategory !== 'assignment',
+        showCoverPage: false,
         startQNo: 1,
     });
 
@@ -80,6 +80,17 @@ export default function CreatePaper() {
     const [validationResult, setValidationResult] = useState(null);
     const [saving, setSaving] = useState(false);
     const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
+    const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
+
+    // Maximum Target Questions Limit
+    const targetLimit = useMemo(() => {
+        if (paperCategory === 'assignment') return autoQty || 60;
+        if (pattern && pattern.length > 0) {
+            const patternQCount = pattern.reduce((acc, sec) => acc + (sec.questions?.length || sec.questionCount || 0), 0);
+            if (patternQCount > 0) return patternQCount;
+        }
+        return autoQty || 60;
+    }, [paperCategory, autoQty, pattern]);
 
     // Meta chapters from backend RPC
     const [metaChapters, setMetaChapters] = useState([]);
@@ -243,13 +254,28 @@ export default function CreatePaper() {
         setSelectedConcepts([]);
     };
 
-    // ── Matched Question Pool (Filtered strictly by multi-selected chapters & concepts) ──
+    // ── Matched Question Pool (Filtered strictly by multi-selected chapters & concepts & class) ──
     const scopedQuestionPool = useMemo(() => {
         return availableQuestions.filter(q => {
-            // Chapter check
-            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) {
-                return false;
+            // Class/Standard check (if classes are specified for paper, e.g. Class 12)
+            if (classes && classes.length > 0 && q.classes && q.classes.length > 0) {
+                const matchesClass = classes.some(c => {
+                    const cleanC = String(c).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                    return q.classes.some(qc => {
+                        const cleanQC = String(qc).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                        return cleanQC === cleanC || cleanQC.includes(cleanC) || cleanC.includes(cleanQC);
+                    });
+                });
+                if (!matchesClass) return false;
             }
+
+            // Chapter check
+            if (selectedChapters.length > 0) {
+                if (!selectedChapters.includes(q.chapter)) {
+                    return false;
+                }
+            }
+
             // Concept check
             if (selectedConcepts.length > 0) {
                 const qConcept = q.concept || q.topic;
@@ -259,7 +285,7 @@ export default function CreatePaper() {
             }
             return true;
         });
-    }, [availableQuestions, selectedChapters, selectedConcepts]);
+    }, [availableQuestions, selectedChapters, selectedConcepts, classes]);
 
     // Filtered questions for Manual Selection (includes search, difficulty, and type)
     const filteredQuestions = useMemo(() => {
@@ -278,7 +304,7 @@ export default function CreatePaper() {
         });
     }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType]);
 
-    // Toggle single question selection
+    // Toggle single question selection with Max Limit enforcement
     const toggleQuestion = (question) => {
         const qId = question._id || question.id;
         setSelectedQuestions(prev => {
@@ -286,6 +312,10 @@ export default function CreatePaper() {
             if (exists) {
                 return prev.filter(q => (q._id || q.id) !== qId);
             } else {
+                if (prev.length >= targetLimit) {
+                    setShowLimitReachedModal(true);
+                    return prev;
+                }
                 return [...prev, question];
             }
         });
@@ -295,6 +325,15 @@ export default function CreatePaper() {
         setSelectedQuestions(prev => {
             const prevIds = new Set(prev.map(q => q._id || q.id));
             const newToAdd = filteredQuestions.filter(q => !prevIds.has(q._id || q.id));
+            const availableSlots = Math.max(0, targetLimit - prev.length);
+            if (availableSlots <= 0) {
+                setShowLimitReachedModal(true);
+                return prev;
+            }
+            if (newToAdd.length > availableSlots) {
+                setShowLimitReachedModal(true);
+                return [...prev, ...newToAdd.slice(0, availableSlots)];
+            }
             return [...prev, ...newToAdd];
         });
     };
@@ -307,10 +346,10 @@ export default function CreatePaper() {
     // Auto Fetch Generator
     const handleGenerateAuto = () => {
         if (scopedQuestionPool.length === 0) {
-            return alert('No questions found in the selected multi-chapter and concept pool.');
+            return alert('No questions found matching the selected syllabus chapters & concepts.');
         }
 
-        const count = Math.min(autoQty, scopedQuestionPool.length);
+        const count = Math.min(targetLimit, scopedQuestionPool.length);
         const easyTarget = Math.round(count * (autoDist.easy / 100));
         const medTarget = Math.round(count * (autoDist.medium / 100));
         const hardTarget = count - easyTarget - medTarget;
@@ -1192,7 +1231,7 @@ export default function CreatePaper() {
 
                             <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
                                 <span className="text-xs font-bold text-gray-600">
-                                    Total Selected: {selectedQuestions.length} Questions
+                                    Total Selected: {selectedQuestions.length} of {targetLimit} Questions
                                 </span>
                                 <button
                                     onClick={() => setShowReviewSelectedModal(false)}
@@ -1201,6 +1240,33 @@ export default function CreatePaper() {
                                     Close & Continue
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── MODAL: MAX QUESTIONS REACHED POPUP ── */}
+                {showLimitReachedModal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-xs p-4 animate-fade-in">
+                        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-gray-100 text-center space-y-4 animate-scale-up">
+                            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto font-black shadow-inner">
+                                ⚠️
+                            </div>
+                            <h3 className="text-xl font-black text-navy uppercase tracking-tight">
+                                Maximum Questions Reached!
+                            </h3>
+                            <p className="text-xs text-gray-600 leading-relaxed">
+                                You have reached the maximum quota of <strong>{targetLimit} questions</strong> for this {paperCategory === 'assignment' ? 'assignment' : 'question paper'}. Extra questions cannot be added.
+                            </p>
+                            <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-left">
+                                💡 <strong>Tip:</strong> If you want to add a different question, please uncheck an already selected question first.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setShowLimitReachedModal(false)}
+                                className="w-full bg-navy hover:bg-navy/90 text-gold py-3 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer shadow-md"
+                            >
+                                Understood & Close
+                            </button>
                         </div>
                     </div>
                 )}
