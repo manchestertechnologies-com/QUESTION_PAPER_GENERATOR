@@ -57,10 +57,18 @@ export default function A4PaperEngine({
                     maxWidth: '100%',
                 }}
             >
-                {/* ── Cover Page (if enabled) ── */}
-                {showCover && (
-                    <div className="a4-sheet-page a4-cover-page">
-                        <div className="a4-page-content" style={{ fontFamily: settings.fontFamily, fontSize: settings.fontSize }}>
+                {/* ── Single Unified Question Paper Sheet ── */}
+                <div className="a4-sheet-page a4-questions-page">
+                    <div
+                        className="a4-page-content"
+                        style={{
+                            fontFamily: settings.fontFamily,
+                            fontSize: settings.fontSize,
+                            lineHeight: settings.lineHeight,
+                        }}
+                    >
+                        {/* Primary Header at top of Page 1 */}
+                        <div className="a4-primary-header-wrap">
                             <PaperHeader
                                 title={paper?.title}
                                 subject={paper?.subject}
@@ -70,56 +78,9 @@ export default function A4PaperEngine({
                                 templateUrl={activeTemplate?.fileUrl}
                                 isAssignment={isAssignment}
                             />
-                            <InstructionCoverPage
-                                paper={paper}
-                                questions={visibleQuestions}
-                                duration={paper?.duration}
-                                totalMarks={totalMarks}
-                                classes={classes}
-                            />
-                            <div className="a4-page-bottom-marker">
-                                <span>{paper?.title || paper?.subject || 'Question Paper'}</span>
-                                <span className="font-bold">Page 1 (Instructions)</span>
-                            </div>
                         </div>
-                    </div>
-                )}
 
-                {/* ── Questions Body Sheet ── */}
-                <div className={`a4-sheet-page a4-questions-page ${showCover ? 'a4-after-cover' : ''}`}>
-                    <div
-                        className="a4-page-content"
-                        style={{
-                            fontFamily: settings.fontFamily,
-                            fontSize: settings.fontSize,
-                            lineHeight: settings.lineHeight,
-                        }}
-                    >
-                        {/* Primary Header for papers/assignments without separate cover */}
-                        {!showCover && (
-                            <div className="a4-primary-header-wrap">
-                                <PaperHeader
-                                    title={paper?.title}
-                                    subject={paper?.subject}
-                                    classes={classes}
-                                    duration={paper?.duration}
-                                    totalMarks={totalMarks}
-                                    templateUrl={activeTemplate?.fileUrl}
-                                    isAssignment={isAssignment}
-                                />
-                            </div>
-                        )}
-
-                        {/* Running header tag for multi-page test flow */}
-                        {showCover && (
-                            <div className="a4-subtle-running-header">
-                                <span className="font-bold text-xs uppercase text-gray-800">{paper?.title || paper?.subject || 'Question Paper'}</span>
-                                {paper?.setName && <span className="font-bold text-[11px] bg-black text-white px-2 py-0.5 rounded">SET {paper.setName}</span>}
-                                <span className="text-xs text-gray-600 font-semibold">Max. Marks: {totalMarks}</span>
-                            </div>
-                        )}
-
-                        {/* ── Questions Flow (1 Column or 2 Columns) ── */}
+                        {/* ── Questions Flow Immediately On Page 1 (1 Column or 2 Columns) ── */}
                         <div
                             className="a4-questions-flow"
                             style={isTwoCol ? {

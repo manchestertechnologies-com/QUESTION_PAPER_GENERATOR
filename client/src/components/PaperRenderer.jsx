@@ -122,13 +122,6 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                     </select>
                 </SettingField>
 
-                <SettingField label="Cover Page (Page 1)">
-                    <select style={selectStyle} value={settings.showCoverPage ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
-                        <option value="no">Directly Start Questions (Standard)</option>
-                        <option value="yes">Separate Cover Page</option>
-                    </select>
-                </SettingField>
-
                 {/* ── Typography ── */}
                 <SettingField label="Font Style">
                     <select style={selectStyle} value={settings.fontFamily} onChange={e => update('fontFamily', e.target.value)}>
