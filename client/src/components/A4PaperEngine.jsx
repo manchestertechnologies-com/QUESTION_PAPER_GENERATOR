@@ -32,7 +32,8 @@ export default function A4PaperEngine({
         return calcTotal(questions, classes);
     }, [paper, questions, classes]);
 
-    const showCover = !isAssignment && settings.showCoverPage !== false;
+    const isAssignmentPaper = isAssignment || paper?.category === 'assignment' || (paper?.title && /assignment/i.test(paper.title));
+    const showCover = !isAssignmentPaper && settings.showCoverPage === true;
     const startQNo = settings.startQNo || 1;
     const endQNo = settings.endQNo ?? (startQNo + questions.length - 1);
     const visibleCount = Math.max(0, endQNo - startQNo + 1);

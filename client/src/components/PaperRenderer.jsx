@@ -53,7 +53,7 @@ const DEFAULT_SETTINGS = {
     showMarks: false,
     showAnswerKey: false,
     showDifficulty: false,
-    showCoverPage: true,
+    showCoverPage: false,
     startQNo: 1,
     endQNo: null,
     pageSize: 'A4',
@@ -123,9 +123,9 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                 </SettingField>
 
                 <SettingField label="Cover Page (Page 1)">
-                    <select style={selectStyle} value={settings.showCoverPage !== false ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
-                        <option value="yes">Include Instructions Cover</option>
-                        <option value="no">Directly Start Questions</option>
+                    <select style={selectStyle} value={settings.showCoverPage ? 'yes' : 'no'} onChange={e => update('showCoverPage', e.target.value === 'yes')}>
+                        <option value="no">Directly Start Questions (Standard)</option>
+                        <option value="yes">Separate Cover Page</option>
                     </select>
                 </SettingField>
 
@@ -244,7 +244,12 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
         <div style={{ marginBottom: '10px' }}>
             {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) && (
                 <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '2px solid #000', paddingBottom: '4px' }}>
-                    <img src={templateUrl} alt="Header" style={{ maxWidth: '100%', maxHeight: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }} />
+                    <img
+                        src={templateUrl}
+                        alt="Header"
+                        onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
+                        style={{ maxWidth: '100%', maxHeight: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
+                    />
                 </div>
             )}
             <div style={{ textAlign: 'center', marginBottom: '4px' }}>
