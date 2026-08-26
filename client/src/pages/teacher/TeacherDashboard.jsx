@@ -314,7 +314,7 @@ const TeacherDashboardHome = () => {
                 <div className="h-px flex-1 bg-gray-100"></div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 {/* Question Bank */}
                 <Link
                     to="/teacher/dashboard/add-question"
@@ -340,6 +340,20 @@ const TeacherDashboardHome = () => {
                     <div>
                         <h2 className="text-lg font-black text-white">Create Paper</h2>
                         <p className="text-xs text-gold/60 mt-2 font-bold uppercase tracking-widest">Step-by-Step Wizard</p>
+                    </div>
+                </Link>
+
+                {/* Assignments Generator */}
+                <Link
+                    to="/teacher/dashboard/assignments"
+                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gold/40 hover:shadow-xl hover:border-navy hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group ring-2 ring-gold/10"
+                >
+                    <div className="bg-amber-50 text-navy w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-gold group-hover:text-navy transition-colors duration-300">
+                        📝
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-black text-navy">Assignments</h2>
+                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Practice & Keys</p>
                     </div>
                 </Link>
 
@@ -425,6 +439,14 @@ const TeacherDashboard = () => {
                             <span>←</span> Back
                         </button>
                     )}
+                    <Link
+                        to="/teacher/dashboard/assignments"
+                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
+                            location.pathname.includes('assignments') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
+                        }`}
+                    >
+                        Assignments
+                    </Link>
                     <Link
                         to="/teacher/dashboard/grand-tests"
                         className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${

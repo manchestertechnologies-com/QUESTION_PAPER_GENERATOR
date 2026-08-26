@@ -6,8 +6,8 @@
  * Workflow:
  *  Step 1: Scope & Mode Setup (Test vs Assignment, Multi-Select Chapters & Concepts via Checkbox Boxes, Manual Duration)
  *  Step 2: Choose Acquisition Method (Manual Question Pick vs Auto Fetch Generator)
- *  Step 3: Question Selection / Auto Assembly from Multi-Topic Pool
- *  Step 4: True A4 Paginated Preview (Page-by-Page, Balanced Distribution)
+ *  Step 3: Question Selection / Auto Assembly from Multi-Topic Pool with Question Swap & Review
+ *  Step 4: True A4 Paginated Preview (Page-by-Page, Balanced Distribution) with Analysis, Answer Key, Solutions
  *  Step 5: Layout Alignment & Fine-tuning
  *  Step 6: Finalize, Validate & Save / PDF Export
  */
@@ -17,6 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api';
 import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
+import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 
 export default function CreatePaper() {
@@ -58,6 +59,9 @@ export default function CreatePaper() {
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [activeTemplate, setActiveTemplate] = useState(null);
 
+    // Question Swap Mode State
+    const [swappingQuestionIndex, setSwappingQuestionIndex] = useState(null);
+
     // Manual Selection Filters & Search
     const [searchTerm, setSearchTerm] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
@@ -76,7 +80,10 @@ export default function CreatePaper() {
         startQNo: 1,
     });
 
-    // Validation State
+    // Modals & Panels
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+    const [showAnswerKeyModal, setShowAnswerKeyModal] = useState(false);
+    const [showSolutionsModal, setShowSolutionsModal] = useState(false);
     const [validationResult, setValidationResult] = useState(null);
     const [saving, setSaving] = useState(false);
     const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
@@ -84,13 +91,15 @@ export default function CreatePaper() {
 
     // Maximum Target Questions Limit
     const targetLimit = useMemo(() => {
-        if (paperCategory === 'assignment') return autoQty || 60;
-        if (pattern && pattern.length > 0) {
-            const patternQCount = pattern.reduce((acc, sec) => acc + (sec.questions?.length || sec.questionCount || 0), 0);
-            if (patternQCount > 0) return patternQCount;
-        }
-        return autoQty || 60;
-    }, [paperCategory, autoQty, pattern]);
+        return targetCount || autoQty || 60;
+    }, [targetCount, autoQty]);
+
+    // Target Classes Array
+    const targetClasses = useMemo(() => {
+        if (!selectedClass) return [];
+        if (selectedClass === 'Both') return ['11', '12', 'Class 11', 'Class 12', 'I PUC', 'II PUC'];
+        return [selectedClass, `Class ${selectedClass}`, `${selectedClass}th`, `PUC ${selectedClass}`];
+    }, [selectedClass]);
 
     // Meta chapters from backend RPC
     const [metaChapters, setMetaChapters] = useState([]);
@@ -146,6 +155,36 @@ export default function CreatePaper() {
         fetchExamDetails();
         fetchTemplates();
     }, [examId, user]);
+
+    // Load Existing Paper if paperId is present (for Editing)
+    useEffect(() => {
+        const fetchPaperDetails = async () => {
+            if (!paperId) return;
+            try {
+                const res = await api.get(`/api/papers/${paperId}`);
+                const p = res.data;
+                if (p) {
+                    if (p.title) setTitle(p.title);
+                    if (p.subject) setSubject(p.subject);
+                    if (p.isAssignment !== undefined) setPaperCategory(p.isAssignment ? 'assignment' : 'test');
+                    if (p.classes && p.classes.length > 0) setSelectedClass(p.classes[0]);
+                    if (p.duration) setDuration(p.duration);
+                    if (p.startQNo) setStartQNo(p.startQNo);
+                    if (p.endQNo) setEndQNo(p.endQNo);
+                    if (p.difficultyDistribution) setAutoDist(p.difficultyDistribution);
+                    if (Array.isArray(p.questions) && p.questions.length > 0) {
+                        setSelectedQuestions(p.questions);
+                        setTargetCount(p.questions.length);
+                        setAutoQty(p.questions.length);
+                        setCurrentStep(3); // Jump straight to Questions step for editing
+                    }
+                }
+            } catch (err) {
+                console.error('Error fetching paper for editing:', err);
+            }
+        };
+        fetchPaperDetails();
+    }, [paperId]);
 
     // Fetch Questions Bank based on subject (limit=20000 to get entire pool and meta)
     const fetchQuestionsPool = async () => {
@@ -257,9 +296,9 @@ export default function CreatePaper() {
     // ── Matched Question Pool (Filtered strictly by multi-selected chapters & concepts & class) ──
     const scopedQuestionPool = useMemo(() => {
         return availableQuestions.filter(q => {
-            // Class/Standard check (if classes are specified for paper, e.g. Class 12)
-            if (classes && classes.length > 0 && q.classes && q.classes.length > 0) {
-                const matchesClass = classes.some(c => {
+            // Class/Standard check
+            if (targetClasses.length > 0 && q.classes && q.classes.length > 0) {
+                const matchesClass = targetClasses.some(c => {
                     const cleanC = String(c).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
                     return q.classes.some(qc => {
                         const cleanQC = String(qc).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
@@ -285,7 +324,7 @@ export default function CreatePaper() {
             }
             return true;
         });
-    }, [availableQuestions, selectedChapters, selectedConcepts, classes]);
+    }, [availableQuestions, selectedChapters, selectedConcepts, targetClasses]);
 
     // Filtered questions for Manual Selection (includes search, difficulty, and type)
     const filteredQuestions = useMemo(() => {
@@ -304,9 +343,22 @@ export default function CreatePaper() {
         });
     }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType]);
 
-    // Toggle single question selection with Max Limit enforcement
-    const toggleQuestion = (question) => {
+    // Toggle single question selection or perform Swap if Swap Mode is active
+    const handleQuestionClick = (question) => {
         const qId = question._id || question.id;
+
+        // If Swap Mode is active, replace the designated question
+        if (swappingQuestionIndex !== null) {
+            setSelectedQuestions(prev => {
+                const next = [...prev];
+                next[swappingQuestionIndex] = question;
+                return next;
+            });
+            setSwappingQuestionIndex(null);
+            return;
+        }
+
+        // Standard toggle selection
         setSelectedQuestions(prev => {
             const exists = prev.some(q => (q._id || q.id) === qId);
             if (exists) {
@@ -319,6 +371,10 @@ export default function CreatePaper() {
                 return [...prev, question];
             }
         });
+    };
+
+    const removeQuestionByIndex = (index) => {
+        setSelectedQuestions(prev => prev.filter((_, idx) => idx !== index));
     };
 
     const selectAllMatching = () => {
@@ -480,12 +536,16 @@ export default function CreatePaper() {
                     ].map((st) => (
                         <div
                             key={st.num}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+                            onClick={() => {
+                                // Allow jumping back to previous steps
+                                if (st.num < currentStep) setCurrentStep(st.num);
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                                 currentStep === st.num
-                                    ? 'bg-gold text-navy shadow-md'
+                                    ? 'bg-gold text-navy shadow-md scale-105'
                                     : currentStep > st.num
-                                    ? 'bg-white/20 text-emerald-400'
-                                    : 'bg-white/5 text-gray-400'
+                                    ? 'bg-white/20 text-emerald-400 hover:bg-white/30'
+                                    : 'bg-white/5 text-gray-400 opacity-50 pointer-events-none'
                             }`}
                         >
                             <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
@@ -734,7 +794,7 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* ── MULTI-SELECT CONCEPTS (ONLY VISIBLE AFTER CHAPTER SELECTION) ── */}
+                        {/* ── MULTI-SELECT CONCEPTS ── */}
                         {selectedChapters.length > 0 ? (
                             <div className="space-y-3 animate-fade-in">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
@@ -858,7 +918,7 @@ export default function CreatePaper() {
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Manual Question Pick</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                        Browse all {scopedQuestionPool.length} questions matching your checked chapters and concepts. Select exactly what you need.
+                                        Browse all {scopedQuestionPool.length} questions matching your checked chapters and concepts. Select, replace, or edit exactly what you need.
                                     </p>
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
@@ -928,14 +988,21 @@ export default function CreatePaper() {
                                                 min={1}
                                                 max={scopedQuestionPool.length || 100}
                                                 value={autoQty}
-                                                onChange={e => setAutoQty(parseInt(e.target.value) || 0)}
+                                                onChange={e => {
+                                                    const v = parseInt(e.target.value) || 0;
+                                                    setAutoQty(v);
+                                                    setTargetCount(v);
+                                                }}
                                                 className="w-32 border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-lg font-black text-navy text-center outline-none"
                                             />
                                             {[15, 30, 45, 60].map(cnt => (
                                                 <button
                                                     key={cnt}
                                                     type="button"
-                                                    onClick={() => setAutoQty(cnt)}
+                                                    onClick={() => {
+                                                        setAutoQty(cnt);
+                                                        setTargetCount(cnt);
+                                                    }}
                                                     className="px-3.5 py-2.5 rounded-xl font-black text-xs bg-navy/5 hover:bg-navy hover:text-gold text-navy transition cursor-pointer"
                                                 >
                                                     {cnt} Qs
@@ -1010,21 +1077,45 @@ export default function CreatePaper() {
                         ) : (
                             /* ── MANUAL SELECTION SCREEN ── */
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
+                                
+                                {/* Active Swap Mode Banner */}
+                                {swappingQuestionIndex !== null && (
+                                    <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-2xl">🔄</span>
+                                            <div>
+                                                <h4 className="font-black text-xs uppercase tracking-wider text-navy">
+                                                    Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
+                                                </h4>
+                                                <p className="text-[11px] font-bold text-navy/80">
+                                                    Click any question below in the repository to replace this question.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setSwappingQuestionIndex(null)}
+                                            className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
+                                        >
+                                            ✕ Cancel Swap
+                                        </button>
+                                    </div>
+                                )}
+
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                     <div>
                                         <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                            Multi-Topic Question Pool
+                                            Question Selection & Review
                                         </span>
                                         <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                            Select Questions ({filteredQuestions.length} in Active Pool)
+                                            Select & Edit Questions ({filteredQuestions.length} in Pool)
                                         </h2>
                                         <p className="text-xs text-gray-500 font-bold">
-                                            {selectedQuestions.length} Questions Selected
+                                            {selectedQuestions.length} of {targetLimit} Questions Selected
                                         </p>
                                     </div>
 
                                     {/* Action Bar */}
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 flex-wrap">
                                         <button
                                             onClick={() => setCurrentStep(2)}
                                             className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
@@ -1033,9 +1124,12 @@ export default function CreatePaper() {
                                         </button>
                                         <button
                                             onClick={() => setShowReviewSelectedModal(true)}
-                                            className="bg-slate-100 text-navy hover:bg-slate-200 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gray-300"
+                                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
                                         >
-                                            👁 Review Selected ({selectedQuestions.length})
+                                            <span>👁 Review & Edit Selected</span>
+                                            <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
+                                                {selectedQuestions.length}
+                                            </span>
                                         </button>
                                         <button
                                             onClick={handlePreFinalizeCheck}
@@ -1119,9 +1213,11 @@ export default function CreatePaper() {
                                             return (
                                                 <div
                                                     key={q._id || idx}
-                                                    onClick={() => toggleQuestion(q)}
+                                                    onClick={() => handleQuestionClick(q)}
                                                     className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
-                                                        isSelected
+                                                        swappingQuestionIndex !== null
+                                                            ? 'border-amber-400 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 shadow-sm'
+                                                            : isSelected
                                                             ? 'border-navy bg-blue-50/40 shadow-sm'
                                                             : 'border-gray-200 bg-white hover:border-gray-300'
                                                     }`}
@@ -1152,6 +1248,11 @@ export default function CreatePaper() {
                                                             }`}>
                                                                 {q.level || 'Medium'}
                                                             </span>
+                                                            {swappingQuestionIndex !== null && (
+                                                                <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-0.5 rounded animate-pulse">
+                                                                    Click to Swap with Q#{startQNo + swappingQuestionIndex}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         <div className="text-xs font-bold text-navy line-clamp-2">
                                                             <MathRenderer inline text={q.questionText || q.question} />
@@ -1170,18 +1271,21 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: REVIEW SELECTED BASKET ── */}
+                {/* ── MODAL: REVIEW & EDIT SELECTED BASKET ── */}
                 {showReviewSelectedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
                             <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
                                 <div>
                                     <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                        Selected Basket
+                                        Selected Questions Management
                                     </span>
                                     <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                        Selected Questions ({selectedQuestions.length})
+                                        Selected Basket ({selectedQuestions.length} Questions)
                                     </h3>
+                                    <p className="text-xs text-gray-500 font-bold">
+                                        Review, remove, or swap any question in your paper.
+                                    </p>
                                 </div>
                                 <button
                                     onClick={() => setShowReviewSelectedModal(false)}
@@ -1198,7 +1302,7 @@ export default function CreatePaper() {
                                     </div>
                                 ) : (
                                     selectedQuestions.map((q, idx) => (
-                                        <div key={idx} className="border border-gray-200 p-4 rounded-2xl bg-gray-50/40 flex items-start justify-between gap-4">
+                                        <div key={idx} className="border border-gray-200 p-4 rounded-2xl bg-gray-50/50 hover:bg-white hover:border-navy transition flex items-start justify-between gap-4">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                     <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
@@ -1212,18 +1316,38 @@ export default function CreatePaper() {
                                                             💡 {q.concept || q.topic}
                                                         </span>
                                                     )}
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                        (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
+                                                        (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
+                                                        'bg-amber-100 text-amber-800'
+                                                    }`}>
+                                                        {q.level || 'Medium'}
+                                                    </span>
                                                 </div>
                                                 <div className="text-xs font-bold text-navy line-clamp-2">
                                                     <MathRenderer inline text={q.questionText || q.question} />
                                                 </div>
                                             </div>
-                                            <button
-                                                onClick={() => toggleQuestion(q)}
-                                                className="text-rose-500 hover:bg-rose-50 p-2 rounded-xl text-xs font-black transition cursor-pointer"
-                                                title="Remove this question"
-                                            >
-                                                ✕ Remove
-                                            </button>
+
+                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                <button
+                                                    onClick={() => {
+                                                        setSwappingQuestionIndex(idx);
+                                                        setShowReviewSelectedModal(false);
+                                                    }}
+                                                    className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1"
+                                                    title="Swap this question with another"
+                                                >
+                                                    <span>🔄</span> Swap
+                                                </button>
+                                                <button
+                                                    onClick={() => removeQuestionByIndex(idx)}
+                                                    className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer"
+                                                    title="Remove this question"
+                                                >
+                                                    ✕ Remove
+                                                </button>
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -1231,13 +1355,13 @@ export default function CreatePaper() {
 
                             <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
                                 <span className="text-xs font-bold text-gray-600">
-                                    Total Selected: {selectedQuestions.length} of {targetLimit} Questions
+                                    Total: {selectedQuestions.length} of {targetLimit} Questions
                                 </span>
                                 <button
                                     onClick={() => setShowReviewSelectedModal(false)}
                                     className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
                                 >
-                                    Close & Continue
+                                    Done Reviewing
                                 </button>
                             </div>
                         </div>
@@ -1258,7 +1382,7 @@ export default function CreatePaper() {
                                 You have reached the maximum quota of <strong>{targetLimit} questions</strong> for this {paperCategory === 'assignment' ? 'assignment' : 'question paper'}. Extra questions cannot be added.
                             </p>
                             <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-left">
-                                💡 <strong>Tip:</strong> If you want to add a different question, please uncheck an already selected question first.
+                                💡 <strong>Tip:</strong> If you want to change or swap questions, click <strong>"Review Selected"</strong> and use the <strong>Swap</strong> or <strong>Remove</strong> option.
                             </p>
                             <button
                                 type="button"
@@ -1272,7 +1396,7 @@ export default function CreatePaper() {
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 4: TRUE A4 PAGE-BY-PAGE PREVIEW
+                    STEP 4: TRUE A4 PAGE-BY-PAGE PREVIEW + TOOLS
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 4 && (
                     <div className="space-y-6 animate-fade-in">
@@ -1280,30 +1404,50 @@ export default function CreatePaper() {
                             <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-xs font-bold text-amber-900 no-print flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <span>⚠️</span>
-                                    <span>{validationResult.issues.length} minor validation advisory note(s) found in selected questions.</span>
+                                    <span>{validationResult.issues.length} validation advisory note(s) found in selected questions.</span>
                                 </div>
                                 <span className="text-[10px] uppercase tracking-wider text-amber-700">Validated</span>
                             </div>
                         )}
 
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 no-print">
+                        {/* Preview Top Toolbar with Edit, Analysis, Key, Solutions */}
+                        <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm gap-3 no-print">
                             <button
                                 onClick={() => setCurrentStep(3)}
-                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                             >
-                                ← Back to Questions
+                                <span>←</span> ✏️ Edit / Change Questions
                             </button>
-                            <div className="flex items-center gap-3">
+
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                    onClick={() => setShowAnalysisModal(true)}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>📊</span> View Analysis
+                                </button>
+                                <button
+                                    onClick={() => setShowAnswerKeyModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🔑</span> Answer Key
+                                </button>
+                                <button
+                                    onClick={() => setShowSolutionsModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>💡</span> Solutions Guide
+                                </button>
                                 <button
                                     onClick={() => setCurrentStep(5)}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    className="bg-slate-100 hover:bg-slate-200 text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>⚙️</span> Open Alignment Controls →
+                                    <span>⚙️</span> Alignment Controls →
                                 </button>
                                 <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <span>✓</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
@@ -1331,20 +1475,49 @@ export default function CreatePaper() {
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 5 && (
                     <div className="space-y-6 animate-fade-in">
-                        <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 no-print">
-                            <button
-                                onClick={() => setCurrentStep(4)}
-                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                            >
-                                ← Back to Preview
-                            </button>
-                            <button
-                                onClick={handleFinalizeAndSave}
-                                disabled={saving}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
-                            >
-                                <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
-                            </button>
+                        <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm gap-3 no-print">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setCurrentStep(4)}
+                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                >
+                                    ← Back to Preview
+                                </button>
+                                <button
+                                    onClick={() => setCurrentStep(3)}
+                                    className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                >
+                                    ✏️ Edit Questions
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                    onClick={() => setShowAnalysisModal(true)}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>📊</span> View Analysis
+                                </button>
+                                <button
+                                    onClick={() => setShowAnswerKeyModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>🔑</span> Answer Key
+                                </button>
+                                <button
+                                    onClick={() => setShowSolutionsModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>💡</span> Solutions Guide
+                                </button>
+                                <button
+                                    onClick={handleFinalizeAndSave}
+                                    disabled={saving}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
+                                >
+                                    <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                </button>
+                            </div>
                         </div>
 
                         {/* Renderer with Alignment panel open */}
@@ -1361,6 +1534,123 @@ export default function CreatePaper() {
                         </div>
                     </div>
                 )}
+
+                {/* ── MODAL: ANSWER KEY ── */}
+                {showAnswerKeyModal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+                                <div>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                        Official Answer Key
+                                    </span>
+                                    <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                        {title || `${subject} Assessment`} Answer Key
+                                    </h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => window.print()}
+                                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer"
+                                    >
+                                        Print Key
+                                    </button>
+                                    <button
+                                        onClick={() => setShowAnswerKeyModal(false)}
+                                        className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                                    {selectedQuestions.map((q, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center text-xs font-bold hover:border-navy transition"
+                                        >
+                                            <span className="text-gray-500">Q.{startQNo + idx}</span>
+                                            <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
+                                                {q.answer || 'N/A'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
+                                <button
+                                    onClick={() => setShowAnswerKeyModal(false)}
+                                    className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── MODAL: SOLUTIONS GUIDE ── */}
+                {showSolutionsModal && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                        <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+                                <div>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                        Solutions & Explanations
+                                    </span>
+                                    <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                        {title || `${subject} Assessment`} Detailed Solutions
+                                    </h3>
+                                </div>
+                                <button
+                                    onClick={() => setShowSolutionsModal(false)}
+                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto space-y-5">
+                                {selectedQuestions.map((q, idx) => (
+                                    <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 space-y-2">
+                                        <div className="flex justify-between items-center border-b pb-2">
+                                            <span className="font-black text-sm text-navy">Question {startQNo + idx}</span>
+                                            <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
+                                                Answer: ({q.answer || 'N/A'})
+                                            </span>
+                                        </div>
+                                        <p className="text-xs font-bold text-gray-800">{q.questionText || q.question}</p>
+                                        <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
+                                            <span className="font-bold text-navy block mb-1">Explanation:</span>
+                                            {q.solutionText ? q.solutionText : 'Detailed step-by-step solution available.'}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
+                                <button
+                                    onClick={() => setShowSolutionsModal(false)}
+                                    className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                                >
+                                    Close Solutions
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── MODAL: ANALYSIS DASHBOARD ── */}
+                <PaperAnalysisModal
+                    isOpen={showAnalysisModal}
+                    onClose={() => setShowAnalysisModal(false)}
+                    paperTitle={title || `${subject} Assessment`}
+                    questions={selectedQuestions}
+                    examType={paperCategory === 'assignment' ? 'CET' : examType}
+                />
             </main>
         </div>
     );

@@ -231,7 +231,7 @@ router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
             return res.status(403).json({ msg: 'Access denied: not your paper.' });
         }
 
-        const { title, questions, questionObjects, pattern, templateId, difficultyDistribution, status, classes } = req.body;
+        const { title, questions, questionObjects, pattern, templateId, difficultyDistribution, status, classes, isAssignment, duration, startQNo, endQNo } = req.body;
         if (title) paper.title = title;
         if (questions) paper.questions = questions;
         if (questionObjects) paper.questionObjects = questionObjects;
@@ -240,6 +240,10 @@ router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
         if (difficultyDistribution) paper.difficultyDistribution = difficultyDistribution;
         if (status) paper.status = status;
         if (classes) paper.classes = classes;
+        if (isAssignment !== undefined) paper.isAssignment = isAssignment;
+        if (duration !== undefined) paper.duration = duration;
+        if (startQNo !== undefined) paper.startQNo = startQNo;
+        if (endQNo !== undefined) paper.endQNo = endQNo;
         paper.updatedAt = new Date();
 
         await paper.save();

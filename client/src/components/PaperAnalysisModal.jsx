@@ -157,11 +157,18 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'Assessment Paper', 
     const [activeTab, setActiveTab] = useState('difficulty');
 
     const subjects = useMemo(() => {
+        const presentSubjects = [...new Set(questions.map(q => q.subject).filter(Boolean))];
+        if (presentSubjects.length === 1) {
+            return presentSubjects;
+        }
+        if (presentSubjects.length > 1 && !['NEET', 'JEE', 'CET'].includes(examType)) {
+            return presentSubjects;
+        }
         if (examType === 'NEET') return ['Physics', 'Chemistry', 'Botany', 'Zoology'];
         if (examType === 'JEE') return ['Physics', 'Chemistry', 'Mathematics'];
         if (examType === 'CET') return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-        return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-    }, [examType]);
+        return presentSubjects.length > 0 ? presentSubjects : ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+    }, [examType, questions]);
 
     const matchSubject = (qSubject) => {
         if (!qSubject) return subjects[0];

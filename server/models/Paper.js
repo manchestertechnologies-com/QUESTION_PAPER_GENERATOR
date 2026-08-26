@@ -21,6 +21,10 @@ const PaperSchema = new mongoose.Schema({
         description: String,
         marks: Number
     }],
+    isAssignment: { type: Boolean, default: false },
+    duration: { type: String },
+    startQNo: { type: Number, default: 1 },
+    endQNo: { type: Number },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now },
     status: { type: String, enum: ['Not Started', 'In Progress', 'Submitted', 'Pending Approval', 'Approved', 'Rejected'], default: 'In Progress' }

@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS, SettingsPanel, formatMarks, calcTotal } from '../../components/PaperRenderer';
+import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 
-/* â”€â”€â”€ Inline styles â”€â”€â”€ */
+/* ─── Inline styles ─── */
 const S = {
     page: { fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif" },
 
@@ -49,7 +51,7 @@ const S = {
         marginBottom: '10px',
     },
 
-    /* â”€â”€ Filter bar â”€â”€ */
+    /* ── Filter bar ── */
     filterBar: {
         display: 'flex',
         gap: '10px',
@@ -166,7 +168,7 @@ const S = {
 
     actionCell: { display: 'flex', gap: '8px', justifyContent: 'flex-end' },
     btnView: {
-        height: '34px', padding: '0 18px',
+        height: '34px', padding: '0 14px',
         fontSize: '11px', fontWeight: 800,
         borderRadius: '10px', cursor: 'pointer',
         background: '#001f6d', color: '#c5a059',
@@ -176,10 +178,20 @@ const S = {
         display: 'inline-flex', alignItems: 'center', gap: '6px',
         boxShadow: '0 4px 10px rgba(0,31,109,0.15)',
     },
+    btnEdit: {
+        height: '34px', padding: '0 14px',
+        fontSize: '11px', fontWeight: 800,
+        borderRadius: '10px', cursor: 'pointer',
+        background: '#f1f5f9', color: '#001f6d',
+        border: '1px solid #cbd5e1',
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        transition: 'all 0.2s',
+        display: 'inline-flex', alignItems: 'center', gap: '4px',
+    },
     btnDel: {
-        height: '30px', padding: '0 14px',
-        fontSize: '12px', fontWeight: 500,
-        borderRadius: '6px', cursor: 'pointer',
+        height: '34px', padding: '0 12px',
+        fontSize: '11px', fontWeight: 700,
+        borderRadius: '10px', cursor: 'pointer',
         background: '#fff', color: '#dc2626',
         border: '1px solid #fecaca',
         fontFamily: 'inherit',
@@ -202,15 +214,15 @@ const S = {
         padding: '12px 18px',
         background: '#fff',
         border: '1px solid #e2e8f0',
-        borderRadius: '10px',
+        borderRadius: '16px',
     },
     btnBack: {
-        height: '38px', padding: '0 20px',
+        height: '38px', padding: '0 18px',
         fontSize: '11px', fontWeight: 800,
         borderRadius: '12px', cursor: 'pointer',
         background: '#f1f5f9', color: '#001f6d',
         border: 'none', textTransform: 'uppercase', letterSpacing: '0.1em',
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
+        display: 'inline-flex', alignItems: 'center', gap: '6px',
     },
     btnPrint: {
         height: '38px', padding: '0 20px',
@@ -221,36 +233,36 @@ const S = {
         display: 'inline-flex', alignItems: 'center', gap: '8px',
         boxShadow: '0 8px 20px rgba(0,31,109,0.2)',
     },
-    btnPdf: {
-        height: '38px', padding: '0 20px',
-        fontSize: '11px', fontWeight: 800,
-        borderRadius: '12px', cursor: 'pointer',
-        background: '#c5a059', color: '#001f6d',
-        border: 'none', textTransform: 'uppercase', letterSpacing: '0.1em',
-        display: 'inline-flex', alignItems: 'center', gap: '8px',
-        boxShadow: '0 8px 20px rgba(197,160,89,0.2)',
-    },
-    viewBtns: { display: 'flex', gap: '10px' },
+    viewBtns: { display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' },
 };
 
-/* â”€â”€â”€ toDateStr â”€â”€â”€ */
+/* ─── toDateStr ─── */
 const toDateStr = (date) => {
     const d = new Date(date);
     return d.toISOString().split('T')[0];
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-/*  PAPER VIEW â€” uses PaperRenderer engine                                */
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  PAPER VIEW — uses PaperRenderer engine + Analysis & Key modals             */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 const PaperView = ({ paper, activeTemplate, onBack }) => {
+    const navigate = useNavigate();
     const [showSettings, setShowSettings] = useState(false);
+    const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+    const [showAnswerKeyModal, setShowAnswerKeyModal] = useState(false);
+    const [showSolutionsModal, setShowSolutionsModal] = useState(false);
+
     const [settings, setSettings] = useState({
         ...DEFAULT_SETTINGS,
-        showMarks: false,        // OFF by default
+        showMarks: false,
         showAnswerKey: false,
+        startQNo: paper.startQNo || 1,
+        endQNo: paper.endQNo || null,
     });
 
     const isApproved = paper?.status?.toLowerCase() === 'approved';
+    const questions = paper?.questions || [];
+    const startQNo = paper?.startQNo || 1;
 
     return (
         <div style={S.page}>
@@ -258,60 +270,200 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
             <div style={{ ...S.viewToolbar, flexDirection: 'column', gap: '12px', alignItems: 'stretch' }} className="no-print">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                     <button style={S.btnBack} onClick={onBack}>← Back to Papers</button>
+                    
                     <div style={S.viewBtns}>
+                        {/* Edit Paper / Questions */}
+                        <button
+                            onClick={() => navigate(`/teacher/create-paper?paperId=${paper._id}`)}
+                            className="bg-navy text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>✏️</span> Edit Questions
+                        </button>
+
+                        {/* View Analysis */}
+                        <button
+                            onClick={() => setShowAnalysisModal(true)}
+                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>📊</span> View Analysis
+                        </button>
+
+                        {/* Answer Key */}
+                        <button
+                            onClick={() => setShowAnswerKeyModal(true)}
+                            className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>🔑</span> Answer Key
+                        </button>
+
+                        {/* Solutions Guide */}
+                        <button
+                            onClick={() => setShowSolutionsModal(true)}
+                            className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>💡</span> Solutions
+                        </button>
+
                         <button
                             style={{ ...S.btnBack, background: showSettings ? '#001f6d' : '#f1f5f9', color: showSettings ? '#fff' : '#001f6d' }}
                             onClick={() => setShowSettings(s => !s)}
                         >
-                            ⚙️ Paper Settings
+                            ⚙️ Layout Settings
                         </button>
-                        {isApproved ? (
-                            <button style={S.btnPrint} onClick={() => window.print()}>🖨 Print / Save PDF</button>
-                        ) : (
-                            <span style={{ color: '#dc2626', fontSize: '12px', fontWeight: 600, padding: '0 10px' }}>
-                                Paper must be approved by admin to print.
-                            </span>
-                        )}
+
+                        <button style={S.btnPrint} onClick={() => window.print()}>
+                            🖨 Print / Save PDF
+                        </button>
                     </div>
                 </div>
 
                 {showSettings && (
-                    <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={paper?.questions?.length || 0} />
+                    <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={questions.length} />
                 )}
             </div>
 
-            {/* â”€â”€ PaperRenderer â”€â”€ */}
+            {/* ── PaperRenderer ── */}
             <PaperRenderer
                 paper={paper}
                 activeTemplate={activeTemplate}
-                isAssignment={false}
+                isAssignment={paper.isAssignment || false}
                 settings={settings}
                 setSettings={setSettings}
                 showSettingsPanel={false}
                 printAreaId="qp-print-area"
             />
+
+            {/* ── MODAL: ANSWER KEY ── */}
+            {showAnswerKeyModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                    Official Key
+                                </span>
+                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                    {paper.title || `${paper.subject} Assessment`} Answer Key
+                                </h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => window.print()}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer"
+                                >
+                                    Print Key
+                                </button>
+                                <button
+                                    onClick={() => setShowAnswerKeyModal(false)}
+                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                                {questions.map((q, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center text-xs font-bold hover:border-navy transition"
+                                    >
+                                        <span className="text-gray-500">Q.{startQNo + idx}</span>
+                                        <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
+                                            {q.answer || 'N/A'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
+                            <button
+                                onClick={() => setShowAnswerKeyModal(false)}
+                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: SOLUTIONS GUIDE ── */}
+            {showSolutionsModal && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                    Step-by-Step Solutions
+                                </span>
+                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                    {paper.title || `${paper.subject} Assessment`} Detailed Solutions
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setShowSolutionsModal(false)}
+                                className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto space-y-5">
+                            {questions.map((q, idx) => (
+                                <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 space-y-2">
+                                    <div className="flex justify-between items-center border-b pb-2">
+                                        <span className="font-black text-sm text-navy">Question {startQNo + idx}</span>
+                                        <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
+                                            Answer: ({q.answer || 'N/A'})
+                                        </span>
+                                    </div>
+                                    <p className="text-xs font-bold text-gray-800">{q.questionText || q.question}</p>
+                                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
+                                        <span className="font-bold text-navy block mb-1">Explanation:</span>
+                                        {q.solutionText ? q.solutionText : 'Detailed step-by-step solution available.'}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
+                            <button
+                                onClick={() => setShowSolutionsModal(false)}
+                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
+                            >
+                                Close Solutions
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── MODAL: ANALYSIS DASHBOARD ── */}
+            <PaperAnalysisModal
+                isOpen={showAnalysisModal}
+                onClose={() => setShowAnalysisModal(false)}
+                paperTitle={paper.title || `${paper.subject} Assessment`}
+                questions={questions}
+                examType={paper.isAssignment ? 'CET' : (paper.examType || 'CET')}
+            />
         </div>
     );
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-/*  MAIN COMPONENT                                                        */
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
-
-
-
-
-
-
-
-
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/*  MAIN COMPONENT                                                            */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 const SavedPapers = () => {
+    const navigate = useNavigate();
     const [papers, setPapers] = useState([]);
     const [selectedPaper, setSelectedPaper] = useState(null);
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [hoveredRow, setHoveredRow] = useState(null);
 
-    /* â”€â”€ Filter state â”€â”€ */
+    /* ── Filter state ── */
     const [filterClass, setFilterClass] = useState('');
     const [filterDate, setFilterDate] = useState('');
 
@@ -342,12 +494,12 @@ const SavedPapers = () => {
         }
     };
 
-    /* â”€â”€ Unique class options from all papers â”€â”€ */
+    /* ── Unique class options from all papers ── */
     const classOptions = [...new Set(
         papers.flatMap(p => p.classes || [])
     )].sort();
 
-    /* â”€â”€ Filtered papers â”€â”€ */
+    /* ── Filtered papers ── */
     const filteredPapers = papers.filter(p => {
         const matchClass = filterClass
             ? (p.classes || []).includes(filterClass)
@@ -365,7 +517,7 @@ const SavedPapers = () => {
         setFilterDate('');
     };
 
-    /* â”€â”€ Paper view â”€â”€ */
+    /* ── Paper view ── */
     if (selectedPaper) {
         return (
             <PaperView
@@ -376,12 +528,12 @@ const SavedPapers = () => {
         );
     }
 
-    /* â”€â”€ Summary values (based on ALL papers, not filtered) â”€â”€ */
+    /* ── Summary values (based on ALL papers, not filtered) ── */
     const lastDate = papers.length
         ? new Date(Math.max(...papers.map(p => new Date(p.createdAt)))).toLocaleDateString()
-        : 'â€”';
+        : '—';
 
-    /* â”€â”€ List view â”€â”€ */
+    /* ── List view ── */
     return (
         <div style={S.page}>
 
@@ -402,10 +554,10 @@ const SavedPapers = () => {
                 </div>
             </div>
 
-            {/* Summary cards â€” 2 cards only (Total Questions removed) */}
+            {/* Summary cards */}
             <div style={S.summaryGrid}>
                 <div style={S.summaryCard}>
-                    <div style={S.summaryLabel}>Total Papers</div>
+                    <div style={S.summaryLabel}>Total Papers & Assignments</div>
                     <div style={S.summaryValue}>{papers.length}</div>
                     <div style={S.summarySub}>All saved question papers</div>
                 </div>
@@ -418,9 +570,9 @@ const SavedPapers = () => {
 
             {/* Section label + filter bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
-                <div style={S.sectionLabel}>All Papers</div>
+                <div style={S.sectionLabel}>All Papers & Assignments</div>
 
-                {/* â”€â”€ Filters â”€â”€ */}
+                {/* ── Filters ── */}
                 <div style={S.filterBar}>
                     {/* Class filter */}
                     <span style={S.filterLabel}>Class:</span>
@@ -444,7 +596,7 @@ const SavedPapers = () => {
                         onChange={e => setFilterDate(e.target.value)}
                     />
 
-                    {/* Clear button â€” only shown when filters are active */}
+                    {/* Clear button */}
                     {hasActiveFilters && (
                         <button
                             style={S.btnClearFilters}
@@ -452,7 +604,7 @@ const SavedPapers = () => {
                             onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#374151'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
                         >
-                            âœ• Clear
+                            ✕ Clear
                         </button>
                     )}
                 </div>
@@ -462,7 +614,7 @@ const SavedPapers = () => {
             <div style={S.tableWrap}>
                 {filteredPapers.length === 0 ? (
                     <div style={S.empty}>
-                        <div style={S.emptyIcon}>{papers.length === 0 ? 'ðŸ“„' : 'ðŸ”'}</div>
+                        <div style={S.emptyIcon}>{papers.length === 0 ? '📄' : '🔍'}</div>
                         <div style={S.emptyTitle}>{papers.length === 0 ? 'No saved papers yet' : 'No papers match your filters'}</div>
                         <div style={S.emptySub}>
                             {papers.length === 0
@@ -474,7 +626,7 @@ const SavedPapers = () => {
                     <table style={S.table}>
                         <thead>
                             <tr>
-                                <th style={S.th}>Paper</th>
+                                <th style={S.th}>Paper / Assignment</th>
                                 <th style={S.th}>Class</th>
                                 <th style={S.th}>Questions</th>
                                 <th style={S.th}>Created</th>
@@ -497,10 +649,14 @@ const SavedPapers = () => {
                                     {/* Paper */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <div style={S.paperCell}>
-                                            <div style={S.paperIcon}>📄</div>
+                                            <div style={S.paperIcon}>
+                                                {p.isAssignment ? '📝' : '📄'}
+                                            </div>
                                             <div>
                                                 <div style={S.paperTitle}>{p.title}</div>
-                                                <div style={S.paperId}>#{String(i + 1).padStart(4, '0')}</div>
+                                                <div style={S.paperId}>
+                                                    {p.isAssignment ? 'ASSIGNMENT • ' : 'TEST • '}#{String(i + 1).padStart(4, '0')}
+                                                </div>
                                             </div>
                                         </div>
                                     </td>
@@ -536,10 +692,19 @@ const SavedPapers = () => {
                                     <td style={{ ...S.tdLast, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <div style={S.actionCell}>
                                             <button
+                                                style={S.btnEdit}
+                                                onClick={() => navigate(`/teacher/create-paper?paperId=${p._id}`)}
+                                                onMouseEnter={e => { e.currentTarget.style.background = '#001f6d'; e.currentTarget.style.color = '#c5a059'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#001f6d'; }}
+                                                title="Edit questions and setup"
+                                            >
+                                                ✏️ Edit
+                                            </button>
+                                            <button
                                                 style={S.btnView}
                                                 onClick={() => setSelectedPaper(p)}
                                                 onMouseEnter={e => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = '#fff'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#2563eb'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = '#001f6d'; e.currentTarget.style.color = '#c5a059'; }}
                                             >
                                                 View
                                             </button>
