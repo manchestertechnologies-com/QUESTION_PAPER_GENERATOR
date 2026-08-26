@@ -18,21 +18,24 @@ import { InstructionCoverPage, PaperHeader, formatMarks, calcTotal } from './Pap
 
 // Standard A4 physical dimensions in standard web print points / mm
 // Standard A4 physical dimensions in standard web print points / mm
-// 210mm x 297mm. Printable height with standard margins: ~950px usable.
-const USABLE_PAGE_HEIGHT_1COL = 880;
-const USABLE_PAGE_HEIGHT_2COL = 1700;
+// Standard A4 printable height estimates (in px)
+// A4 is 297mm tall (~1123px at 96 DPI).
+// Usable content height after padding (12mm top/bottom) & footer: ~920px
+const USABLE_PAGE_HEIGHT_1COL = 900;
+const USABLE_PAGE_HEIGHT_2COL = 1750;
+const HEADER_OFFSET_PAGE1 = 120; // Height consumed by primary PaperHeader on Page 1 when no cover page
 
 /**
  * Estimate question height in pixels for smart pagination
  */
 function estimateQuestionHeight(q, isTwoCol = false) {
-    let h = 28; // Base question statement + numbering
+    let h = 24; // Base question statement + numbering
     const textLen = (q.questionText || q.question || '').length;
-    h += Math.ceil(textLen / (isTwoCol ? 42 : 80)) * 17;
+    h += Math.ceil(textLen / (isTwoCol ? 45 : 90)) * 17;
 
     // Diagram height
     if (q.imageUrl || q.image_url) {
-        h += 110;
+        h += 105;
     }
 
     // Options height
@@ -40,65 +43,52 @@ function estimateQuestionHeight(q, isTwoCol = false) {
     if (options.length > 0) {
         const maxOptLen = options.reduce((m, o) => Math.max(m, String(o || '').length), 0);
         if (isTwoCol) {
-            if (maxOptLen <= 25) {
-                h += Math.ceil(options.length / 2) * 20; // 2x2 grid
+            if (maxOptLen <= 22) {
+                h += Math.ceil(options.length / 2) * 18; // 2x2 grid
             } else {
-                h += options.length * 20; // 1 column
+                h += options.length * 18; // 1 column
             }
         } else {
-            if (maxOptLen <= 25 && options.length <= 4) {
-                h += 22; // 4 in a single horizontal row!
-            } else if (maxOptLen <= 55 && options.length <= 4) {
-                h += 44; // 2x2 grid
+            if (maxOptLen <= 22 && options.length <= 4) {
+                h += 20; // 4 in a single horizontal row
+            } else if (maxOptLen <= 50 && options.length <= 4) {
+                h += 38; // 2x2 grid
             } else {
-                h += options.length * 20; // 1 column per option
+                h += options.length * 18; // 1 column per option
             }
         }
     }
 
     // Statements / match table
-    if (q.matchPairs?.length) h += q.matchPairs.length * 22;
-    if (q.statements?.length) h += q.statements.length * 18;
+    if (q.matchPairs?.length) h += q.matchPairs.length * 20;
+    if (q.statements?.length) h += q.statements.length * 16;
 
-    return Math.max(50, h + 10); // + question margin
+    return Math.max(42, h + 8); // + question margin
 }
 
 /**
- * Smart Balanced Question Paginator:
- * Groups questions into discrete pages and balances question distribution
- * evenly across pages (e.g. 5 + 5 instead of 7 + 3).
+ * Greedy Full-Capacity Question Paginator:
+ * Fills each page up to its standard printable capacity without artificial early cuts,
+ * preventing large blank spaces while ensuring questions don't overflow page boundaries.
  */
 export function paginateQuestions(questions, { showCover = true, columns = 1, startQNo = 1 }) {
     if (!Array.isArray(questions) || questions.length === 0) return [];
 
     const isTwoCol = columns === 2;
-    const maxPageHeight = isTwoCol ? USABLE_PAGE_HEIGHT_2COL : USABLE_PAGE_HEIGHT_1COL;
-
-    // 1. Calculate each question's estimated height
-    const qHeights = questions.map(q => estimateQuestionHeight(q, isTwoCol));
-    const totalContentHeight = qHeights.reduce((sum, h) => sum + h, 0);
-
-    // 2. Determine ideal page count
-    const numPages = Math.max(1, Math.ceil(totalContentHeight / maxPageHeight));
-
-    // 3. Balanced target height per page so questions don't pile up on page 1 leaving page 2 almost empty
-    const balancedTargetHeight = numPages > 1 
-        ? Math.min(maxPageHeight, Math.ceil(totalContentHeight / numPages) + 25)
-        : maxPageHeight;
+    const standardMaxHeight = isTwoCol ? USABLE_PAGE_HEIGHT_2COL : USABLE_PAGE_HEIGHT_1COL;
+    const page1MaxHeight = showCover ? standardMaxHeight : (standardMaxHeight - (isTwoCol ? HEADER_OFFSET_PAGE1 * 2 : HEADER_OFFSET_PAGE1));
 
     const pages = [];
     let currentPageQuestions = [];
     let currentHeight = 0;
 
     questions.forEach((q, idx) => {
-        const qHeight = qHeights[idx];
+        const qHeight = estimateQuestionHeight(q, isTwoCol);
         const effectiveQNum = startQNo + idx;
+        const currentLimit = pages.length === 0 ? page1MaxHeight : standardMaxHeight;
 
-        // Check if starting a new page is needed
-        const isOverflow = currentPageQuestions.length > 0 && (
-            (currentHeight + qHeight > balancedTargetHeight && pages.length < numPages - 1) ||
-            (currentHeight + qHeight > maxPageHeight)
-        );
+        // Check if question exceeds the current page's usable printable capacity
+        const isOverflow = currentPageQuestions.length > 0 && (currentHeight + qHeight > currentLimit);
 
         if (isOverflow) {
             pages.push({
@@ -214,6 +204,7 @@ export default function A4PaperEngine({
                     }
 
                     const isLastPage = pIdx === questionPages.length - 1;
+                    const isFirstQuestionPage = pIdx === 0;
 
                     return (
                         <div key={pIdx} className="a4-page-sheet" data-page={actualPageNumber}>
@@ -225,25 +216,48 @@ export default function A4PaperEngine({
                                     lineHeight: settings.lineHeight,
                                 }}
                             >
-                                {/* Running Header for Page 2+ */}
-                                <div className="a4-running-header">
-                                    <span className="font-bold text-xs uppercase">{paper?.title || paper?.subject || 'Assessment Paper'}</span>
-                                    {paper?.setName && <span className="font-bold text-xs bg-black text-white px-2 py-0.5 rounded">SET {paper.setName}</span>}
-                                    <span className="text-xs text-gray-600">Max. Marks: {totalMarks}</span>
-                                </div>
+                                {/* If no cover page, render full header on Page 1 */}
+                                {!showCover && isFirstQuestionPage && (
+                                    <PaperHeader
+                                        title={paper?.title}
+                                        subject={paper?.subject}
+                                        classes={classes}
+                                        duration={paper?.duration}
+                                        totalMarks={totalMarks}
+                                        templateUrl={activeTemplate?.fileUrl}
+                                        isAssignment={isAssignment}
+                                    />
+                                )}
+
+                                {/* Running Header for subsequent pages */}
+                                {(showCover || !isFirstQuestionPage) && (
+                                    <div className="a4-running-header">
+                                        <span className="font-bold text-xs uppercase text-gray-800 tracking-wider">
+                                            {paper?.title || paper?.subject || 'Question Paper'}
+                                        </span>
+                                        {paper?.setName && (
+                                            <span className="font-bold text-[11px] bg-black text-white px-2 py-0.5 rounded">
+                                                SET {paper.setName}
+                                            </span>
+                                        )}
+                                        <span className="text-xs text-gray-600 font-semibold">
+                                            Max. Marks: {totalMarks}
+                                        </span>
+                                    </div>
+                                )}
 
                                 {/* Questions Content */}
                                 <div
                                     className="a4-questions-body"
                                     style={{
                                         display: settings.columns === 2 ? 'flex' : 'block',
-                                        gap: settings.columnGap || '24px',
+                                        gap: settings.columnGap || '20px',
                                     }}
                                 >
                                     {settings.columns === 2 ? (
                                         <>
                                             {/* Column 1 */}
-                                            <div style={{ flex: 1, minWidth: 0, borderRight: '1px solid #e0e0e0', paddingRight: '16px' }}>
+                                            <div style={{ flex: 1, minWidth: 0, borderRight: '1px solid #e0e0e0', paddingRight: '12px' }}>
                                                 {pageObj.questions.slice(0, Math.ceil(pageObj.questions.length / 2)).map(({ question, displayNum }) => (
                                                     <QuestionBlock
                                                         key={question._id || displayNum}
@@ -261,7 +275,7 @@ export default function A4PaperEngine({
                                                 ))}
                                             </div>
                                             {/* Column 2 */}
-                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ flex: 1, minWidth: 0, paddingLeft: '4px' }}>
                                                 {pageObj.questions.slice(Math.ceil(pageObj.questions.length / 2)).map(({ question, displayNum }) => (
                                                     <QuestionBlock
                                                         key={question._id || displayNum}
@@ -307,7 +321,7 @@ export default function A4PaperEngine({
 
                                 {/* Running Footer with Page Numbers */}
                                 <div className="a4-page-footer">
-                                    <span>{paper?.subject || 'Question Paper'}</span>
+                                    <span>{paper?.subject || paper?.title || 'Question Paper'}</span>
                                     <span className="font-bold">Page {actualPageNumber} of {totalPages}</span>
                                 </div>
                             </div>
@@ -350,8 +364,8 @@ export default function A4PaperEngine({
                     justifyContent: space-between;
                     align-items: center;
                     border-bottom: 1.5px solid #000;
-                    padding-bottom: 5px;
-                    margin-bottom: 12px;
+                    padding-bottom: 4px;
+                    margin-bottom: 10px;
                 }
                 .a4-page-footer {
                     margin-top: auto;
@@ -367,9 +381,9 @@ export default function A4PaperEngine({
                     text-align: center;
                     font-weight: 700;
                     font-size: 12px;
-                    padding: 8px 0;
-                    border-top: 1px solid #aaa;
-                    margin-top: 12px;
+                    padding: 6px 0;
+                    border-top: 1px solid #ccc;
+                    margin-top: 8px;
                 }
 
                 @media print {
@@ -383,14 +397,22 @@ export default function A4PaperEngine({
                         margin: 0 !important;
                         padding: 0 !important;
                     }
+                    .a4-pages-container {
+                        transform: none !important;
+                        margin-bottom: 0 !important;
+                    }
                     .a4-page-sheet {
                         box-shadow: none !important;
                         border: none !important;
                         margin: 0 !important;
                         width: 100% !important;
-                        height: 100vh !important;
+                        height: 296mm !important;
+                        min-height: 296mm !important;
+                        max-height: 296mm !important;
                         page-break-after: always !important;
                         break-after: page !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }
                     .no-print { display: none !important; }
                     @page {
