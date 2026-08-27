@@ -208,18 +208,24 @@ router.get('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
         const paper = await Paper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Paper not found' });
 
-        // IDOR check: teacher can access if admin, or own paper, or assigned to exam
-        if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
-            // Check if teacher is assigned to this paper's exam
-            if (paper.examId) {
-                const OnlineExam = require('../models/OnlineExam');
-                const exam = await OnlineExam.findById(paper.examId);
-                const isAssigned = exam && exam.subjectAssignments.some(sa => sa.teacherId && sa.teacherId.toString() === req.user.id);
-                if (!isAssigned) {
+        // Access check: teacher can access if admin, or own paper, or same subject, or assigned to exam
+        if (req.user.role === 'teacher') {
+            const tIdStr = paper.teacherId ? paper.teacherId.toString() : '';
+            const uIdStr = req.user.id ? req.user.id.toString() : '';
+            const matchesTeacher = tIdStr && uIdStr && tIdStr === uIdStr;
+            const matchesSubject = paper.subject && req.user.subject && paper.subject.toLowerCase() === req.user.subject.toLowerCase();
+
+            if (!matchesTeacher && !matchesSubject) {
+                if (paper.examId) {
+                    const OnlineExam = require('../models/OnlineExam');
+                    const exam = await OnlineExam.findById(paper.examId);
+                    const isAssigned = exam && exam.subjectAssignments.some(sa => sa.teacherId && sa.teacherId.toString() === uIdStr);
+                    if (!isAssigned) {
+                        return res.status(403).json({ msg: 'Access denied: not your paper.' });
+                    }
+                } else if (paper.teacherId) {
                     return res.status(403).json({ msg: 'Access denied: not your paper.' });
                 }
-            } else {
-                return res.status(403).json({ msg: 'Access denied: not your paper.' });
             }
         }
 
@@ -239,8 +245,17 @@ router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
         let paper = await Paper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Paper not found' });
 
-        if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
-            return res.status(403).json({ msg: 'Access denied: not your paper.' });
+        if (req.user.role === 'teacher') {
+            const tIdStr = paper.teacherId ? paper.teacherId.toString() : '';
+            const uIdStr = req.user.id ? req.user.id.toString() : '';
+            const matchesTeacher = tIdStr && uIdStr && tIdStr === uIdStr;
+            const matchesSubject = paper.subject && req.user.subject && paper.subject.toLowerCase() === req.user.subject.toLowerCase();
+
+            if (!matchesTeacher && !matchesSubject && !paper.teacherId) {
+                paper.teacherId = req.user.id;
+            } else if (!matchesTeacher && !matchesSubject) {
+                return res.status(403).json({ msg: 'Access denied: not your paper.' });
+            }
         }
 
         const { title, questions, questionObjects, pattern, templateId, difficultyDistribution, status, classes, isAssignment, duration, startQNo, endQNo } = req.body;

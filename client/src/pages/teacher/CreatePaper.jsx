@@ -76,7 +76,8 @@ export default function CreatePaper() {
     const initialCategory = searchParams.get('category') === 'assignment' ? 'assignment' : 'test';
 
     // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions) -> 4 (Preview) -> 5 (Alignment)
-    const [currentStep, setCurrentStep] = useState(1);
+    // If editing existing paper, default directly to Step 3 (Questions)
+    const [currentStep, setCurrentStep] = useState(paperId ? 3 : 1);
 
     // Step 1: Mode & Academic Metadata
     const [paperCategory, setPaperCategory] = useState(initialCategory);
@@ -624,7 +625,7 @@ export default function CreatePaper() {
                     </div>
                 </div>
 
-                {/* Step Indicators */}
+                {/* Step Indicators - Always freely clickable */}
                 <div className="hidden md:flex items-center gap-2 mr-4">
                     {[
                         { num: 1, label: 'Scope & Setup' },
@@ -633,22 +634,19 @@ export default function CreatePaper() {
                         { num: 4, label: 'Preview' },
                         { num: 5, label: 'Alignment' },
                     ].map((st) => (
-                        <div
+                        <button
                             key={st.num}
-                            onClick={() => {
-                                if (st.num < currentStep) setCurrentStep(st.num);
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                            type="button"
+                            onClick={() => setCurrentStep(st.num)}
+                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                                 currentStep === st.num
-                                    ? 'bg-gold text-navy shadow-md scale-105'
-                                    : currentStep > st.num
-                                    ? 'bg-white/20 text-emerald-400 hover:bg-white/30'
-                                    : 'bg-white/5 text-gray-400 opacity-50 pointer-events-none'
+                                    ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
+                                    : 'bg-white/10 hover:bg-white/20 text-white/90'
                             }`}
                         >
                             <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
                             <span>{st.label}</span>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </header>
@@ -1206,42 +1204,62 @@ export default function CreatePaper() {
 
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                     <div>
-                                        <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                            Complete Question Quality View
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                                {paperId ? 'Edit Mode' : 'Question Quality View'}
+                                            </span>
+                                            {paperId && (
+                                                <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                                                    Saved Paper #{paperId.slice(-6)}
+                                                </span>
+                                            )}
+                                        </div>
                                         <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                            Select & Quality Check Questions ({filteredQuestions.length} in Pool)
+                                            {paperId ? `Editing: ${title || 'Saved Paper'}` : 'Select & Quality Check Questions'} ({filteredQuestions.length} in Pool)
                                         </h2>
                                         <p className="text-xs text-gray-500 font-bold">
                                             {selectedQuestions.length} of {targetLimit} Questions Selected
                                         </p>
                                     </div>
 
-                                    {/* Action Bar */}
-                                    <div className="flex items-center gap-3 flex-wrap">
+                                    {/* Action Bar with clear Back and Forward buttons */}
+                                    <div className="flex items-center gap-2.5 flex-wrap">
                                         <button
-                                            onClick={() => setCurrentStep(2)}
-                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                            type="button"
+                                            onClick={() => setCurrentStep(1)}
+                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                                         >
-                                            ← Back
+                                            <span>←</span> Setup (Step 1)
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={() => setShowReviewSelectedModal(true)}
-                                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
+                                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
                                         >
-                                            <span>👁 Review Selected Basket</span>
+                                            <span>👁 Review Basket</span>
                                             <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
                                                 {selectedQuestions.length}
                                             </span>
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={handlePreFinalizeCheck}
                                             disabled={selectedQuestions.length === 0}
-                                            className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2 cursor-pointer"
+                                            className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
                                         >
-                                            <span>Proceed to Preview ({selectedQuestions.length})</span>
+                                            <span>Preview Paper (Step 4)</span>
                                             <span>→</span>
                                         </button>
+                                        {paperId && (
+                                            <button
+                                                type="button"
+                                                onClick={handleFinalizeAndSave}
+                                                disabled={saving || selectedQuestions.length === 0}
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <span>💾</span> {saving ? 'Saving...' : 'Save Changes'}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
