@@ -54,15 +54,40 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         type = 'TRUE_FALSE';
     }
 
-    // Build options array from opt_a, opt_b, opt_c, opt_d
+    // Build options array from all possible column variations
     const rawOptions = [];
     if (row.opt_a) rawOptions.push(row.opt_a);
     if (row.opt_b) rawOptions.push(row.opt_b);
     if (row.opt_c) rawOptions.push(row.opt_c);
     if (row.opt_d) rawOptions.push(row.opt_d);
 
+    if (rawOptions.length === 0) {
+        if (row.option_a) rawOptions.push(row.option_a);
+        if (row.option_b) rawOptions.push(row.option_b);
+        if (row.option_c) rawOptions.push(row.option_c);
+        if (row.option_d) rawOptions.push(row.option_d);
+    }
+
+    if (rawOptions.length === 0 && row.options) {
+        if (Array.isArray(row.options)) {
+            rawOptions.push(...row.options);
+        } else if (typeof row.options === 'string') {
+            try {
+                const parsed = JSON.parse(row.options);
+                if (Array.isArray(parsed)) rawOptions.push(...parsed);
+            } catch (e) {}
+        }
+    }
+
+    if (rawOptions.length === 0 && row.options_json) {
+        try {
+            const parsed = typeof row.options_json === 'string' ? JSON.parse(row.options_json) : row.options_json;
+            if (Array.isArray(parsed)) rawOptions.push(...parsed);
+        } catch (e) {}
+    }
+
     // Sanitize option texts
-    const options = rawOptions.map(cleanDifficultyTags);
+    const options = rawOptions.map(cleanDifficultyTags).filter(Boolean);
 
     // Map answer
     let answer = row.correct_option || row.num_answer || '';
@@ -105,6 +130,8 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         type: type,
         q_type: row.q_type,
         questionText: cleanQuestion,
+        imageUrl: row.image_url || row.imageUrl || null,
+        solutionImageUrl: row.solution_image_url || row.solutionImageUrl || null,
         options: options,
         answer: answer,
         correct_option: row.correct_option,
