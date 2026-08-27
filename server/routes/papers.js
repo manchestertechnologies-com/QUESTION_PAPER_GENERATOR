@@ -49,7 +49,10 @@ async function handlePaperFinalization(paper, user, exam = null) {
 async function populatePaperQuestions(paper) {
     const pObj = paper.toObject ? paper.toObject() : paper;
     if (Array.isArray(pObj.questions) && pObj.questions.length > 0) {
-        // If items are string UUIDs or objects with _id
+        // If questions are already full question objects with questionText or question
+        if (typeof pObj.questions[0] === 'object' && (pObj.questions[0].questionText || pObj.questions[0].question)) {
+            return pObj;
+        }
         const stringIds = pObj.questions.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(Boolean);
         if (stringIds.length > 0 && typeof pObj.questions[0] === 'string') {
             try {
@@ -58,11 +61,18 @@ async function populatePaperQuestions(paper) {
                     const fetchedMap = new Map(fetched.map(q => [(q._id || q.id).toString(), q]));
                     const ordered = stringIds.map(id => fetchedMap.get(id.toString())).filter(Boolean);
                     pObj.questions = ordered.length > 0 ? ordered : fetched;
+                } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                    pObj.questions = pObj.questionObjects;
                 }
             } catch (fetchErr) {
                 console.error('Error populating paper questions:', fetchErr.message);
+                if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                    pObj.questions = pObj.questionObjects;
+                }
             }
         }
+    } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+        pObj.questions = pObj.questionObjects;
     }
     return pObj;
 }
@@ -175,7 +185,9 @@ router.get('/', [auth, checkRole(['teacher', 'admin'])], async (req, res) => {
             query = {
                 $or: [
                     { teacherId: uId },
-                    { teacherId: req.user.id }
+                    { teacherId: req.user.id },
+                    { teacherId: { $in: [uId, req.user.id] } },
+                    { subject: req.user.subject }
                 ]
             };
         }

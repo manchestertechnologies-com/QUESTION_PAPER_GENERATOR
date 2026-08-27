@@ -6,7 +6,7 @@
  * Workflow:
  *  Step 1: Scope & Mode Setup (Test vs Assignment, Multi-Select Chapters & Concepts via Checkbox Boxes, Manual Duration)
  *  Step 2: Choose Acquisition Method (Manual Question Pick vs Auto Fetch Generator)
- *  Step 3: Question Selection / Auto Assembly from Multi-Topic Pool with Question Swap & Review
+ *  Step 3: Question Selection / Auto Assembly from Multi-Topic Pool with Question Swap, Full Quality Inspection & Review
  *  Step 4: True A4 Paginated Preview (Page-by-Page, Balanced Distribution) with Analysis, Answer Key, Solutions
  *  Step 5: Layout Alignment & Fine-tuning
  *  Step 6: Finalize, Validate & Save / PDF Export
@@ -19,6 +19,32 @@ import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import { validatePaperQuestions } from '../../utils/questionValidator';
+import { optionLabel } from '../../utils/sanitize';
+
+// Helper component to render complete options for a question
+const QuestionOptionsDisplay = ({ options = [] }) => {
+    if (!options || options.length === 0) return null;
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
+            {options.map((opt, oIdx) => {
+                const optText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '');
+                const label = typeof opt === 'object' && opt.label ? opt.label : optionLabel(oIdx);
+
+                return (
+                    <div key={oIdx} className="flex items-start gap-2 text-xs text-slate-700 bg-gray-50/80 rounded-xl p-2 border border-gray-100">
+                        <span className="font-black text-navy bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[10px] flex-shrink-0">
+                            ({label})
+                        </span>
+                        <div className="flex-1 min-w-0 font-medium">
+                            <MathRenderer inline text={optText} />
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 export default function CreatePaper() {
     const { user } = useContext(AuthContext);
@@ -58,6 +84,9 @@ export default function CreatePaper() {
     const [selectedQuestions, setSelectedQuestions] = useState([]);
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [activeTemplate, setActiveTemplate] = useState(null);
+
+    // View Options (Full Quality View vs Compact View)
+    const [fullQualityView, setFullQualityView] = useState(true);
 
     // Question Swap Mode State
     const [swappingQuestionIndex, setSwappingQuestionIndex] = useState(null);
@@ -259,7 +288,6 @@ export default function CreatePaper() {
     const toggleChapter = (ch) => {
         setSelectedChapters(prev => {
             if (prev.includes(ch)) {
-                // If unchecking chapter, also remove concepts belonging to this chapter
                 const chapterConcepts = chapterConceptsMap[ch] || [];
                 setSelectedConcepts(cPrev => cPrev.filter(c => !chapterConcepts.includes(c)));
                 return prev.filter(item => item !== ch);
@@ -471,7 +499,7 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
-            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved!`);
+            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
             } else {
@@ -537,7 +565,6 @@ export default function CreatePaper() {
                         <div
                             key={st.num}
                             onClick={() => {
-                                // Allow jumping back to previous steps
                                 if (st.num < currentStep) setCurrentStep(st.num);
                             }}
                             className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
@@ -963,7 +990,7 @@ export default function CreatePaper() {
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 3: QUESTION SELECTION / AUTO GENERATION
+                    STEP 3: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 3 && (
                     <div className="space-y-6 animate-fade-in">
@@ -1104,18 +1131,27 @@ export default function CreatePaper() {
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
                                     <div>
                                         <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                            Question Selection & Review
+                                            Question Repository & Quality Inspection
                                         </span>
                                         <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                            Select & Edit Questions ({filteredQuestions.length} in Pool)
+                                            Select & Review Questions ({filteredQuestions.length} in Pool)
                                         </h2>
                                         <p className="text-xs text-gray-500 font-bold">
                                             {selectedQuestions.length} of {targetLimit} Questions Selected
                                         </p>
                                     </div>
 
-                                    {/* Action Bar */}
+                                    {/* Action Bar & View Mode Switcher */}
                                     <div className="flex items-center gap-3 flex-wrap">
+                                        {/* Toggle View Mode */}
+                                        <button
+                                            onClick={() => setFullQualityView(!fullQualityView)}
+                                            className="bg-slate-100 text-navy hover:bg-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
+                                            title="Toggle between Full Details View and Compact View"
+                                        >
+                                            <span>{fullQualityView ? '🖼 Full Details View (Active)' : '📄 Compact View (Active)'}</span>
+                                        </button>
+
                                         <button
                                             onClick={() => setCurrentStep(2)}
                                             className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
@@ -1126,7 +1162,7 @@ export default function CreatePaper() {
                                             onClick={() => setShowReviewSelectedModal(true)}
                                             className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
                                         >
-                                            <span>👁 Review & Edit Selected</span>
+                                            <span>👁 Review Selected Basket</span>
                                             <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
                                                 {selectedQuestions.length}
                                             </span>
@@ -1142,7 +1178,7 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
-                                {/* Quick Filters & Search within Active Multi-Selected Pool */}
+                                {/* Quick Filters & Search */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                                     <input
                                         type="text"
@@ -1198,7 +1234,7 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
-                                {/* Questions List */}
+                                {/* Questions List (Full Question & Option Rendering) */}
                                 {loadingQuestions ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400">Loading questions pool...</div>
                                 ) : filteredQuestions.length === 0 ? (
@@ -1206,30 +1242,32 @@ export default function CreatePaper() {
                                         No questions match the active filters in this pool.
                                     </div>
                                 ) : (
-                                    <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
                                         {filteredQuestions.map((q, idx) => {
                                             const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
                                             const conceptName = q.concept || q.topic;
+                                            const diagramImg = q.imageUrl || q.image_url;
+
                                             return (
                                                 <div
                                                     key={q._id || idx}
                                                     onClick={() => handleQuestionClick(q)}
-                                                    className={`p-4 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
+                                                    className={`p-5 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
                                                         swappingQuestionIndex !== null
-                                                            ? 'border-amber-400 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 shadow-sm'
+                                                            ? 'border-amber-400 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 shadow-md'
                                                             : isSelected
-                                                            ? 'border-navy bg-blue-50/40 shadow-sm'
-                                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                                            ? 'border-navy bg-blue-50/40 shadow-sm ring-1 ring-navy/20'
+                                                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-xs'
                                                     }`}
                                                 >
                                                     <input
                                                         type="checkbox"
                                                         checked={isSelected}
                                                         onChange={() => {}}
-                                                        className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                                        className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer flex-shrink-0"
                                                     />
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                                                             <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
                                                                 {q.type || 'MCQ'}
                                                             </span>
@@ -1254,11 +1292,27 @@ export default function CreatePaper() {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        <div className="text-xs font-bold text-navy line-clamp-2">
+
+                                                        {/* Full Question Text */}
+                                                        <div className="text-xs font-bold text-navy leading-relaxed">
                                                             <MathRenderer inline text={q.questionText || q.question} />
                                                         </div>
-                                                        {q.imageUrl && (
-                                                            <span className="text-[10px] text-blue-600 font-bold mt-1 block">🖼 Diagram Included</span>
+
+                                                        {/* Diagram / Image */}
+                                                        {diagramImg && (
+                                                            <div className="mt-2.5 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-1 shadow-xs">
+                                                                <img
+                                                                    src={diagramImg}
+                                                                    alt="Question Diagram"
+                                                                    className="max-h-36 object-contain mx-auto"
+                                                                    onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Full Options Display when Full Quality View is enabled */}
+                                                        {fullQualityView && q.options && q.options.length > 0 && (
+                                                            <QuestionOptionsDisplay options={q.options} />
                                                         )}
                                                     </div>
                                                 </div>
@@ -1271,7 +1325,7 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: REVIEW & EDIT SELECTED BASKET ── */}
+                {/* ── MODAL: REVIEW & EDIT SELECTED BASKET (FULL QUALITY VIEW) ── */}
                 {showReviewSelectedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -1284,7 +1338,7 @@ export default function CreatePaper() {
                                         Selected Basket ({selectedQuestions.length} Questions)
                                     </h3>
                                     <p className="text-xs text-gray-500 font-bold">
-                                        Review, remove, or swap any question in your paper.
+                                        Review full questions, diagrams, options, and swap or remove any question.
                                     </p>
                                 </div>
                                 <button
@@ -1295,61 +1349,89 @@ export default function CreatePaper() {
                                 </button>
                             </div>
 
-                            <div className="p-6 overflow-y-auto space-y-3">
+                            <div className="p-6 overflow-y-auto space-y-4">
                                 {selectedQuestions.length === 0 ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400">
                                         No questions selected yet.
                                     </div>
                                 ) : (
-                                    selectedQuestions.map((q, idx) => (
-                                        <div key={idx} className="border border-gray-200 p-4 rounded-2xl bg-gray-50/50 hover:bg-white hover:border-navy transition flex items-start justify-between gap-4">
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                                    <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
-                                                        Q.{startQNo + idx}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
-                                                        📖 {q.chapter || 'General'}
-                                                    </span>
-                                                    {(q.concept || q.topic) && (
-                                                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                                                            💡 {q.concept || q.topic}
-                                                        </span>
-                                                    )}
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                                        (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
-                                                        (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
-                                                        'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {q.level || 'Medium'}
-                                                    </span>
-                                                </div>
-                                                <div className="text-xs font-bold text-navy line-clamp-2">
-                                                    <MathRenderer inline text={q.questionText || q.question} />
-                                                </div>
-                                            </div>
+                                    selectedQuestions.map((q, idx) => {
+                                        const diagramImg = q.imageUrl || q.image_url;
 
-                                            <div className="flex items-center gap-2 flex-shrink-0">
-                                                <button
-                                                    onClick={() => {
-                                                        setSwappingQuestionIndex(idx);
-                                                        setShowReviewSelectedModal(false);
-                                                    }}
-                                                    className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1"
-                                                    title="Swap this question with another"
-                                                >
-                                                    <span>🔄</span> Swap
-                                                </button>
-                                                <button
-                                                    onClick={() => removeQuestionByIndex(idx)}
-                                                    className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer"
-                                                    title="Remove this question"
-                                                >
-                                                    ✕ Remove
-                                                </button>
+                                        return (
+                                            <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 hover:bg-white hover:border-navy transition flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                        <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
+                                                            Q.{startQNo + idx}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
+                                                            📖 {q.chapter || 'General'}
+                                                        </span>
+                                                        {(q.concept || q.topic) && (
+                                                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
+                                                                💡 {q.concept || q.topic}
+                                                            </span>
+                                                        )}
+                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                                            (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
+                                                            (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
+                                                            'bg-amber-100 text-amber-800'
+                                                        }`}>
+                                                            {q.level || 'Medium'}
+                                                        </span>
+                                                        {q.answer && (
+                                                            <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                                                                Correct Answer: ({q.answer})
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Full Question Text */}
+                                                    <div className="text-xs font-bold text-navy leading-relaxed">
+                                                        <MathRenderer inline text={q.questionText || q.question} />
+                                                    </div>
+
+                                                    {/* Diagram if available */}
+                                                    {diagramImg && (
+                                                        <div className="mt-2.5 max-w-xs border border-gray-200 rounded-xl overflow-hidden bg-white p-1">
+                                                            <img
+                                                                src={diagramImg}
+                                                                alt="Question Diagram"
+                                                                className="max-h-32 object-contain mx-auto"
+                                                                onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Options */}
+                                                    {q.options && q.options.length > 0 && (
+                                                        <QuestionOptionsDisplay options={q.options} />
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-shrink-0 sm:self-start">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSwappingQuestionIndex(idx);
+                                                            setShowReviewSelectedModal(false);
+                                                        }}
+                                                        className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-xs"
+                                                        title="Swap this question with another"
+                                                    >
+                                                        <span>🔄</span> Swap
+                                                    </button>
+                                                    <button
+                                                        onClick={() => removeQuestionByIndex(idx)}
+                                                        className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border border-rose-200"
+                                                        title="Remove this question"
+                                                    >
+                                                        ✕ Remove
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
 
@@ -1513,7 +1595,7 @@ export default function CreatePaper() {
                                 <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
                                 >
                                     <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
