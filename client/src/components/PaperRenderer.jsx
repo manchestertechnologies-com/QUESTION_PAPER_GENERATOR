@@ -233,8 +233,22 @@ export function InstructionCoverPage({ paper, questions = [], duration, totalMar
 
 // ─── Paper Header ─────────────────────────────────────────────────────────────
 export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false }) {
+    // Clean assignment title
+    let displayTitle = title;
+    if (isAssignment) {
+        if (!displayTitle || /assessment|test|exam|jee|neet|cet|paper/i.test(displayTitle)) {
+            displayTitle = `${subject || ''} ASSIGNMENT`.trim().toUpperCase();
+        } else {
+            // Strip out any accidental CET/NEET/JEE references
+            displayTitle = displayTitle.replace(/\b(jee|neet|cet|kcet|bitsat|mains|advanced|board)\b/gi, '').replace(/\s+/g, ' ').trim();
+            if (!/assignment/i.test(displayTitle)) {
+                displayTitle = `${displayTitle} ASSIGNMENT`.trim();
+            }
+        }
+    }
+
     return (
-        <div style={{ marginBottom: '10px' }}>
+        <div style={{ marginBottom: '12px' }}>
             {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) && (
                 <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '2px solid #000', paddingBottom: '4px' }}>
                     <img
@@ -245,9 +259,9 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
                     />
                 </div>
             )}
-            <div style={{ textAlign: 'center', marginBottom: '4px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
                 <div style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0', color: '#000' }}>
-                    {title || subject || 'Assessment Question Paper'}
+                    {displayTitle || (isAssignment ? `${subject} ASSIGNMENT` : (title || `${subject} Assessment`))}
                 </div>
                 {!isAssignment && (
                     <div style={{ fontSize: '12px', color: '#222', fontWeight: 600 }}>
@@ -255,14 +269,21 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
                     </div>
                 )}
             </div>
-            {!isAssignment && (
+
+            {isAssignment ? (
+                /* Pure clean Assignment header without any CET/NEET/JEE/Time/Marks */
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '11.5px', marginTop: '4px' }}>
+                    <span>Subject: <strong>{subject || 'General'}</strong></span>
+                    <span>Student Name: _____________________</span>
+                    <span>Roll No: ________</span>
+                    <span>Date: _________</span>
+                </div>
+            ) : (
+                /* Formal Test Header */
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', borderBottom: '2px solid #000', padding: '3px 0', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>
                     <span>Time: {duration || '3 Hours'}</span>
                     <span>Max. Marks: {totalMarks}</span>
                 </div>
-            )}
-            {isAssignment && (
-                <div style={{ borderBottom: '2px solid #000', paddingBottom: '2px', marginTop: '2px' }} />
             )}
         </div>
     );
