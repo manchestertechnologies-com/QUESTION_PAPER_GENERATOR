@@ -263,22 +263,18 @@ export default function CreatePaper() {
     }, [paperId]);
 
     // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ──
-    const fetchQuestionsPool = async () => {
-        if (!subject) return;
+    const fetchQuestionsPool = async (forceSubject = subject) => {
+        if (!forceSubject) return;
 
-        const cacheKey = `${subject}_${selectedChapters.join(',')}`;
-        if (questionsCache.current[cacheKey]) {
+        const cacheKey = forceSubject.trim().toLowerCase();
+        if (questionsCache.current[cacheKey] && questionsCache.current[cacheKey].length > 0) {
             setAvailableQuestions(questionsCache.current[cacheKey]);
             return;
         }
 
         setLoadingQuestions(true);
         try {
-            let url = `/api/questions?subject=${encodeURIComponent(subject)}&limit=3000`;
-            if (selectedChapters.length > 0 && selectedChapters.length <= 5) {
-                url += `&chapter=${encodeURIComponent(selectedChapters.join(','))}`;
-            }
-
+            const url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=20000`;
             const res = await api.get(url);
             const qs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             questionsCache.current[cacheKey] = qs;
@@ -290,12 +286,12 @@ export default function CreatePaper() {
         }
     };
 
-    // Trigger pool fetch when moving to Step 2 or 3 or when subject/chapter changes
+    // Fetch questions pool immediately when subject is known
     useEffect(() => {
-        if (currentStep >= 2) {
-            fetchQuestionsPool();
+        if (subject) {
+            fetchQuestionsPool(subject);
         }
-    }, [currentStep, subject, selectedChapters]);
+    }, [subject]);
 
     // Distinct chapters and concepts map
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
@@ -383,35 +379,44 @@ export default function CreatePaper() {
         setSelectedConcepts([]);
     };
 
-    // Scoped Question Pool
+    // Scoped Question Pool (Ensure all questions load reliably)
     const scopedQuestionPool = useMemo(() => {
         return availableQuestions.filter(q => {
-            // Class check
-            if (targetClasses.length > 0 && q.classes && q.classes.length > 0) {
-                const matchesClass = targetClasses.some(c => {
-                    const cleanC = String(c).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
-                    return q.classes.some(qc => {
-                        const cleanQC = String(qc).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
-                        return cleanQC === cleanC || cleanQC.includes(cleanC) || cleanC.includes(cleanQC);
-                    });
+            // If already in selected questions, always preserve it
+            const isAlreadySelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
+            if (isAlreadySelected) return true;
+
+            // Class check (permissive: JEE/NEET/CET entrance questions match all high school classes)
+            if (selectedClass && selectedClass !== 'Both' && q.classes && q.classes.length > 0) {
+                const isGeneralOrEntrance = q.classes.some(c => {
+                    const str = String(c).toLowerCase();
+                    return str.includes('jee') || str.includes('neet') || str.includes('cet') || str.includes('general');
                 });
-                if (!matchesClass) return false;
+
+                if (!isGeneralOrEntrance) {
+                    const cleanTarget = String(selectedClass).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                    const matchesClass = q.classes.some(qc => {
+                        const cleanQC = String(qc).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                        return cleanQC === cleanTarget || cleanQC.includes(cleanTarget);
+                    });
+                    if (!matchesClass) return false;
+                }
             }
 
             // Chapter check
             if (selectedChapters.length > 0) {
-                if (!selectedChapters.includes(q.chapter)) return false;
+                if (!selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
             }
 
             // Concept check
             if (selectedConcepts.length > 0) {
                 const qConcept = q.concept || q.topic;
-                if (!selectedConcepts.includes(qConcept)) return false;
+                if (qConcept && qConcept !== 'General' && !selectedConcepts.includes(qConcept)) return false;
             }
 
             return true;
         });
-    }, [availableQuestions, selectedChapters, selectedConcepts, targetClasses]);
+    }, [availableQuestions, selectedQuestions, selectedChapters, selectedConcepts, selectedClass]);
 
     // Filtered questions for Manual Selection
     const filteredQuestions = useMemo(() => {
