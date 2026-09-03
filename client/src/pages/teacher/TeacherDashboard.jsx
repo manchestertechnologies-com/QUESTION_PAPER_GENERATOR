@@ -298,6 +298,7 @@ const TeacherAssignmentsSection = () => {
 
 // ── Teacher Dashboard Home ────────────────────────────────────────────────────
 const TeacherDashboardHome = () => {
+    const { user } = useContext(AuthContext);
     return (
         <div className="animate-fade-in-up">
             {/* Welcome Banner - Compact, Controlled Height */}
