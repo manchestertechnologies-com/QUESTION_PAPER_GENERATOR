@@ -49,7 +49,10 @@ const ProtectedRoute = ({ children, role }) => {
     const { user, loading } = useContext(AuthContext);
     if (loading) return <AppLoadingSpinner />;
     if (!user) return <Navigate to="/" />;
-    if (role && user.role !== role) return <Navigate to="/" />;
+    if (role) {
+        const allowedRoles = Array.isArray(role) ? role : [role];
+        if (!allowedRoles.includes(user.role)) return <Navigate to="/" />;
+    }
     return children;
 };
 
@@ -77,7 +80,7 @@ function App() {
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/create-paper" element={
-                            <ProtectedRoute role="teacher">
+                            <ProtectedRoute role={['teacher', 'admin']}>
                                 <CreatePaper />
                             </ProtectedRoute>
                         } />

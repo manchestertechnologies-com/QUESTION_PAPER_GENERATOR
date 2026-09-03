@@ -205,11 +205,11 @@ export default function CreatePaper() {
 
     // Keep selectedChapters and selectedConcepts synchronized with available metadata
     useEffect(() => {
-        if (metaData.chapters && metaData.chapters.length > 0) {
+        if (metaData?.chapters && Array.isArray(metaData.chapters) && metaData.chapters.length > 0) {
             setSelectedChapters(prev => prev.filter(ch => metaData.chapters.includes(ch)));
         }
-        if (metaData.concepts && metaData.concepts.length > 0) {
-            const conceptNames = metaData.concepts.map(c => c.concept);
+        if (metaData?.concepts && Array.isArray(metaData.concepts) && metaData.concepts.length > 0) {
+            const conceptNames = metaData.concepts.map(c => typeof c === 'object' ? (c.concept || c.name) : c).filter(Boolean);
             setSelectedConcepts(prev => prev.filter(cpt => conceptNames.includes(cpt)));
         }
     }, [metaData]);
@@ -320,11 +320,16 @@ export default function CreatePaper() {
 
     // Distinct chapters and concepts map
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
-        const chaptersSet = new Set(metaData.chapters.filter(Boolean));
+        const chaptersList = Array.isArray(metaData?.chapters) ? metaData.chapters : [];
+        const conceptsList = Array.isArray(metaData?.concepts) ? metaData.concepts : [];
+        const questionsList = Array.isArray(availableQuestions) ? availableQuestions : [];
+
+        const chaptersSet = new Set(chaptersList.filter(Boolean));
         const map = {};
 
         // Also add from available questions
-        availableQuestions.forEach(q => {
+        questionsList.forEach(q => {
+            if (!q) return;
             const ch = q.chapter || 'General';
             chaptersSet.add(ch);
             if (!map[ch]) map[ch] = new Set();
@@ -335,11 +340,11 @@ export default function CreatePaper() {
         });
 
         // Add meta concepts
-        metaData.concepts.forEach(c => {
-            if (c && typeof c === 'object' && c.chapter && c.name) {
+        conceptsList.forEach(c => {
+            if (c && typeof c === 'object' && c.chapter && (c.name || c.concept)) {
                 chaptersSet.add(c.chapter);
                 if (!map[c.chapter]) map[c.chapter] = new Set();
-                map[c.chapter].add(c.name);
+                map[c.chapter].add(c.name || c.concept);
             }
         });
 
@@ -354,12 +359,12 @@ export default function CreatePaper() {
 
     // Available concepts for checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
-        if (selectedChapters.length === 0) return [];
+        if (!selectedChapters || selectedChapters.length === 0 || !chapterConceptsMap) return [];
         const list = [];
         selectedChapters.forEach(ch => {
             const cList = chapterConceptsMap[ch] || [];
             cList.forEach(c => {
-                if (!list.some(item => item.concept === c && item.chapter === ch)) {
+                if (c && !list.some(item => item.concept === c && item.chapter === ch)) {
                     list.push({ concept: c, chapter: ch });
                 }
             });
