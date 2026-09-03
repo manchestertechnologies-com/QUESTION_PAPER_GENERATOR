@@ -23,6 +23,9 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
+import { getQuestionCorrectAnswerLabel } from '../../utils/sanitize';
+import { triggerPrintMode, PrintableAnswerKey, PrintableSolutionKey } from '../../components/PrintableKeys';
+import MathRenderer from '../../components/MathRenderer';
 import { generatePaperSet, generateAllPQRS, generateAnswerKey } from '../../utils/pqrsGenerator';
 
 const AdminPaperPreview = () => {
@@ -85,7 +88,7 @@ const AdminPaperPreview = () => {
     }, [pqrsSets, activeSet, selectedPaper]);
 
     const handlePrintPaper = () => {
-        window.print();
+        triggerPrintMode('paper');
     };
 
     const handleDownloadWord = () => {
@@ -95,7 +98,7 @@ const AdminPaperPreview = () => {
     };
 
     const handleDownloadAllSets = () => {
-        window.print();
+        triggerPrintMode('paper');
     };
 
     if (loading) {
@@ -240,12 +243,14 @@ const AdminPaperPreview = () => {
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => window.print()}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow"
+                                    type="button"
+                                    onClick={() => triggerPrintMode('answer_key')}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                                 >
-                                    Print Key
+                                    <span>🖨</span> Print Answer Key
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setShowAnswerKeyModal(false)}
                                     className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
                                 >
@@ -273,7 +278,7 @@ const AdminPaperPreview = () => {
                         <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
                             <button
                                 onClick={() => setShowAnswerKeyModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider"
+                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
                             >
                                 Close
                             </button>
@@ -293,12 +298,22 @@ const AdminPaperPreview = () => {
                                     Set {activeSet} Detailed Solutions
                                 </h3>
                             </div>
-                            <button
-                                onClick={() => setShowSolutionsModal(false)}
-                                className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                            >
-                                ✕
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => triggerPrintMode('solution_key')}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>🖨</span> Print Solution Key
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSolutionsModal(false)}
+                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
                         </div>
 
                         <div className="p-6 overflow-y-auto space-y-6">
@@ -307,13 +322,19 @@ const AdminPaperPreview = () => {
                                     <div className="flex justify-between items-center border-b pb-2">
                                         <span className="font-black text-sm text-navy">Question {idx + 1}</span>
                                         <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
-                                            Correct Answer: ({q.answer})
+                                            Correct Answer: ({getQuestionCorrectAnswerLabel(q)})
                                         </span>
                                     </div>
-                                    <p className="text-xs font-bold text-gray-800">{q.questionText || q.question}</p>
+                                    <div className="text-xs font-normal text-gray-800">
+                                        <MathRenderer text={q.questionText || q.question || ''} />
+                                    </div>
                                     <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
                                         <span className="font-bold text-navy block mb-1">Explanation / Solution:</span>
-                                        {q.solutionText ? q.solutionText : 'Detailed solution available upon evaluation.'}
+                                        {q.solutionText ? (
+                                            <MathRenderer text={q.solutionText} />
+                                        ) : (
+                                            'Detailed solution available upon evaluation.'
+                                        )}
                                     </div>
                                 </div>
                             ))}
@@ -322,7 +343,7 @@ const AdminPaperPreview = () => {
                         <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
                             <button
                                 onClick={() => setShowSolutionsModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider"
+                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
                             >
                                 Close Solutions
                             </button>
@@ -330,6 +351,7 @@ const AdminPaperPreview = () => {
                     </div>
                 </div>
             )}
+
 
             {/* ── ANALYSIS MODAL ── */}
             <PaperAnalysisModal

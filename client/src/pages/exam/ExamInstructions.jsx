@@ -9,7 +9,8 @@ export default function ExamInstructions() {
     const [agreed, setAgreed] = useState(false);
     const [loading, setLoading] = useState(true);
     const studentInfo = JSON.parse(localStorage.getItem('student_info') || '{}');
-
+    const [candidateName, setCandidateName] = useState(studentInfo.studentName || '');
+    const [candidateRoll, setCandidateRoll] = useState(studentInfo.rollNumber || '');
     const [timeLeftToStart, setTimeLeftToStart] = useState(null); // seconds until start
 
     useEffect(() => {
@@ -49,6 +50,14 @@ export default function ExamInstructions() {
 
     const handleProceed = () => {
         if (!agreed) return;
+        const nameToSave = candidateName.trim() || studentInfo.studentName || 'Candidate';
+        const rollToSave = candidateRoll.trim() || studentInfo.rollNumber || `STU-${Math.floor(1000 + Math.random() * 9000)}`;
+        localStorage.setItem('student_info', JSON.stringify({
+            studentName: nameToSave,
+            rollNumber: rollToSave,
+            section: studentInfo.section || 'A'
+        }));
+
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
             elem.requestFullscreen().then(() => {
@@ -87,6 +96,34 @@ export default function ExamInstructions() {
             </div>
 
             <div style={styles.container}>
+                {/* ── Candidate Details Banner ── */}
+                <div style={{ background: '#f8fafc', border: '2px solid #cbd5e1', borderRadius: '16px', padding: '16px 20px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            📝 Candidate Registration / Verification
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                            Verify your name & roll number before starting
+                        </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        <input
+                            type="text"
+                            placeholder="Candidate Full Name (e.g. Student Name)"
+                            value={candidateName}
+                            onChange={e => setCandidateName(e.target.value)}
+                            style={{ flex: 1, minWidth: '220px', padding: '9px 14px', borderRadius: '10px', border: '2px solid #94a3b8', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', background: '#fff', outline: 'none' }}
+                        />
+                        <input
+                            type="text"
+                            placeholder="Roll Number / Student ID (e.g. 2026-PCMB-01)"
+                            value={candidateRoll}
+                            onChange={e => setCandidateRoll(e.target.value)}
+                            style={{ flex: 1, minWidth: '220px', padding: '9px 14px', borderRadius: '10px', border: '2px solid #94a3b8', fontSize: '13px', fontWeight: 'bold', color: '#0f172a', background: '#fff', outline: 'none' }}
+                        />
+                    </div>
+                </div>
+
                 <h2 style={styles.mainHeading}>Please read the instructions carefully</h2>
                 
                 <div style={styles.sectionHeading}><u>General Instructions:</u></div>

@@ -241,7 +241,7 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'Assessment Paper', 
         return { subjects: result, grand };
     }, [questions, subjects]);
 
-    // 3. Question Type Breakdown
+    // 3. Question Type Breakdown with Robust Multi-Attribute Detection
     const typeData = useMemo(() => {
         const result = {};
         subjects.forEach(s => {
@@ -250,16 +250,50 @@ const PaperAnalysisModal = ({ isOpen, onClose, paperTitle = 'Assessment Paper', 
 
         questions.forEach(q => {
             const sub = matchSubject(q.subject);
-            const t = (q.type || q.q_type || 'MCQ').toUpperCase();
-            if (result[sub]) {
-                if (t.includes('ASSERTION')) result[sub].assertion += 1;
-                else if (t.includes('MATCH')) result[sub].match += 1;
-                else if (t.includes('MULTIPLE_STATEMENT')) result[sub].multi += 1;
-                else if (t.includes('STATEMENT')) result[sub].stmt += 1;
-                else if (t.includes('DIAGRAM') || q.imageUrl || q.image_url) result[sub].diagram += 1;
-                else result[sub].single += 1;
-                result[sub].total += 1;
+            if (!result[sub]) return;
+
+            const t = (q.type || q.q_type || '').toUpperCase();
+            const text = String(q.questionText || q.stem || q.question || '').toLowerCase();
+            const hasDiagram = Boolean(
+                q.diagram || q.image || q.imageUrl || q.image_url ||
+                /<img|data:image|{{img::|\.png|\.jpg|\.jpeg|\[image/i.test(text + ' ' + (q.diagram || ''))
+            );
+
+            // Classification priority:
+            if (t.includes('DIAGRAM') || hasDiagram) {
+                result[sub].diagram += 1;
+            } else if (
+                t.includes('MATCH') ||
+                (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ||
+                text.includes('match the list') ||
+                text.includes('match the column') ||
+                text.includes('match column') ||
+                text.includes('match list') ||
+                /\*\*column\s*i\*\*/i.test(text) ||
+                /\*\*list\s*i\*\*/i.test(text)
+            ) {
+                result[sub].match += 1;
+            } else if (
+                t.includes('ASSERTION') ||
+                (q.assertion && q.reason) ||
+                /assertion\s*(?:\([a-z0-9]+\)|:)/i.test(text)
+            ) {
+                result[sub].assertion += 1;
+            } else if (
+                t.includes('STATEMENT') ||
+                t.includes('MULTIPLE_STATEMENT') ||
+                (Array.isArray(q.statements) && q.statements.length > 0) ||
+                /statement\s*(?:i|ii|iii|iv|1|2|3|4|a|b|c|d)\s*:/i.test(text) ||
+                /statement\s*(?:i|ii|iii|iv|1|2|3|4)\b/i.test(text) ||
+                text.includes('consider the following statement') ||
+                text.includes('which of the following statement')
+            ) {
+                result[sub].stmt += 1;
+            } else {
+                result[sub].single += 1;
             }
+
+            result[sub].total += 1;
         });
 
         const grand = { single: 0, stmt: 0, multi: 0, assertion: 0, match: 0, diagram: 0, total: 0 };

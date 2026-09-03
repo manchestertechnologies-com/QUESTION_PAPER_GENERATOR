@@ -842,9 +842,9 @@ export default function ExamManagement() {
     };
 
     const copyShareLink = (examId) => {
-        const url = `${window.location.origin}/exam/${examId}/instructions`;
+        const url = `${window.location.origin}/exam`;
         navigator.clipboard.writeText(url);
-        setMsg('✅ Exam link copied to clipboard!');
+        setMsg('✅ Permanent Static Exam Portal link copied to clipboard!');
     };
 
     if (printExamDetail) {

@@ -138,8 +138,9 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 // @access  Teacher / Admin
 router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const subject = req.user.role === 'teacher' ? req.user.subject : (req.query.subject || '');
-        const meta = await supabaseQuestions.getSubjectMetadata(subject);
+        const subject = req.query.subject || (req.user.role === 'teacher' ? req.user.subject : '');
+        const klass = req.query.class || req.query.klass || '';
+        const meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
         res.json(meta);
     } catch (err) {
         console.error('[QUESTIONS META] error:', err.message);

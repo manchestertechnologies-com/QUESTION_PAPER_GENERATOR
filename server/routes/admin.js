@@ -60,4 +60,23 @@ router.delete('/teachers/:id', [auth, checkRole(['admin'])], async (req, res) =>
     }
 });
 
+// @route   PUT /api/admin/teachers/:id/omr-access
+// @desc    Toggle teacher OMR evaluation access permission
+// @access  Admin
+router.put('/teachers/:id/omr-access', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const { omrAccess } = req.body;
+        const teacher = await User.findByIdAndUpdate(
+            req.params.id,
+            { $set: { omrAccess: Boolean(omrAccess) } },
+            { new: true }
+        ).select('-password');
+        if (!teacher) return res.status(404).json({ msg: 'Teacher not found' });
+        res.json({ msg: 'OMR permission updated successfully', teacher });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
 module.exports = router;

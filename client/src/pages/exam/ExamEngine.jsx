@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import MatchTable, { parseMTFFromText } from '../../components/MatchTable';
 
 // ── Palette States ──────────────────────────────────────────────
 // not_visited: #6b7280 (grey)
@@ -419,11 +420,37 @@ export default function ExamEngine() {
                             </div>
                         )}
 
-                        {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (
-                            <MathRenderer style={styles.qText} text={currentQ.questionText} />
-                        )}
-                        {currentQ.imageUrl && (
-                            <img src={currentQ.imageUrl} alt="Question" style={styles.qImage} />
+                        {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (() => {
+                            const isMTF = (Array.isArray(currentQ.matchPairs) && currentQ.matchPairs.length > 0) || parseMTFFromText(currentQ.questionText);
+                            const mtfData = parseMTFFromText(currentQ.questionText);
+                            const diagramImg = currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url;
+
+                            return (
+                                <div>
+                                    <MathRenderer style={styles.qText} text={mtfData ? mtfData.stem : currentQ.questionText} />
+                                    {currentQ.statements && currentQ.statements.length > 0 && (
+                                        <div style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
+                                            {currentQ.statements.map((stmt, idx) => (
+                                                <p key={idx} style={{ marginLeft: '1rem', marginBottom: '0.4rem', color: '#1e293b' }}>
+                                                    <strong>Statement {idx + 1}:</strong> {stmt}
+                                                </p>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {currentQ.assertion && (
+                                        <div style={{ marginTop: '0.75rem', marginBottom: '1rem', color: '#1e293b' }}>
+                                            <p style={{ marginBottom: '0.4rem' }}><strong>Assertion (A):</strong> {currentQ.assertion}</p>
+                                            <p style={{ marginBottom: '0.4rem' }}><strong>Reason (R):</strong> {currentQ.reason}</p>
+                                        </div>
+                                    )}
+                                    {isMTF && (
+                                        <MatchTable question={currentQ} />
+                                    )}
+                                </div>
+                            );
+                        })()}
+                        {(currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url) && (
+                            <img src={currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url} alt="Question Diagram" style={styles.qImage} />
                         )}
 
                         {/* Options or Numerical Input */}

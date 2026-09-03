@@ -132,12 +132,42 @@ router.get('/commissioned', [auth, checkRole(['admin'])], async (req, res) => {
                 for (const sa of exObj.subjectAssignments) {
                     let paper = sa.submittedPaperId;
 
-                    // Fallback: if not explicitly linked, match by exam title & subject
+                    // Fallback: if not explicitly linked, match by examId, exam title, teacher, or subject
                     if (!paper) {
-                        const matchedPaper = allPapers.find(p => 
-                            p.title && p.title.toLowerCase().includes(exObj.title.toLowerCase()) &&
-                            (p.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase())
-                        );
+                        const saSub = (sa.subject || '').toLowerCase().trim();
+                        const saTeacherId = sa.teacherId ? sa.teacherId.toString() : '';
+
+                        const matchedPaper = allPapers.find(p => {
+                            const pSub = (p.subject || '').toLowerCase().trim();
+                            const pTitle = (p.title || '').toLowerCase().trim();
+                            const pTeacherId = p.teacherId ? p.teacherId.toString() : '';
+
+                            // 1. Paper explicitly tagged with this examId
+                            if (p.examId && p.examId.toString() === exObj._id.toString()) {
+                                if (pSub === saSub) return true;
+                                if (pTitle.includes(saSub)) return true;
+                                if (saTeacherId && pTeacherId === saTeacherId) return true;
+                                if (pSub.includes('bio') && (saSub.includes('botan') || saSub.includes('zool'))) return true;
+                            }
+
+                            // 2. Paper title matches exam title
+                            if (pTitle && exObj.title && pTitle.includes(exObj.title.toLowerCase())) {
+                                if (pSub === saSub) return true;
+                                if (pTitle.includes(saSub)) return true;
+                                if (saTeacherId && pTeacherId === saTeacherId) return true;
+                                if (pSub.includes('bio') && (saSub.includes('botan') || saSub.includes('zool'))) return true;
+                            }
+
+                            // 3. Teacher assigned to this subject created paper for this subject or biology
+                            if (saTeacherId && pTeacherId === saTeacherId) {
+                                if (pSub === saSub || pTitle.includes(saSub) || (pSub.includes('bio') && (saSub.includes('botan') || saSub.includes('zool')))) {
+                                    return true;
+                                }
+                            }
+
+                            return false;
+                        });
+
                         if (matchedPaper) {
                             paper = matchedPaper;
                             // Auto link in background
@@ -199,177 +229,285 @@ router.get('/commissioned', [auth, checkRole(['admin'])], async (req, res) => {
     }
 });
 
+// Helper to sort papers in standard exam subject order
+const getSubjectOrderWeight = (subject, examType) => {
+    const s = (subject || '').toLowerCase().trim();
+    if (examType === 'NEET') {
+        if (s.includes('physic')) return 1;
+        if (s.includes('chem')) return 2;
+        if (s.includes('botan')) return 3;
+        if (s.includes('zool')) return 4;
+        if (s.includes('bio')) return 5;
+    } else if (examType === 'JEE') {
+        if (s.includes('physic')) return 1;
+        if (s.includes('chem')) return 2;
+        if (s.includes('math')) return 3;
+    } else { // CET
+        if (s.includes('physic')) return 1;
+        if (s.includes('chem')) return 2;
+        if (s.includes('math')) return 3;
+        if (s.includes('bio') || s.includes('botan') || s.includes('zool')) return 4;
+    }
+    return 10;
+};
+
 // ─────────────────────────────────────────────────────────────────
-// ADMIN: Merge 3 papers into one OnlineExam
+// ADMIN: Merge Subject Papers into one Unified Assessment Paper & OnlineExam
 // POST /api/exams/merge
 // ─────────────────────────────────────────────────────────────────
 router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const { title, examType, paperIds, instructions, start_time, end_time, duration_minutes, allowedStudents } = req.body;
+        const { examId, title, examType: reqExamType, paperIds: reqPaperIds, instructions, start_time, end_time, duration_minutes, allowedStudents } = req.body;
 
-        if (!['JEE', 'NEET', 'CET'].includes(examType)) {
-            return res.status(400).json({ msg: 'Invalid exam type. Must be JEE, NEET, or CET.' });
-        }
-        
-        const reqCount = examType === 'JEE' ? 3 : 4;
+        let exam = null;
+        let paperIds = reqPaperIds || [];
+        let examType = reqExamType || 'CET';
 
-        if (!paperIds || paperIds.length === 0) {
-            return res.status(400).json({ msg: `At least 1 paper must be selected.` });
-        }
+        if (examId) {
+            exam = await OnlineExam.findById(examId).populate('subjectAssignments.submittedPaperId');
+            if (!exam) return res.status(404).json({ msg: 'Commissioned exam not found.' });
+            examType = exam.examType || examType;
 
-        // Fetch all selected papers with questions populated
-        console.log("Merge Request - paperIds:", paperIds);
-        const { Types: { ObjectId } } = require('mongoose');
-        const objectIds = paperIds.map(id => typeof id === 'string' ? new ObjectId(id) : id);
-        const papers = await Paper.find({ _id: { $in: objectIds } }).populate('questions');
-        console.log("Merge Request - Found papers:", papers.length);
+            // Collect all submitted papers from exam assignments
+            if (Array.isArray(exam.subjectAssignments)) {
+                for (const sa of exam.subjectAssignments) {
+                    if (sa.submittedPaperId) {
+                        const pid = sa.submittedPaperId._id ? sa.submittedPaperId._id.toString() : sa.submittedPaperId.toString();
+                        if (!paperIds.includes(pid)) paperIds.push(pid);
+                    }
+                }
+            }
 
-        if (papers.length !== paperIds.length) {
-            return res.status(404).json({ msg: `One or more papers not found. Expected ${paperIds.length}, found ${papers.length}.` });
-        }
-
-        // Validate subjects (DISABLED FOR TESTING)
-        /*
-        const subjectsFound = papers.map(p => p.subject.toLowerCase().trim());
-        let requiredSubjects = [];
-        if (examType === 'JEE') requiredSubjects = ['physics', 'chemistry', 'mathematics'];
-        if (examType === 'NEET') requiredSubjects = ['physics', 'chemistry', 'botany', 'zoology'];
-        if (examType === 'CET') requiredSubjects = ['physics', 'chemistry', 'mathematics', 'biology'];
-
-        const missingSubjects = requiredSubjects.filter(sub => !subjectsFound.some(found => found.includes(sub)));
-        if (missingSubjects.length > 0) {
-            return res.status(400).json({ msg: `Missing required subjects for ${examType}: ${missingSubjects.join(', ')}` });
-        }
-
-        // Validate question counts per subject
-        const expectedQCount = examType === 'JEE' ? 25 : examType === 'NEET' ? 50 : 60; // JEE = 25 (20 MCQs + 5 Numerical), CET = 60
-        for (const p of papers) {
-            if (p.questions.length !== expectedQCount) {
-                return res.status(400).json({ msg: `Paper '${p.title}' (${p.subject}) has ${p.questions.length} questions. ${examType} requires exactly ${expectedQCount} questions per subject.` });
+            // Fallback: match by title & subject in Paper collection
+            if (paperIds.length === 0) {
+                const allPapers = await Paper.find({}).sort({ createdAt: -1 });
+                for (const sa of (exam.subjectAssignments || [])) {
+                    const matchedPaper = allPapers.find(p => 
+                        p.title && p.title.toLowerCase().includes(exam.title.toLowerCase()) &&
+                        (p.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase())
+                    );
+                    if (matchedPaper) {
+                        paperIds.push(matchedPaper._id.toString());
+                        sa.submittedPaperId = matchedPaper._id;
+                    }
+                }
             }
         }
-        */
 
-        // Merge questions from all papers, preserving sections and translations
+        if (!paperIds || paperIds.length === 0) {
+            return res.status(400).json({ msg: 'No subject papers found to merge. Please ensure faculty have submitted questions or select papers.' });
+        }
+
+        // Fetch all selected papers
+        const { Types: { ObjectId } } = require('mongoose');
+        const objectIds = paperIds.map(id => typeof id === 'string' ? new ObjectId(id) : id);
+        let papers = await Paper.find({ _id: { $in: objectIds } });
+
+        if (papers.length === 0) {
+            return res.status(404).json({ msg: 'Selected subject papers not found.' });
+        }
+
+        // Sort papers into standard subject order (Physics -> Chemistry -> Mathematics -> Biology/Botany/Zoology)
+        papers.sort((a, b) => getSubjectOrderWeight(a.subject, examType) - getSubjectOrderWeight(b.subject, examType));
+
+        // Hydrate questions for each paper from Supabase / MongoDB
+        const hydratedPapers = await Promise.all(papers.map(async (p) => {
+            const pObj = p.toObject();
+            if (Array.isArray(pObj.questions) && pObj.questions.length > 0) {
+                if (typeof pObj.questions[0] === 'object' && (pObj.questions[0].questionText || pObj.questions[0].question)) {
+                    return pObj;
+                }
+                const stringIds = pObj.questions.map(q => typeof q === 'string' ? q : (q._id || q.id)).filter(Boolean);
+                if (stringIds.length > 0 && typeof pObj.questions[0] === 'string') {
+                    try {
+                        const fetched = await supabaseQuestions.getQuestionsByIds(stringIds);
+                        if (fetched && fetched.length > 0) {
+                            const map = new Map(fetched.map(q => [(q._id || q.id).toString(), q]));
+                            const ordered = stringIds.map(id => map.get(id.toString())).filter(Boolean);
+                            pObj.questions = ordered.length > 0 ? ordered : fetched;
+                        } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                            pObj.questions = pObj.questionObjects;
+                        }
+                    } catch (e) {
+                        if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                            pObj.questions = pObj.questionObjects;
+                        }
+                    }
+                }
+            } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                pObj.questions = pObj.questionObjects;
+            }
+            return pObj;
+        }));
+
+        // Merge questions preserving all fields, solutions (SOE), answer keys, statements, and sections
         const seen = new Set();
         const mergedQuestions = [];
         const sectionsMap = {};
 
-        for (const paper of papers) {
-            let availableQuestions = [...paper.questions];
-            
-            if (paper.pattern && paper.pattern.length > 0) {
-                paper.pattern.forEach(sec => {
-                    const uniqueSecName = `${paper.subject} - ${sec.sectionName}`;
-                    
-                    if (!sectionsMap[uniqueSecName]) {
-                        const isSectionB = sec.sectionName.toLowerCase().endsWith('b');
-                        let allowedToAnswer = 0;
-                        if (isSectionB) {
-                            const subClean = paper.subject.toLowerCase().trim();
-                            allowedToAnswer = (subClean === 'mathematics' || subClean === 'maths') ? 5 : 10;
-                        }
+        for (const paper of hydratedPapers) {
+            const sub = paper.subject || 'General';
+            const questionsList = Array.isArray(paper.questions) ? paper.questions : [];
 
-                        sectionsMap[uniqueSecName] = {
-                            sectionName: uniqueSecName,
-                            numQuestions: sec.numQuestions || 0,
-                            allowedToAnswer,
-                            markingRules: {
-                                correct: sec.marks / sec.numQuestions || 4,
-                                incorrect: -1,
-                                unattempted: 0
-                            }
-                        };
-                    }
+            const defSecName = `${sub} - Section A`;
+            if (!sectionsMap[defSecName]) {
+                sectionsMap[defSecName] = {
+                    sectionName: defSecName,
+                    numQuestions: questionsList.length,
+                    allowedToAnswer: 0,
+                    markingRules: { correct: 4, incorrect: -1, unattempted: 0 }
+                };
+            }
 
-                    let secQuestions = [];
-                    if (sec.type) {
-                        secQuestions = availableQuestions.filter(q => q.type === sec.type).slice(0, sec.numQuestions);
-                        const usedIds = new Set(secQuestions.map(q => q._id.toString()));
-                        availableQuestions = availableQuestions.filter(q => !usedIds.has(q._id.toString()));
-                    } else {
-                        secQuestions = availableQuestions.slice(0, sec.numQuestions);
-                        availableQuestions = availableQuestions.slice(sec.numQuestions);
-                    }
+            for (const q of questionsList) {
+                const qIdStr = (q._id || q.id || q.questionId || Math.random().toString()).toString();
+                if (!seen.has(qIdStr)) {
+                    seen.add(qIdStr);
 
-                    secQuestions.forEach(q => {
-                        if (!seen.has(q._id.toString())) {
-                            seen.add(q._id.toString());
-                            mergedQuestions.push({
-                                questionId: q._id,
-                                subject: q.subject,
-                                chapter: q.chapter,
-                                concept: q.concept,
-                                questionText: q.questionText,
-                                options: q.options || [],
-                                answer: q.answer,
-                                imageUrl: q.imageUrl,
-                                marks: sec.marks / sec.numQuestions || 4,
-                                type: q.type || 'MCQ',
-                                sectionName: uniqueSecName,
-                                questionTextTranslation: q.questionTextTranslation || '',
-                                optionsTranslation: q.optionsTranslation || []
-                            });
-                        }
-                    });
-                });
-            } else {
-                // Fallback for papers without patterns
-                const defSecName = `${paper.subject} - Section A`;
-                if (!sectionsMap[defSecName]) {
-                    sectionsMap[defSecName] = {
+                    // Ensure options is an array of strings or formatted option objects
+                    const formattedOptions = Array.isArray(q.options)
+                        ? q.options.map(opt => typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || ''))
+                        : [q.opt_a || '', q.opt_b || '', q.opt_c || '', q.opt_d || ''];
+
+                    const formattedQ = {
+                        _id: q._id || q.id,
+                        questionId: q._id || q.id || q.questionId,
+                        subject: q.subject || sub,
+                        chapter: q.chapter || '',
+                        concept: q.concept || '',
+                        subConcept: q.subConcept || '',
+                        level: q.level || 'medium',
+                        questionText: q.questionText || q.question || '',
+                        options: formattedOptions,
+                        answer: q.answer || q.correct_option || 'A',
+                        solutionText: q.solutionText || q.solution_text || '',
+                        statements: Array.isArray(q.statements) ? q.statements : [],
+                        assertion: q.assertion || '',
+                        reason: q.reason || '',
+                        matchPairs: Array.isArray(q.matchPairs) ? q.matchPairs : [],
+                        imageUrl: q.imageUrl || q.image_url || null,
+                        marks: q.marks || 4,
+                        negativeMarks: q.negativeMarks || 1,
+                        type: q.type || 'MCQ',
                         sectionName: defSecName,
-                        numQuestions: paper.questions.length,
-                        allowedToAnswer: 0,
-                        markingRules: { correct: 4, incorrect: -1, unattempted: 0 }
+                        questionTextTranslation: q.questionTextTranslation || '',
+                        optionsTranslation: q.optionsTranslation || []
                     };
-                }
 
-                for (const q of paper.questions) {
-                    if (!seen.has(q._id.toString())) {
-                        seen.add(q._id.toString());
-                        mergedQuestions.push({
-                            questionId: q._id,
-                            subject: q.subject,
-                            chapter: q.chapter,
-                            concept: q.concept,
-                            questionText: q.questionText,
-                            options: q.options || [],
-                            answer: q.answer,
-                            imageUrl: q.imageUrl,
-                            marks: 4,
-                            type: q.type || 'MCQ',
-                            sectionName: defSecName,
-                            questionTextTranslation: q.questionTextTranslation || '',
-                            optionsTranslation: q.optionsTranslation || []
-                        });
-                    }
+                    mergedQuestions.push(formattedQ);
                 }
             }
         }
 
-        const exam = new OnlineExam({
-            title: title || `Merged ${examType} Exam`,
-            examType,
-            sourcePapers: paperIds,
+        const mergedExamTitle = title || (exam ? exam.title : `Merged ${examType} Comprehensive Exam`);
+        const finalDuration = duration_minutes || (exam ? exam.duration_minutes : 180) || 180;
+
+        // 1. Create or Update the unified Paper document for A4 Preview, Analysis, SOE, Answer Key, PQRS
+        let mergedPaper = null;
+        if (exam && exam.mergedPaperId) {
+            mergedPaper = await Paper.findById(exam.mergedPaperId);
+        }
+
+        const paperPayload = {
+            title: `${mergedExamTitle} (Complete Assessment)`,
+            subject: examType === 'CET' ? 'PCMB (Merged)' : examType === 'NEET' ? 'PCB (Merged)' : 'PCM (Merged)',
+            classes: exam ? exam.classes : ['12'],
+            teacherId: req.user.id,
+            examId: exam ? exam._id : undefined,
             questions: mergedQuestions,
-            sections: Object.values(sectionsMap),
-            instructions: instructions || getDefaultInstructions(examType),
-            start_time: start_time || null,
-            end_time: end_time || null,
-            duration_minutes: duration_minutes || 180,
-            status: start_time ? 'scheduled' : 'draft',
-            shuffleQuestions: req.body.shuffleQuestions || false,
-            examMode: req.body.examMode || 'ONLINE',
-            allowedStudents: Array.isArray(allowedStudents) ? allowedStudents : [],
-            createdBy: req.user.id
-        });
+            questionObjects: mergedQuestions,
+            duration: `${finalDuration} Minutes`,
+            status: 'Approved',
+            pattern: Object.values(sectionsMap)
+        };
+
+        if (mergedPaper) {
+            Object.assign(mergedPaper, paperPayload);
+            await mergedPaper.save();
+        } else {
+            mergedPaper = new Paper(paperPayload);
+            await mergedPaper.save();
+        }
+
+        // 2. Save / Update OnlineExam
+        if (!exam) {
+            exam = new OnlineExam({
+                title: mergedExamTitle,
+                examType,
+                sourcePapers: paperIds,
+                mergedPaperId: mergedPaper._id,
+                questions: mergedQuestions,
+                sections: Object.values(sectionsMap),
+                instructions: instructions || getDefaultInstructions(examType),
+                start_time: start_time || null,
+                end_time: end_time || null,
+                duration_minutes: finalDuration,
+                status: start_time ? 'scheduled' : 'draft',
+                shuffleQuestions: req.body.shuffleQuestions || false,
+                examMode: req.body.examMode || 'ONLINE',
+                allowedStudents: Array.isArray(allowedStudents) ? allowedStudents : [],
+                createdBy: req.user.id
+            });
+        } else {
+            exam.sourcePapers = paperIds;
+            exam.mergedPaperId = mergedPaper._id;
+            exam.questions = mergedQuestions;
+            exam.sections = Object.values(sectionsMap);
+            exam.duration_minutes = finalDuration;
+            if (instructions) exam.instructions = instructions;
+            if (start_time) exam.start_time = start_time;
+            if (end_time) exam.end_time = end_time;
+        }
 
         await exam.save();
-        res.status(201).json({ msg: 'Exam created successfully', exam });
+
+        res.status(200).json({
+            msg: `Successfully merged ${papers.length} subject papers (${mergedQuestions.length} total questions) for ${mergedExamTitle}!`,
+            exam,
+            paper: mergedPaper,
+            totalQuestions: mergedQuestions.length
+        });
     } catch (err) {
-        console.error('Merge error:', err.message);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error('Merge error:', err);
+        res.status(500).json({ msg: 'Server error merging exam papers', error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: 1-Click Launch / Publish Online Exam
+// POST /api/exams/:id/quick-launch
+// ─────────────────────────────────────────────────────────────────
+router.post('/:id/quick-launch', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        const { duration_minutes, action } = req.body; // action: 'launch_now' | 'stop_now' | 'schedule'
+        const duration = duration_minutes || exam.duration_minutes || 180;
+
+        if (action === 'stop_now') {
+            exam.status = 'ended';
+            exam.end_time = new Date();
+        } else {
+            // Instant Launch
+            const now = new Date();
+            exam.status = 'live';
+            exam.start_time = now;
+            exam.end_time = new Date(now.getTime() + duration * 60 * 1000);
+            exam.duration_minutes = duration;
+        }
+
+        await exam.save();
+
+        res.json({
+            msg: exam.status === 'live' ? `Exam is now LIVE for students!` : `Exam has been stopped.`,
+            exam,
+            studentUrl: `/exam/${exam._id}/instructions`,
+            examCode: exam._id.toString().slice(-6).toUpperCase()
+        });
+    } catch (err) {
+        console.error('Quick launch error:', err);
+        res.status(500).json({ msg: 'Server error launching exam' });
     }
 });
 
@@ -424,6 +562,118 @@ router.post('/from-grand-test', [auth, checkRole(['admin'])], async (req, res) =
     } catch (err) {
         console.error('Grand Test exam creation error:', err.message);
         res.status(500).json({ msg: 'Server Error', error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Create & Launch Online CBT Exam from an existing Faculty Paper
+// POST /api/exams/from-single-paper
+// ─────────────────────────────────────────────────────────────────
+router.post('/from-single-paper', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const { paperId, title, examType, duration_minutes, action } = req.body;
+        if (!paperId) return res.status(400).json({ msg: 'Paper ID is required' });
+
+        const paper = await Paper.findById(paperId);
+        if (!paper) return res.status(404).json({ msg: 'Paper not found' });
+
+        let resolvedQuestions = [];
+        if (Array.isArray(paper.questions) && paper.questions.length > 0) {
+            if (typeof paper.questions[0] === 'object' && (paper.questions[0].questionText || paper.questions[0].question)) {
+                resolvedQuestions = paper.questions;
+            } else {
+                const stringIds = paper.questions.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(Boolean);
+                resolvedQuestions = await supabaseQuestions.getQuestionsByIds(stringIds);
+            }
+        }
+
+        const formattedQuestions = resolvedQuestions.map(q => ({
+            questionId: q._id || q.id,
+            subject: q.subject || paper.subject,
+            chapter: q.chapter || '',
+            concept: q.concept || '',
+            questionText: q.questionText || q.question || '',
+            options: q.options || [],
+            answer: q.answer || 'A',
+            imageUrl: q.imageUrl || q.image_url || null,
+            solutionText: q.solutionText || q.solution_text || '',
+            marks: q.type === 'NUMERICAL' ? 4 : 4,
+            negativeMarks: q.type === 'NUMERICAL' ? 0 : 1,
+            type: q.type || 'MCQ'
+        }));
+
+        const isLive = action === 'launch' || action === 'live';
+        const newExam = new OnlineExam({
+            title: title || paper.title || 'Online Assessment',
+            examType: examType || paper.examType || 'CET',
+            classes: Array.isArray(paper.classes) ? paper.classes : [paper.classes || '12'],
+            sourcePapers: [paperId],
+            questions: formattedQuestions,
+            instructions: `Online Examination for ${paper.title || 'Assessment'}. Read all questions carefully.`,
+            duration_minutes: duration_minutes || paper.duration || 180,
+            status: isLive ? 'live' : 'scheduled',
+            start_time: isLive ? new Date() : (req.body.start_time || new Date()),
+            end_time: req.body.end_time || null,
+            examMode: 'ONLINE',
+            createdBy: req.user.id
+        });
+
+        await newExam.save();
+        res.status(201).json({ msg: `Exam successfully ${isLive ? 'launched live' : 'created'} for Online CBT Exam Portal`, exam: newExam });
+    } catch (err) {
+        console.error('Error creating exam from paper:', err.message);
+        res.status(500).json({ msg: 'Server error creating exam from paper', error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// PUBLIC: Get all active / live / scheduled online exams for static exam portal
+// GET /api/exams/public/live
+// ─────────────────────────────────────────────────────────────────
+router.get('/public/live', async (req, res) => {
+    try {
+        const now = new Date();
+
+        // 1. Auto-transition scheduled -> live
+        await OnlineExam.updateMany(
+            { status: 'scheduled', start_time: { $lte: now } },
+            { $set: { status: 'live' } }
+        );
+
+        // 2. Auto-transition live -> ended
+        await OnlineExam.updateMany(
+            { status: 'live', end_time: { $lte: now } },
+            { $set: { status: 'ended' } }
+        );
+
+        const { rollNumber, search } = req.query;
+
+        const query = {
+            status: { $in: ['live', 'scheduled', 'ended'] }
+        };
+
+        const exams = await OnlineExam.find(query)
+            .select('title examType duration_minutes start_time end_time instructions status questions classes is_ip_restricted')
+            .sort({ status: 1, start_time: 1, createdAt: -1 });
+
+        const result = exams.map(e => ({
+            _id: e._id,
+            title: e.title,
+            examType: e.examType,
+            duration_minutes: e.duration_minutes || 180,
+            start_time: e.start_time,
+            end_time: e.end_time,
+            instructions: e.instructions,
+            status: e.status,
+            questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
+            classes: e.classes || [],
+            is_ip_restricted: !!e.is_ip_restricted
+        }));
+
+        res.json(result);
+    } catch (err) {
+        console.error('Error fetching public live exams:', err.message);
+        res.status(500).json({ msg: 'Server error fetching live exams' });
     }
 });
 
@@ -496,24 +746,7 @@ router.put('/:id/config', [auth, checkRole(['admin'])], async (req, res) => {
     }
 });
 
-// ─────────────────────────────────────────────────────────────────
-// ADMIN: Delete exam
-// DELETE /api/exams/:id
-// ─────────────────────────────────────────────────────────────────
-router.delete('/:id', [auth, checkRole(['admin'])], async (req, res) => {
-    try {
-        const exam = await OnlineExam.findById(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
-        
-        await OnlineExam.findByIdAndDelete(req.params.id);
-        await ExamSession.deleteMany({ examId: req.params.id });
-        
-        res.json({ msg: 'Exam deleted successfully' });
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ msg: 'Server Error' });
-    }
-});
+
 
 // Seeded shuffle helper for deterministic question order
 const seededShuffle = (arr, seed) => {
@@ -544,7 +777,9 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
     try {
         const exam = await OnlineExam.findById(req.params.id);
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
-        if (!['live', 'scheduled'].includes(exam.status)) {
+        
+        const isPreview = req.query.preview === 'true';
+        if (!isPreview && !['live', 'scheduled', 'draft'].includes(exam.status)) {
             return res.status(403).json({ msg: 'Exam is not currently available.' });
         }
 
@@ -564,6 +799,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             duration_minutes: exam.duration_minutes,
             start_time: exam.start_time,
             end_time: exam.end_time,
+            status: exam.status,
             questions: examQuestions.map(q => ({
                 _id: q._id,
                 questionId: q.questionId,
@@ -572,6 +808,10 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
                 concept: q.concept,
                 questionText: q.questionText,
                 options: q.options,
+                statements: q.statements || [],
+                assertion: q.assertion || '',
+                reason: q.reason || '',
+                matchPairs: q.matchPairs || [],
                 imageUrl: q.imageUrl,
                 marks: q.marks,
                 type: q.type || 'MCQ'

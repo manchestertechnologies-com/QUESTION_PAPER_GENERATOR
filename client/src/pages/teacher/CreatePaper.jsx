@@ -24,39 +24,33 @@ import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import { validatePaperQuestions } from '../../utils/questionValidator';
-import { optionLabel } from '../../utils/sanitize';
+import { optionLabel, getQuestionOptionLabel, getQuestionCorrectAnswerLabel, getQuestionCorrectOptionIndex } from '../../utils/sanitize';
+import { triggerPrintMode, PrintableAnswerKey, PrintableSolutionKey } from '../../components/PrintableKeys';
 
-// Helper component to render complete options for a question
-const QuestionCardOptions = ({ options = [], answer = '', showAnswer = false }) => {
+// Helper component to render complete options for a question matching reference screenshot
+const QuestionCardOptions = ({ options = [], question = null, answer = '', showAnswer = true }) => {
     if (!options || options.length === 0) return null;
 
+    const correctIdx = getQuestionCorrectOptionIndex(question || { answer, options });
+
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3 pt-3 border-t border-gray-200/80">
+        <div className="space-y-1.5 my-3 text-xs leading-relaxed font-normal">
             {options.map((opt, oIdx) => {
                 const optText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '');
-                const label = typeof opt === 'object' && opt.label ? opt.label : optionLabel(oIdx);
-                const isCorrect = showAnswer && (
-                    answer === optText || 
-                    answer === label || 
-                    answer === String(oIdx + 1)
-                );
+                const label = getQuestionOptionLabel(question, oIdx);
+                const isCorrect = showAnswer && (oIdx === correctIdx);
 
                 return (
                     <div
                         key={oIdx}
-                        className={`flex items-start gap-2.5 text-xs rounded-xl p-2.5 border transition ${
-                            isCorrect
-                                ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold shadow-xs'
-                                : 'bg-white border-gray-200 text-slate-800'
+                        className={`flex items-start gap-2 ${
+                            isCorrect ? 'text-emerald-400 font-semibold' : 'text-slate-300 font-normal'
                         }`}
                     >
-                        <span className={`rounded-md px-2 py-0.5 text-[11px] font-black flex-shrink-0 ${
-                            isCorrect ? 'bg-emerald-600 text-white' : 'bg-navy text-gold'
-                        }`}>
-                            {label}
-                        </span>
-                        <div className="flex-1 min-w-0 font-medium leading-snug pt-0.5">
+                        <span className="shrink-0">{label}:</span>
+                        <div className="flex-1 min-w-0">
                             <MathRenderer inline text={optText} />
+                            {isCorrect && <span className="ml-2 font-bold text-emerald-400">✓</span>}
                         </div>
                     </div>
                 );
@@ -136,6 +130,9 @@ export default function CreatePaper() {
         startQNo: 1,
     });
 
+    // Active Preview Document Mode ('paper' | 'answer_key' | 'solutions')
+    const [docMode, setDocMode] = useState('paper');
+
     // Modals & Panels
     const [showAnalysisModal, setShowAnalysisModal] = useState(false);
     const [showAnswerKeyModal, setShowAnswerKeyModal] = useState(false);
@@ -175,7 +172,8 @@ export default function CreatePaper() {
             if (!subject) return;
             setLoadingMeta(true);
             try {
-                const res = await api.get(`/api/questions/meta?subject=${encodeURIComponent(subject)}`);
+                const classParam = (selectedClass === 'Both' || !selectedClass) ? '' : selectedClass.replace(/[^0-9]/g, '');
+                const res = await api.get(`/api/questions/meta?subject=${encodeURIComponent(subject)}&class=${encodeURIComponent(classParam)}`);
                 if (res.data) {
                     setMetaData({
                         total: res.data.total || 0,
@@ -203,7 +201,18 @@ export default function CreatePaper() {
 
         fetchMeta();
         fetchTemplates();
-    }, [subject]);
+    }, [subject, selectedClass]);
+
+    // Keep selectedChapters and selectedConcepts synchronized with available metadata
+    useEffect(() => {
+        if (metaData.chapters && metaData.chapters.length > 0) {
+            setSelectedChapters(prev => prev.filter(ch => metaData.chapters.includes(ch)));
+        }
+        if (metaData.concepts && metaData.concepts.length > 0) {
+            const conceptNames = metaData.concepts.map(c => c.concept);
+            setSelectedConcepts(prev => prev.filter(cpt => conceptNames.includes(cpt)));
+        }
+    }, [metaData]);
 
     // Load Admin Commissioned Exam metadata if examId is present
     useEffect(() => {
@@ -216,14 +225,29 @@ export default function CreatePaper() {
                     setTitle(exam.title || '');
                     setExamType(exam.examType || 'CET');
                     if (exam.classes && exam.classes.length > 0) setSelectedClass(exam.classes[0]);
-                    const myAssignment = (exam.subjectAssignments || []).find(
-                        sa => (sa.subject || '').toLowerCase() === (user?.subject || '').toLowerCase()
-                    );
+
+                    const urlSub = (searchParams.get('subject') || '').toLowerCase().trim();
+                    const userSub = (user?.subject || '').toLowerCase().trim();
+                    const userId = user?._id || user?.id;
+                    const userEmail = (user?.email || '').toLowerCase().trim();
+
+                    const myAssignment = (exam.subjectAssignments || []).find(sa => {
+                        const saSub = (sa.subject || '').toLowerCase().trim();
+                        if (urlSub && saSub === urlSub) return true;
+                        if (sa.teacherId && userId && sa.teacherId.toString() === userId.toString()) return true;
+                        if (sa.teacherEmail && userEmail && sa.teacherEmail.toLowerCase().trim() === userEmail) return true;
+                        if (saSub === userSub) return true;
+                        if (userSub === 'biology' && (saSub === 'botany' || saSub === 'zoology')) return true;
+                        return false;
+                    });
+
                     if (myAssignment) {
                         setTargetCount(myAssignment.targetQuestions || 60);
                         setAutoQty(myAssignment.targetQuestions || 60);
                         if (myAssignment.difficultyDistribution) setAutoDist(myAssignment.difficultyDistribution);
                         if (myAssignment.subject) setSubject(myAssignment.subject);
+                    } else if (searchParams.get('subject')) {
+                        setSubject(searchParams.get('subject'));
                     }
                 }
             } catch (err) {
@@ -231,7 +255,7 @@ export default function CreatePaper() {
             }
         };
         fetchExamDetails();
-    }, [examId, user]);
+    }, [examId, user, searchParams]);
 
     // Load Existing Paper if paperId is present (for Editing)
     useEffect(() => {
@@ -522,11 +546,18 @@ export default function CreatePaper() {
             optD = question.opt_d || question.option_d || '';
         }
 
+        const stmts = Array.isArray(question.statements) && question.statements.length > 0
+            ? [...question.statements]
+            : [];
+
         setEditingQuestionModal({
             index: idx,
             question,
             form: {
                 questionText: question.questionText || question.question || '',
+                statements: stmts,
+                assertion: question.assertion || '',
+                reason: question.reason || '',
                 opt_a: optA,
                 opt_b: optB,
                 opt_c: optC,
@@ -553,6 +584,9 @@ export default function CreatePaper() {
             ...question,
             questionText: form.questionText,
             question: form.questionText,
+            statements: Array.isArray(form.statements) ? form.statements.filter(s => s && s.trim()) : [],
+            assertion: form.assertion || '',
+            reason: form.reason || '',
             options: updatedOptions,
             opt_a: form.opt_a,
             opt_b: form.opt_b,
@@ -857,13 +891,37 @@ export default function CreatePaper() {
                             {/* Subject */}
                             <div>
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Academic Subject</label>
-                                <input
-                                    type="text"
-                                    value={subject}
-                                    disabled={user?.role === 'teacher'}
-                                    onChange={e => setSubject(e.target.value)}
-                                    className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-navy bg-gray-100"
-                                />
+                                {(user?.role === 'admin' || (!examId && (user?.subject === 'Biology' || user?.subject === 'Botany' || user?.subject === 'Zoology'))) ? (
+                                    <select
+                                        value={subject}
+                                        onChange={e => setSubject(e.target.value)}
+                                        className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
+                                    >
+                                        {user?.role === 'admin' ? (
+                                            <>
+                                                <option value="Physics">Physics</option>
+                                                <option value="Chemistry">Chemistry</option>
+                                                <option value="Mathematics">Mathematics</option>
+                                                <option value="Biology">Biology</option>
+                                                <option value="Botany">Botany</option>
+                                                <option value="Zoology">Zoology</option>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <option value="Biology">Biology (All)</option>
+                                                <option value="Botany">Botany</option>
+                                                <option value="Zoology">Zoology</option>
+                                            </>
+                                        )}
+                                    </select>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        value={subject}
+                                        disabled={true}
+                                        className="w-full border-2 border-gray-200 rounded-2xl px-4 py-3 text-sm font-bold text-navy bg-gray-100 cursor-not-allowed"
+                                    />
+                                )}
                             </div>
 
                             {/* Duration (Manual Input Only) */}
@@ -1373,63 +1431,78 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
-                                {/* Quick Filters & Search */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                {/* Quick Filters & Search matching reference screenshot */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-2.5 bg-[#0f131a] p-3.5 rounded-2xl border border-slate-800">
                                     <input
                                         type="text"
-                                        placeholder="🔍 Search in pool..."
+                                        placeholder="🔍 Search questions..."
                                         value={searchTerm}
                                         onChange={e => { setSearchTerm(e.target.value); setPageNumber(1); }}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                        className="border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 outline-none bg-[#161a23] placeholder-slate-500 focus:border-amber-400"
                                     />
                                     <select
                                         value={singleFilterChapter}
                                         onChange={e => { setSingleFilterChapter(e.target.value); setPageNumber(1); }}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                        className="border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 outline-none bg-[#161a23] focus:border-amber-400"
                                     >
-                                        <option value="">All Scoped Chapters ({selectedChapters.length || distinctChapters.length})</option>
+                                        <option value="">All Chapters ({selectedChapters.length || distinctChapters.length})</option>
                                         {(selectedChapters.length > 0 ? selectedChapters : distinctChapters).map(ch => (
                                             <option key={ch} value={ch}>{ch}</option>
                                         ))}
                                     </select>
                                     <select
-                                        value={filterDifficulty}
-                                        onChange={e => { setFilterDifficulty(e.target.value); setPageNumber(1); }}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                        value={singleFilterConcept}
+                                        onChange={e => { setSingleFilterConcept(e.target.value); setPageNumber(1); }}
+                                        className="border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 outline-none bg-[#161a23] focus:border-amber-400"
                                     >
-                                        <option value="">All Difficulties</option>
-                                        <option value="easy">🟢 Easy</option>
-                                        <option value="medium">🟡 Medium</option>
-                                        <option value="hard">🔴 Hard</option>
+                                        <option value="">All Concepts</option>
+                                        {((singleFilterChapter && chapterConceptsMap[singleFilterChapter]) || Object.values(chapterConceptsMap).flat()).slice(0, 50).map(cn => (
+                                            <option key={cn} value={cn}>{cn}</option>
+                                        ))}
                                     </select>
                                     <select
                                         value={filterType}
                                         onChange={e => { setFilterType(e.target.value); setPageNumber(1); }}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                        className="border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 outline-none bg-[#161a23] focus:border-amber-400"
                                     >
                                         <option value="">All Question Types</option>
-                                        <option value="MCQ">MCQ</option>
+                                        <option value="MCQ">MCQ (Single Correct)</option>
                                         <option value="ASSERTION_REASON">Assertion & Reason</option>
                                         <option value="MATCH_FOLLOWING">Match the Column</option>
                                         <option value="STATEMENT_BASED">Statement Based</option>
                                     </select>
+                                    <select
+                                        value={filterDifficulty}
+                                        onChange={e => { setFilterDifficulty(e.target.value); setPageNumber(1); }}
+                                        className="border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium text-slate-200 outline-none bg-[#161a23] focus:border-amber-400"
+                                    >
+                                        <option value="">All Difficulties</option>
+                                        <option value="easy">Easy</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="hard">Hard</option>
+                                    </select>
                                     <div className="flex items-center gap-2">
+                                        <span className="text-[11px] font-bold text-amber-300 bg-amber-950/40 border border-amber-800/40 px-2.5 py-1.5 rounded-xl whitespace-nowrap">
+                                            {filteredQuestions.length} Qs
+                                        </span>
                                         <button
+                                            type="button"
                                             onClick={selectAllMatching}
-                                            className="flex-1 bg-navy text-gold text-[11px] font-bold py-2 rounded-xl cursor-pointer hover:bg-navy/90"
+                                            className="flex-1 bg-amber-400 text-navy font-bold text-[11px] py-1.5 px-2 rounded-xl cursor-pointer hover:bg-amber-300 transition"
                                         >
-                                            Select All ({filteredQuestions.length})
+                                            All
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={deselectAllMatching}
-                                            className="bg-gray-200 text-gray-700 text-[11px] font-bold px-3 py-2 rounded-xl cursor-pointer hover:bg-gray-300"
+                                            className="bg-slate-800 text-slate-300 hover:text-white text-[11px] font-bold py-1.5 px-2 rounded-xl cursor-pointer"
                                         >
                                             Clear
                                         </button>
                                     </div>
                                 </div>
 
-                                {/* Questions List (Full Question & Option Rendering) */}
+                                {/* Questions List (Matching user reference screenshots) */}
                                 {loadingQuestions ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400">Loading questions pool...</div>
                                 ) : filteredQuestions.length === 0 ? (
@@ -1437,126 +1510,230 @@ export default function CreatePaper() {
                                         No questions match the active filters in this pool.
                                     </div>
                                 ) : (
-                                    <div className="space-y-4 max-h-[68vh] overflow-y-auto pr-1">
+                                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                                         {paginatedQuestions.map((q, idx) => {
                                             const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
-                                            const conceptName = q.concept || q.topic;
+                                            const conceptName = q.concept || q.topic || 'General';
                                             const diagramImg = q.imageUrl || q.image_url;
                                             const isSolutionOpen = revealedSolutions[q._id || idx];
+                                            const qTypeDisplay = (q.type || 'MCQ') === 'MCQ' ? 'MCQ (Single Correct)' :
+                                                (q.type === 'ASSERTION_REASON' ? 'Assertion & Reason' :
+                                                (q.type === 'MATCH_FOLLOWING' ? 'Match the Following' : q.type));
+
+                                            const effectiveMatchPairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0)
+                                                ? q.matchPairs
+                                                : (Array.isArray(q.column_a) && q.column_a.length > 0)
+                                                    ? q.column_a.map((left, pIdx) => ({ left, right: (q.column_b && q.column_b[pIdx]) || '' }))
+                                                    : (Array.isArray(q.columnA) && q.columnA.length > 0)
+                                                        ? q.columnA.map((left, pIdx) => ({ left, right: (q.columnB && q.columnB[pIdx]) || '' }))
+                                                        : null;
+
+                                            const effectiveOptions = (Array.isArray(q.options) && q.options.length > 0)
+                                                ? q.options
+                                                : (q.match_options && typeof q.match_options === 'object')
+                                                    ? ['A', 'B', 'C', 'D'].map(k => q.match_options[k]).filter(Boolean)
+                                                    : [];
 
                                             return (
                                                 <div
                                                     key={q._id || idx}
-                                                    onClick={() => handleQuestionClick(q)}
-                                                    className={`p-5 rounded-3xl border-2 transition-all cursor-pointer flex items-start gap-4 ${
-                                                        swappingQuestionIndex !== null
-                                                            ? 'border-amber-400 bg-amber-50/70 hover:bg-amber-100 hover:border-amber-500 shadow-md'
-                                                            : isSelected
-                                                            ? 'border-navy bg-blue-50/50 shadow-md ring-2 ring-navy/15'
-                                                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                                                    }`}
+                                                    className={`p-5 rounded-2xl transition-all border ${
+                                                        isSelected
+                                                            ? 'bg-[#171c26] border-amber-400/90 ring-1 ring-amber-400/40 shadow-lg'
+                                                            : 'bg-[#131720] border-[#252b38] hover:border-slate-600 shadow'
+                                                    } text-slate-200`}
                                                 >
-                                                    <div className="pt-1 flex flex-col items-center gap-1.5 flex-shrink-0">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            onChange={() => {}}
-                                                            className="w-5 h-5 text-navy rounded border-gray-300 cursor-pointer"
-                                                        />
-                                                        <span className="text-[10px] font-black text-gray-400">#{idx + 1}</span>
+                                                    {/* Top Metadata Header Row */}
+                                                    <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+                                                        <div className="flex items-center gap-1.5 text-xs flex-wrap font-normal">
+                                                            <span className="font-bold text-amber-400">{q.subject || subject || 'Physics'}</span>
+                                                            <span className="text-slate-500">·</span>
+                                                            <span className="text-slate-300">Class {q.klass || (Array.isArray(q.classes) && q.classes[0]) || selectedClass || '11'}</span>
+                                                            <span className="text-slate-500">·</span>
+                                                            <span className="text-slate-300">{q.chapter || 'General'}</span>
+                                                            <span className="text-slate-500">·</span>
+                                                            <span className="text-slate-300">{qTypeDisplay}</span>
+                                                            <span className="text-slate-500">·</span>
+                                                            <span className="text-slate-300 capitalize">{q.level || 'Easy'}</span>
+                                                        </div>
+
+                                                        {/* Action Buttons */}
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleQuestionClick(q)}
+                                                                className={`px-3.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                                                                    isSelected
+                                                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                                                                        : 'bg-amber-400 text-navy hover:bg-amber-300 shadow-sm'
+                                                                }`}
+                                                            >
+                                                                {isSelected ? '✓ In Paper' : '+ Add to Paper'}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleOpenEditQuestion(q, idx);
+                                                                }}
+                                                                className="text-xs text-slate-400 hover:text-white bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700 cursor-pointer"
+                                                                title="Edit question text, options, or solution"
+                                                            >
+                                                                ✏️ Edit
+                                                            </button>
+                                                        </div>
                                                     </div>
 
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                            <span className="text-[10px] font-black bg-navy text-gold px-2.5 py-0.5 rounded-md">
-                                                                {q.type || 'MCQ'}
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-navy bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-100">
-                                                                📖 {q.chapter || 'General'}
-                                                            </span>
-                                                            {conceptName && conceptName !== 'General' && (
-                                                                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
-                                                                    💡 {conceptName}
-                                                                </span>
-                                                            )}
-                                                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md ${
-                                                                (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
-                                                                (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
-                                                                'bg-amber-100 text-amber-800'
-                                                            }`}>
-                                                                {q.level || 'Medium'}
-                                                            </span>
-                                                            {swappingQuestionIndex !== null && (
-                                                                <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2.5 py-0.5 rounded-md animate-pulse">
-                                                                    Click to Swap with Q#{startQNo + swappingQuestionIndex}
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                    {/* Status Badge */}
+                                                    <div className="mb-1.5">
+                                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300/90 bg-amber-950/40 border border-amber-800/40 px-2 py-0.5 rounded-md">
+                                                            ⏳ Pending Review
+                                                        </span>
+                                                    </div>
 
-                                                        {/* Full Question Text (Bold, Clean Typography, Zero Clamping) */}
-                                                        <div className="text-sm font-bold text-navy leading-relaxed mb-1">
-                                                            <MathRenderer inline text={q.questionText || q.question} />
+                                                    {/* Concept Line */}
+                                                    {conceptName && (
+                                                        <div className="text-xs text-slate-400 mb-2 font-normal">
+                                                            Concept: <span className="text-slate-200">{conceptName}</span>
                                                         </div>
+                                                    )}
 
-                                                        {/* Diagram / Graph */}
-                                                        {diagramImg && (
-                                                            <div className="my-3 max-w-sm border border-gray-200 rounded-2xl overflow-hidden bg-white p-2 shadow-xs">
-                                                                <img
-                                                                    src={diagramImg}
-                                                                    alt="Question Diagram"
-                                                                    className="max-h-40 object-contain mx-auto"
-                                                                    onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
-                                                                />
+                                                    {/* Question Text (KaTeX Math rendering, Normal Font Weight) */}
+                                                    <div className="text-sm font-normal text-slate-100 leading-relaxed my-2">
+                                                        <MathRenderer inline text={q.questionText || q.question} />
+                                                    </div>
+
+                                                    {/* Sub-statements if present */}
+                                                    {q.statements && Array.isArray(q.statements) && q.statements.length > 0 && (
+                                                        <div className="my-2.5 pl-3 border-l-2 border-amber-400/40 space-y-1 bg-slate-900/40 p-2 rounded-r-xl text-xs text-slate-200">
+                                                            {q.statements.map((stmt, sIdx) => (
+                                                                <div key={sIdx}>
+                                                                    <span className="font-semibold text-slate-100 mr-1.5">Statement {sIdx + 1}:</span>
+                                                                    <MathRenderer inline text={stmt} />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Assertion & Reason if present */}
+                                                    {q.assertion && (
+                                                        <div className="my-2.5 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-200 space-y-1.5">
+                                                            <div>
+                                                                <span className="font-semibold text-slate-100 mr-1">Assertion:</span>
+                                                                <MathRenderer inline text={q.assertion} />
                                                             </div>
-                                                        )}
+                                                            {q.reason && (
+                                                                <div className="pt-1 border-t border-slate-800">
+                                                                    <span className="font-semibold text-slate-100 mr-1">Reason:</span>
+                                                                    <MathRenderer inline text={q.reason} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
 
-                                                        {/* Options (A, B, C, D) Layout */}
-                                                        {q.options && q.options.length > 0 && (
-                                                            <QuestionCardOptions
-                                                                options={q.options}
-                                                                answer={q.answer || q.correct_option}
-                                                                showAnswer={isSolutionOpen}
+                                                    {/* Diagram / Graph - Positioned above Match Table */}
+                                                    {diagramImg && (
+                                                        <div className="my-2.5 max-w-sm rounded-xl overflow-hidden bg-white p-2 shadow-sm">
+                                                            <img
+                                                                src={diagramImg}
+                                                                alt="Question Diagram"
+                                                                className="max-h-48 object-contain mx-auto"
+                                                                onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
                                                             />
-                                                        )}
+                                                        </div>
+                                                    )}
 
-                                                        {/* Solution & Answer Toggle Button */}
-                                                        <div className="mt-3 flex items-center justify-between">
-                                                            {(q.answer || q.solutionText) && (
+                                                    {/* Match Pairs Table if present */}
+                                                    {effectiveMatchPairs && effectiveMatchPairs.length > 0 && (
+                                                        <div className="my-3 border border-[#252b38] rounded-xl overflow-hidden max-w-2xl bg-[#0e1219]">
+                                                            <table className="w-full text-xs text-left border-collapse">
+                                                                <thead className="bg-[#171c26] text-amber-400 font-bold border-b border-[#252b38]">
+                                                                    <tr>
+                                                                        <th className="py-2.5 px-3.5 w-1/2">Column A</th>
+                                                                        <th className="py-2.5 px-3.5 w-1/2 border-l border-[#252b38]">Column B</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-[#1e2533] text-slate-200">
+                                                                    {effectiveMatchPairs.map((pair, pIdx) => {
+                                                                        const leftText = pair.left || '';
+                                                                        const rightText = pair.right || '';
+                                                                        const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'][pIdx] || `(${pIdx + 1})`;
+                                                                        const letter = `(${String.fromCharCode(97 + pIdx)})`; // (a), (b), (c), (d)
+                                                                        const hasLeftLabel = /^\s*(\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+[\.\)])/.test(leftText);
+                                                                        const hasRightLabel = /^\s*(\([a-zA-Z0-9ivxLCDM]+\)|[a-zA-Z0-9ivxLCDM]+[\.\)])/i.test(rightText);
+
+                                                                        return (
+                                                                            <tr key={pIdx} className="hover:bg-slate-900/40 transition">
+                                                                                <td className="py-2 px-3.5 align-top">
+                                                                                    {!hasLeftLabel && <span className="text-amber-400 font-medium mr-2">{letter}</span>}
+                                                                                    <MathRenderer inline text={leftText} />
+                                                                                </td>
+                                                                                <td className="py-2 px-3.5 align-top border-l border-[#252b38]">
+                                                                                    {!hasRightLabel && <span className="text-amber-400 font-medium mr-2">{roman}</span>}
+                                                                                    <MathRenderer inline text={rightText} />
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Options with Green Checkmark for Correct Answer */}
+                                                    {effectiveOptions && effectiveOptions.length > 0 && (
+                                                        <QuestionCardOptions
+                                                            options={effectiveOptions}
+                                                            question={{ ...q, options: effectiveOptions }}
+                                                            answer={q.answer || q.correct_option}
+                                                            showAnswer={true}
+                                                        />
+                                                    )}
+
+                                                    {/* Bottom Card Footer: Tag, View Detailed Answer, Added By */}
+                                                    <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-2 text-xs">
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="bg-[#202634] text-slate-300 px-2.5 py-0.5 rounded-md text-[11px] font-medium border border-slate-700/60">
+                                                                {q.sourceExam || (Array.isArray(q.classes) && q.classes.includes('JEE') ? 'JEE' : 'NEET/JEE')}
+                                                            </span>
+                                                            {(q.solutionText || q.solution_text || q.answer) && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => toggleSolutionPreview(q._id || idx, e)}
-                                                                    className="text-[11px] font-bold text-gray-500 hover:text-navy underline flex items-center gap-1 cursor-pointer"
+                                                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-sky-400 bg-sky-950/30 border border-sky-600/40 hover:bg-sky-900/40 transition cursor-pointer"
                                                                 >
-                                                                    <span>{isSolutionOpen ? '🙈 Hide Answer & Solution' : '💡 View Answer & Solution'}</span>
+                                                                    <span>💡</span> {isSolutionOpen ? 'Hide Detailed Answer' : 'View Detailed Answer'}
                                                                 </button>
                                                             )}
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-400">
+                                                            Added by <span className="text-slate-300 font-medium">{q.createdByName || 'Admin'}</span>
+                                                        </div>
+                                                    </div>
 
-                                                            {isSelected && (
-                                                                <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                                                                    ✓ Added to Paper
-                                                                </span>
+                                                    {/* Expanded Detailed Answer Preview */}
+                                                    {isSolutionOpen && (
+                                                        <div className="mt-3 p-4 rounded-xl bg-[#0b0e14] border border-[#2a3242] text-xs text-slate-300 space-y-2 animate-fade-in">
+                                                            <div className="font-bold text-emerald-400 flex items-center gap-1.5">
+                                                                <span>✓</span> Correct Answer: Option ({getQuestionCorrectAnswerLabel(q)})
+                                                            </div>
+                                                            {(q.solutionText || q.solution_text) ? (
+                                                                <div className="leading-relaxed text-slate-300 pt-1.5 border-t border-slate-800">
+                                                                    <strong className="text-slate-200 block mb-1">Explanation:</strong>
+                                                                    <MathRenderer inline text={q.solutionText || q.solution_text} />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-slate-500 italic text-[11px]">
+                                                                    No additional step-by-step explanation recorded for this question.
+                                                                </div>
                                                             )}
                                                         </div>
-
-                                                        {/* Expanded Solution Preview */}
-                                                        {isSolutionOpen && (
-                                                            <div className="mt-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200 text-xs text-navy space-y-1 animate-fade-in">
-                                                                <div className="font-black text-emerald-800">
-                                                                    Correct Key: {q.answer || q.correct_option || 'N/A'}
-                                                                </div>
-                                                                {q.solutionText && (
-                                                                    <div className="font-medium text-gray-700 text-[11px] pt-1 border-t border-amber-200/60">
-                                                                        <strong>Explanation:</strong> <MathRenderer inline text={q.solutionText} />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
 
-                                        {/* Load More Button if pool has more */}
+                                        {/* Load More Button */}
                                         {paginatedQuestions.length < filteredQuestions.length && (
                                             <div className="text-center pt-4 pb-2">
                                                 <button
@@ -1638,9 +1815,37 @@ export default function CreatePaper() {
                                                     </div>
 
                                                     {/* Full Question Text */}
-                                                    <div className="text-xs font-bold text-navy leading-relaxed">
+                                                    <div className="text-xs font-bold text-navy leading-relaxed mb-1.5">
                                                         <MathRenderer inline text={q.questionText || q.question} />
                                                     </div>
+
+                                                    {/* Sub-statements if present */}
+                                                    {q.statements && Array.isArray(q.statements) && q.statements.length > 0 && (
+                                                        <div className="my-2 pl-2.5 border-l-2 border-navy/40 space-y-1 bg-white p-2 rounded-r-xl text-[11px]">
+                                                            {q.statements.map((stmt, sIdx) => (
+                                                                <div key={sIdx} className="font-semibold text-slate-800">
+                                                                    <span className="font-bold text-navy mr-1">Statement {sIdx + 1}:</span>
+                                                                    <MathRenderer inline text={stmt} />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Assertion & Reason if present */}
+                                                    {q.assertion && (
+                                                        <div className="my-2 p-2 rounded-xl bg-blue-50/40 border border-blue-100 text-[11px] space-y-1">
+                                                            <div className="text-slate-800 font-medium">
+                                                                <strong className="font-bold text-navy mr-1">Assertion (A):</strong>
+                                                                <MathRenderer inline text={q.assertion} />
+                                                            </div>
+                                                            {q.reason && (
+                                                                <div className="text-slate-800 font-medium pt-1 border-t border-blue-100/60">
+                                                                    <strong className="font-bold text-navy mr-1">Reason (R):</strong>
+                                                                    <MathRenderer inline text={q.reason} />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
 
                                                     {/* Diagram */}
                                                     {diagramImg && (
@@ -1654,14 +1859,74 @@ export default function CreatePaper() {
                                                         </div>
                                                     )}
 
+                                                    {/* Match Pairs Table if present */}
+                                                    {(() => {
+                                                        const s4Pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0)
+                                                            ? q.matchPairs
+                                                            : (Array.isArray(q.column_a) && q.column_a.length > 0)
+                                                                ? q.column_a.map((left, pIdx) => ({ left, right: (q.column_b && q.column_b[pIdx]) || '' }))
+                                                                : (Array.isArray(q.columnA) && q.columnA.length > 0)
+                                                                    ? q.columnA.map((left, pIdx) => ({ left, right: (q.columnB && q.columnB[pIdx]) || '' }))
+                                                                    : null;
+
+                                                        if (!s4Pairs || s4Pairs.length === 0) return null;
+
+                                                        return (
+                                                            <div className="my-2 border border-gray-200 rounded-xl overflow-hidden max-w-md bg-white">
+                                                                <table className="w-full text-[11px] text-left border-collapse">
+                                                                    <thead className="bg-slate-100 font-bold text-navy border-b border-gray-200">
+                                                                        <tr>
+                                                                            <th className="p-1.5 w-1/2">Column A</th>
+                                                                            <th className="p-1.5 w-1/2 border-l border-gray-200">Column B</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-gray-100 text-slate-700">
+                                                                        {s4Pairs.map((pair, pIdx) => {
+                                                                            const leftText = pair.left || '';
+                                                                            const rightText = pair.right || '';
+                                                                            const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'][pIdx] || `(${pIdx + 1})`;
+                                                                            const letter = `(${String.fromCharCode(97 + pIdx)})`;
+                                                                            const hasLeftLabel = /^\s*(\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+[\.\)])/.test(leftText);
+                                                                            const hasRightLabel = /^\s*(\([a-zA-Z0-9ivxLCDM]+\)|[a-zA-Z0-9ivxLCDM]+[\.\)])/i.test(rightText);
+
+                                                                            return (
+                                                                                <tr key={pIdx}>
+                                                                                    <td className="p-1.5 font-medium">
+                                                                                        {!hasLeftLabel && <span className="font-bold text-navy mr-1">{letter}</span>}
+                                                                                        <MathRenderer inline text={leftText} />
+                                                                                    </td>
+                                                                                    <td className="p-1.5 font-medium border-l border-gray-200">
+                                                                                        {!hasRightLabel && <span className="font-bold text-navy mr-1">{roman}</span>}
+                                                                                        <MathRenderer inline text={rightText} />
+                                                                                    </td>
+                                                                                </tr>
+                                                                            );
+                                                                        })}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        );
+                                                    })()}
+
                                                     {/* Options */}
-                                                    {q.options && q.options.length > 0 && (
-                                                        <QuestionCardOptions
-                                                            options={q.options}
-                                                            answer={q.answer}
-                                                            showAnswer={true}
-                                                        />
-                                                    )}
+                                                    {(() => {
+                                                        const s4Options = (Array.isArray(q.options) && q.options.length > 0)
+                                                            ? q.options
+                                                            : (q.match_options && typeof q.match_options === 'object')
+                                                                ? ['A', 'B', 'C', 'D'].map(k => q.match_options[k]).filter(Boolean)
+                                                                : [];
+
+                                                        if (!s4Options || s4Options.length === 0) return null;
+
+                                                        return (
+                                                            <QuestionCardOptions
+                                                                options={s4Options}
+                                                                question={{ ...q, options: s4Options }}
+                                                                answer={q.answer}
+                                                                showAnswer={true}
+                                                            />
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 <div className="flex items-center gap-2 flex-shrink-0 sm:self-start">
@@ -1780,16 +2045,20 @@ export default function CreatePaper() {
                                     <span>📊</span> View Analysis
                                 </button>
                                 <button
-                                    onClick={() => setShowAnswerKeyModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    onClick={() => setDocMode(m => m === 'answer_key' ? 'paper' : 'answer_key')}
+                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer ${
+                                        docMode === 'answer_key' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
+                                    }`}
                                 >
-                                    <span>🔑</span> Answer Key
+                                    <span>🔑</span> {docMode === 'answer_key' ? '📄 View Question Paper' : 'Answer Key (A4)'}
                                 </button>
                                 <button
-                                    onClick={() => setShowSolutionsModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    onClick={() => setDocMode(m => m === 'solutions' ? 'paper' : 'solutions')}
+                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer ${
+                                        docMode === 'solutions' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
+                                    }`}
                                 >
-                                    <span>💡</span> Solutions Guide
+                                    <span>💡</span> {docMode === 'solutions' ? '📄 View Question Paper' : 'Solutions Guide (A4)'}
                                 </button>
                                 <button
                                     onClick={() => setCurrentStep(5)}
@@ -1816,6 +2085,8 @@ export default function CreatePaper() {
                                 settings={{ ...settings, startQNo, endQNo }}
                                 setSettings={setSettings}
                                 showSettingsPanel={false}
+                                docMode={docMode}
+                                onDocModeChange={setDocMode}
                                 onProceedToAlignment={() => setCurrentStep(5)}
                                 onProceedToFinalize={handleFinalizeAndSave}
                             />
@@ -1852,16 +2123,20 @@ export default function CreatePaper() {
                                     <span>📊</span> View Analysis
                                 </button>
                                 <button
-                                    onClick={() => setShowAnswerKeyModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    onClick={() => setDocMode(m => m === 'answer_key' ? 'paper' : 'answer_key')}
+                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer ${
+                                        docMode === 'answer_key' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
+                                    }`}
                                 >
-                                    <span>🔑</span> Answer Key
+                                    <span>🔑</span> {docMode === 'answer_key' ? '📄 View Question Paper' : 'Answer Key (A4)'}
                                 </button>
                                 <button
-                                    onClick={() => setShowSolutionsModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                    onClick={() => setDocMode(m => m === 'solutions' ? 'paper' : 'solutions')}
+                                    className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer ${
+                                        docMode === 'solutions' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
+                                    }`}
                                 >
-                                    <span>💡</span> Solutions Guide
+                                    <span>💡</span> {docMode === 'solutions' ? '📄 View Question Paper' : 'Solutions Guide (A4)'}
                                 </button>
                                 <button
                                     onClick={handleFinalizeAndSave}
@@ -1882,6 +2157,8 @@ export default function CreatePaper() {
                                 settings={{ ...settings, startQNo, endQNo }}
                                 setSettings={setSettings}
                                 showSettingsPanel={true}
+                                docMode={docMode}
+                                onDocModeChange={setDocMode}
                                 onProceedToFinalize={handleFinalizeAndSave}
                             />
                         </div>
@@ -1903,12 +2180,14 @@ export default function CreatePaper() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => window.print()}
-                                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer"
+                                        type="button"
+                                        onClick={() => triggerPrintMode('answer_key')}
+                                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                                     >
-                                        Print Key
+                                        <span>🖨</span> Print Answer Key
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => setShowAnswerKeyModal(false)}
                                         className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
                                     >
@@ -1926,7 +2205,7 @@ export default function CreatePaper() {
                                         >
                                             <span className="text-gray-500">Q.{startQNo + idx}</span>
                                             <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
-                                                {q.answer || 'N/A'}
+                                                {getQuestionCorrectAnswerLabel(q)}
                                             </span>
                                         </div>
                                     ))}
@@ -1958,12 +2237,22 @@ export default function CreatePaper() {
                                         {title || `${subject} Assessment`} Detailed Solutions
                                     </h3>
                                 </div>
-                                <button
-                                    onClick={() => setShowSolutionsModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => triggerPrintMode('solution_key')}
+                                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <span>🖨</span> Print Solution Key
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSolutionsModal(false)}
+                                        className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="p-6 overflow-y-auto space-y-5">
@@ -1972,13 +2261,19 @@ export default function CreatePaper() {
                                         <div className="flex justify-between items-center border-b pb-2">
                                             <span className="font-black text-sm text-navy">Question {startQNo + idx}</span>
                                             <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
-                                                Answer: ({q.answer || 'N/A'})
+                                                Correct Answer: Option ({getQuestionCorrectAnswerLabel(q)})
                                             </span>
                                         </div>
-                                        <p className="text-xs font-bold text-gray-800">{q.questionText || q.question}</p>
+                                        <div className="text-xs font-normal text-gray-800">
+                                            <MathRenderer text={q.questionText || q.question || ''} />
+                                        </div>
                                         <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
                                             <span className="font-bold text-navy block mb-1">Explanation:</span>
-                                            {q.solutionText ? q.solutionText : 'Detailed step-by-step solution available.'}
+                                            {q.solutionText ? (
+                                                <MathRenderer text={q.solutionText} />
+                                            ) : (
+                                                'Detailed step-by-step solution available.'
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -1995,6 +2290,7 @@ export default function CreatePaper() {
                         </div>
                     </div>
                 )}
+
 
                 {/* ── MODAL: IN-PLACE QUESTION & OPTIONS EDITOR ── */}
                 {editingQuestionModal && (
@@ -2025,7 +2321,7 @@ export default function CreatePaper() {
                                 {/* Question Statement */}
                                 <div>
                                     <label className="block text-xs font-black text-navy uppercase tracking-wider mb-1.5">
-                                        Question Statement / Text <span className="text-red-500">*</span>
+                                        Question Statement / Stem <span className="text-red-500">*</span>
                                     </label>
                                     <textarea
                                         rows={4}
@@ -2044,6 +2340,72 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
+                                {/* Statements Management (for Statement-based or multi-statement questions) */}
+                                <div className="p-4 rounded-2xl bg-gray-50 border border-gray-200 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-xs font-black text-navy uppercase tracking-wider">
+                                            Sub-Statements (Optional)
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditingQuestionModal(prev => ({
+                                                ...prev,
+                                                form: {
+                                                    ...prev.form,
+                                                    statements: [...(prev.form.statements || []), '']
+                                                }
+                                            }))}
+                                            className="text-[11px] font-black text-blue-600 hover:text-navy bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 cursor-pointer"
+                                        >
+                                            + Add Statement
+                                        </button>
+                                    </div>
+
+                                    {(editingQuestionModal.form.statements || []).map((stmt, sIdx) => (
+                                        <div key={sIdx} className="flex items-center gap-2">
+                                            <span className="text-xs font-black text-navy w-24 flex-shrink-0">
+                                                Statement {sIdx + 1}:
+                                            </span>
+                                            <input
+                                                type="text"
+                                                value={stmt}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setEditingQuestionModal(prev => {
+                                                        const nextStmts = [...(prev.form.statements || [])];
+                                                        nextStmts[sIdx] = val;
+                                                        return {
+                                                            ...prev,
+                                                            form: { ...prev.form, statements: nextStmts }
+                                                        };
+                                                    });
+                                                }}
+                                                placeholder={`Statement ${sIdx + 1} text`}
+                                                className="flex-1 border-2 border-gray-200 focus:border-navy rounded-xl px-3 py-1.5 text-xs font-medium text-navy outline-none bg-white"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingQuestionModal(prev => ({
+                                                    ...prev,
+                                                    form: {
+                                                        ...prev.form,
+                                                        statements: prev.form.statements.filter((_, i) => i !== sIdx)
+                                                    }
+                                                }))}
+                                                className="text-rose-500 hover:text-rose-700 text-sm font-black px-2 py-1 rounded-lg hover:bg-rose-50 cursor-pointer"
+                                                title="Remove this statement"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(!editingQuestionModal.form.statements || editingQuestionModal.form.statements.length === 0) && (
+                                        <p className="text-[11px] text-gray-400 font-medium italic">
+                                            No separate statement rows. (Statements in the main stem above will be formatted automatically).
+                                        </p>
+                                    )}
+                                </div>
+
                                 {/* Options (A, B, C, D) */}
                                 <div className="space-y-3">
                                     <label className="block text-xs font-black text-navy uppercase tracking-wider">
@@ -2056,20 +2418,27 @@ export default function CreatePaper() {
                                             { key: 'opt_c', label: 'C' },
                                             { key: 'opt_d', label: 'D' },
                                         ].map(({ key, label }) => (
-                                            <div key={key} className="flex items-center gap-2 border-2 border-gray-200 focus-within:border-navy rounded-2xl p-2 bg-white">
-                                                <span className="w-7 h-7 rounded-xl bg-navy text-gold flex items-center justify-center text-xs font-black flex-shrink-0">
-                                                    {label}
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    value={editingQuestionModal.form[key]}
-                                                    onChange={e => setEditingQuestionModal(prev => ({
-                                                        ...prev,
-                                                        form: { ...prev.form, [key]: e.target.value }
-                                                    }))}
-                                                    placeholder={`Option ${label}`}
-                                                    className="w-full text-xs font-bold text-navy outline-none"
-                                                />
+                                            <div key={key} className="flex flex-col gap-1 border-2 border-gray-200 focus-within:border-navy rounded-2xl p-2.5 bg-white">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-7 h-7 rounded-xl bg-navy text-gold flex items-center justify-center text-xs font-black flex-shrink-0">
+                                                        {label}
+                                                    </span>
+                                                    <input
+                                                        type="text"
+                                                        value={editingQuestionModal.form[key]}
+                                                        onChange={e => setEditingQuestionModal(prev => ({
+                                                            ...prev,
+                                                            form: { ...prev.form, [key]: e.target.value }
+                                                        }))}
+                                                        placeholder={`Option ${label}`}
+                                                        className="w-full text-xs font-bold text-navy outline-none"
+                                                    />
+                                                </div>
+                                                {editingQuestionModal.form[key] && (
+                                                    <div className="text-[11px] text-slate-600 pl-9 pt-1 border-t border-gray-100">
+                                                        <MathRenderer inline text={editingQuestionModal.form[key]} />
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -2079,7 +2448,7 @@ export default function CreatePaper() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-black text-navy uppercase tracking-wider mb-1.5">
-                                            Correct Option
+                                            Correct Option Key
                                         </label>
                                         <select
                                             value={editingQuestionModal.form.answer}
@@ -2093,6 +2462,10 @@ export default function CreatePaper() {
                                             <option value="B">Option B</option>
                                             <option value="C">Option C</option>
                                             <option value="D">Option D</option>
+                                            <option value="1">Option 1</option>
+                                            <option value="2">Option 2</option>
+                                            <option value="3">Option 3</option>
+                                            <option value="4">Option 4</option>
                                         </select>
                                     </div>
                                     <div>
@@ -2127,6 +2500,12 @@ export default function CreatePaper() {
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl p-3 text-xs font-bold text-navy outline-none"
                                         placeholder="Detailed solution explanation"
                                     />
+                                    {editingQuestionModal.form.solutionText && (
+                                        <div className="mt-1.5 p-2.5 rounded-xl bg-amber-50/50 border border-amber-200 text-xs font-medium text-navy">
+                                            <span className="text-[10px] font-black text-amber-800 block mb-1 uppercase tracking-wider">Solution Preview:</span>
+                                            <MathRenderer inline text={editingQuestionModal.form.solutionText} />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

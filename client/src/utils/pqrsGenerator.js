@@ -7,6 +7,7 @@
  * - R Set: Shuffled questions, shuffled options with recalculated answer keys.
  * - S Set: Maximum shuffle (shuffled questions, shuffled options) with recalculated answer keys.
  */
+import { getQuestionCorrectAnswerLabel } from './sanitize.js';
 
 // Seeded pseudo-random number generator for deterministic shuffling per paper ID + set name
 function createSeededRandom(seedStr) {
@@ -16,7 +17,7 @@ function createSeededRandom(seedStr) {
         hash |= 0;
     }
     return function () {
-        hash = (hash * 9301 + 49297) % 233280;
+        hash = Math.abs((hash * 9301 + 49297) % 233280);
         return hash / 233280;
     };
 }
@@ -185,11 +186,7 @@ export function generatePaperSet(paper, setName = 'P') {
 export function generateAnswerKey(questions = [], setName = 'P') {
     return questions.map((q, idx) => {
         const qNum = q.setQNo || (idx + 1);
-        let ans = q.answer || 'N/A';
-        // Normalize answer to clean string
-        if (typeof ans === 'number') {
-            ans = getOptionLetter(ans - 1);
-        }
+        const ans = getQuestionCorrectAnswerLabel(q);
         return {
             qNo: qNum,
             originalQNo: q.originalQNo || qNum,

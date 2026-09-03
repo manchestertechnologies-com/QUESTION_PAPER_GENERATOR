@@ -17,6 +17,7 @@ import TemplateCart from './TemplateCart';
 import GrandTestList from '../admin/GrandTestList';
 import PreviousYearPapers from '../admin/PreviousYearPapers';
 import AssignmentGenerator from './AssignmentGenerator';
+import OMREvaluation from './OMREvaluation';
 import api from '../../api';
 
 // ── Teacher Notification Bell Component ──────────────────────────────────────
@@ -101,7 +102,7 @@ const TeacherNotificationBell = () => {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-50 overflow-hidden animate-fade-in-up text-left">
+                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-[100] overflow-hidden animate-fade-in-up text-left">
                     <div className="p-4 bg-navy text-white flex justify-between items-center border-b border-gold/30">
                         <div className="flex items-center gap-2">
                             <span className="text-gold font-bold">🔔</span>
@@ -207,9 +208,9 @@ const TeacherAssignmentsSection = () => {
 
     if (loading) {
         return (
-            <div className="mb-8 p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center justify-center gap-3">
-                <div className="w-5 h-5 border-2 border-navy border-t-gold rounded-full animate-spin"></div>
-                <span className="text-xs font-bold text-slate/60">Checking assignments...</span>
+            <div className="mb-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-xs flex items-center justify-center gap-2.5">
+                <div className="w-4 h-4 border-2 border-navy border-t-gold rounded-full animate-spin"></div>
+                <span className="text-xs font-bold text-slate-500">Checking assignments...</span>
             </div>
         );
     }
@@ -217,57 +218,57 @@ const TeacherAssignmentsSection = () => {
     if (assignments.length === 0) return null;
 
     return (
-        <div className="mb-8 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                    <span className="w-3 h-3 rounded-full bg-gold animate-ping"></span>
-                    <h2 className="text-sm font-black text-navy uppercase tracking-[0.2em]">
+        <div className="mb-4 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-gold animate-ping"></span>
+                    <h2 className="text-xs font-black text-navy uppercase tracking-[0.15em]">
                         Commissioned Paper Requests ({assignments.length})
                     </h2>
                 </div>
-                <span className="text-[10px] font-bold text-slate/50 uppercase tracking-widest">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                     Action Required by Faculty
                 </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 {assignments.map((item, idx) => {
                     const statusColor =
-                        item.status === 'Completed' ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
-                        item.status === 'In Progress' ? 'bg-amber-100 text-amber-800 border-amber-300' :
-                        'bg-blue-100 text-blue-800 border-blue-300';
+                        item.status === 'Completed' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
+                        item.status === 'In Progress' ? 'bg-amber-50 text-amber-800 border-amber-300' :
+                        'bg-blue-50 text-blue-800 border-blue-300';
 
                     return (
                         <div
                             key={idx}
-                            className="bg-white p-6 rounded-3xl shadow-md border-2 border-gray-100 hover:border-gold transition-all relative overflow-hidden flex flex-col justify-between"
+                            className="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 hover:border-gold transition-all relative overflow-hidden flex flex-col justify-between"
                         >
-                            <div className="absolute top-0 right-0 px-3 py-1 bg-navy text-gold text-[10px] font-black rounded-bl-xl uppercase tracking-widest">
+                            <div className="absolute top-0 right-0 px-2.5 py-0.5 bg-navy text-gold text-[9px] font-black rounded-bl-lg uppercase tracking-wider">
                                 {item.examType}
                             </div>
 
                             <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full border ${statusColor} uppercase tracking-wider`}>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${statusColor} uppercase tracking-wider`}>
                                         {item.status}
                                     </span>
-                                    <span className="text-[10px] font-bold text-slate/50">
+                                    <span className="text-[10px] font-bold text-slate-400">
                                         {item.subject}
                                     </span>
                                 </div>
 
-                                <h3 className="text-base font-black text-navy mb-2 line-clamp-1">
+                                <h3 className="text-sm font-black text-navy mb-1.5 line-clamp-1">
                                     {item.examTitle}
                                 </h3>
 
-                                <div className="space-y-1.5 mb-4 text-xs font-semibold text-slate/70">
+                                <div className="space-y-1 mb-3 text-xs font-semibold text-slate-600">
                                     <div className="flex justify-between">
-                                        <span className="text-slate/50">Target Questions:</span>
-                                        <span className="font-bold text-navy">{item.targetQuestions} Qs</span>
+                                        <span className="text-slate-400 text-[11px]">Target Questions:</span>
+                                        <span className="font-bold text-navy text-[11px]">{item.targetQuestions} Qs</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-slate/50">Target Split:</span>
-                                        <span className="font-bold text-slate/80">
+                                        <span className="text-slate-400 text-[11px]">Target Split:</span>
+                                        <span className="font-bold text-slate-700 text-[11px]">
                                             {item.difficultyDistribution?.easy || 40}%E / {item.difficultyDistribution?.medium || 40}%M / {item.difficultyDistribution?.hard || 20}%H
                                         </span>
                                     </div>
@@ -281,7 +282,7 @@ const TeacherAssignmentsSection = () => {
                                         : `/teacher/create-paper?examId=${item.examId}`;
                                     navigate(targetUrl);
                                 }}
-                                className="w-full mt-2 bg-navy text-gold hover:bg-gold hover:text-navy py-2.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer group"
+                                className="w-full mt-1 bg-navy text-gold hover:bg-gold hover:text-navy py-2 rounded-xl font-black text-[11px] uppercase tracking-wider transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer group"
                             >
                                 <span>{item.status === 'In Progress' ? '⚡ Continue Creation' : '✍️ Create Paper'}</span>
                                 <span className="group-hover:translate-x-1 transition-transform">→</span>
@@ -298,10 +299,11 @@ const TeacherAssignmentsSection = () => {
 const TeacherDashboardHome = () => {
     return (
         <div className="animate-fade-in-up">
-            <div className="mb-8 bg-surface p-8 rounded-3xl shadow-sm border-l-8 border-navy relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gold/5 rounded-full -mr-16 -mt-16"></div>
-                <h3 className="font-black text-2xl text-navy mb-2">Welcome to your Workspace</h3>
-                <p className="text-slate/70 font-medium text-sm max-w-2xl leading-relaxed">
+            {/* Welcome Banner - Compact, Controlled Height */}
+            <div className="mb-4 bg-white p-5 sm:p-6 rounded-2xl shadow-xs border-l-4 border-navy relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-gold/5 rounded-full -mr-12 -mt-12 pointer-events-none"></div>
+                <h3 className="font-black text-xl sm:text-2xl text-navy mb-1">Welcome to your Workspace</h3>
+                <p className="text-slate-600 font-medium text-xs sm:text-sm max-w-2xl leading-normal">
                     Access your subject's question bank, generate standardized institutional papers, and complete assigned exam papers for your department.
                 </p>
             </div>
@@ -309,81 +311,99 @@ const TeacherDashboardHome = () => {
             {/* ── ASSIGNMENTS & NOTIFICATIONS SECTION ── */}
             <TeacherAssignmentsSection />
 
-            <div className="flex items-center gap-4 mb-8">
-                <h2 className="text-sm font-black text-navy uppercase tracking-[0.2em]">Academic Modules</h2>
-                <div className="h-px flex-1 bg-gray-100"></div>
+            {/* Section Heading - Close to Content */}
+            <div className="flex items-center gap-3 mb-3.5">
+                <h2 className="text-xs font-black text-navy uppercase tracking-[0.18em]">Academic Modules</h2>
+                <div className="h-px flex-1 bg-slate-200"></div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {/* Module Grid - Responsive, Compact, Consistent */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
                 {/* Question Bank */}
                 <Link
                     to="/teacher/dashboard/add-question"
-                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-white p-5 rounded-2xl shadow-xs text-center border border-slate-200/80 hover:shadow-md hover:border-gold hover:text-navy transform hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
                 >
-                    <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
+                    <div className="bg-slate-50 text-gold w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-200">
                         Q
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-navy">Question Bank</h2>
-                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Repository Management</p>
+                        <h2 className="text-sm font-black text-navy group-hover:text-navy">Question Bank</h2>
+                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Repository</p>
                     </div>
                 </Link>
 
                 {/* Create Paper */}
                 <Link
                     to="/teacher/create-paper"
-                    className="bg-navy p-8 rounded-3xl shadow-2xl text-center border-4 border-gold hover:scale-[1.02] transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-navy p-5 rounded-2xl shadow-md text-center border-2 border-gold hover:scale-[1.02] transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
                 >
-                    <div className="bg-gold text-navy w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg group-hover:rotate-12 transition-transform duration-300">
+                    <div className="bg-gold text-navy w-12 h-12 rounded-xl flex items-center justify-center text-2xl font-black shadow-md group-hover:rotate-12 transition-transform duration-200">
                         +
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-white">Create Paper</h2>
-                        <p className="text-xs text-gold/60 mt-2 font-bold uppercase tracking-widest">Step-by-Step Wizard</p>
+                        <h2 className="text-sm font-black text-white">Create Paper</h2>
+                        <p className="text-[10px] text-gold/70 mt-1 font-bold uppercase tracking-wider">Paper Wizard</p>
                     </div>
                 </Link>
 
                 {/* Assignments Generator */}
                 <Link
                     to="/teacher/dashboard/assignments"
-                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gold/40 hover:shadow-xl hover:border-navy hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group ring-2 ring-gold/10"
+                    className="bg-white p-5 rounded-2xl shadow-xs text-center border border-slate-200/80 hover:shadow-md hover:border-navy hover:text-navy transform hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
                 >
-                    <div className="bg-amber-50 text-navy w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-gold group-hover:text-navy transition-colors duration-300">
+                    <div className="bg-amber-50 text-navy w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-inner group-hover:bg-gold group-hover:text-navy transition-colors duration-200">
                         📝
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-navy">Assignments</h2>
-                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Practice & Keys</p>
+                        <h2 className="text-sm font-black text-navy group-hover:text-navy">Assignments</h2>
+                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Practice & Keys</p>
                     </div>
                 </Link>
 
                 {/* Saved Papers */}
                 <Link
                     to="/teacher/dashboard/saved-papers"
-                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-white p-5 rounded-2xl shadow-xs text-center border border-slate-200/80 hover:shadow-md hover:border-gold hover:text-navy transform hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
                 >
-                    <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
+                    <div className="bg-slate-50 text-gold w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-200">
                         P
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-navy">Saved Papers</h2>
-                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">Document Archives</p>
+                        <h2 className="text-sm font-black text-navy group-hover:text-navy">Saved Papers</h2>
+                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Archives</p>
                     </div>
                 </Link>
 
-                {/* Grand Test Papers */}
+                {/* Grand Tests */}
                 <Link
                     to="/teacher/dashboard/grand-tests"
-                    className="bg-surface p-8 rounded-3xl shadow-sm text-center border border-gray-100 hover:shadow-xl hover:border-gold hover:text-navy transform hover:-translate-y-2 transition-all flex flex-col items-center justify-center gap-4 group"
+                    className="bg-white p-5 rounded-2xl shadow-xs text-center border border-slate-200/80 hover:shadow-md hover:border-gold hover:text-navy transform hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
                 >
-                    <div className="bg-gray-50 text-gold w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
+                    <div className="bg-slate-50 text-gold w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-inner group-hover:bg-navy group-hover:text-gold transition-colors duration-200">
                         GT
                     </div>
                     <div>
-                        <h2 className="text-lg font-black text-navy">Grand Tests</h2>
-                        <p className="text-xs text-slate/50 mt-2 font-bold uppercase tracking-widest">GT Paper Archives</p>
+                        <h2 className="text-sm font-black text-navy group-hover:text-navy">Grand Tests</h2>
+                        <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">GT Archives</p>
                     </div>
                 </Link>
+
+                {/* OMR Evaluation (Visible if Admin granted omrAccess) */}
+                {user?.omrAccess !== false && (
+                    <Link
+                        to="/teacher/dashboard/omr-evaluation"
+                        className="bg-white p-5 rounded-2xl shadow-xs text-center border border-slate-200/80 hover:shadow-md hover:border-teal-500 hover:text-navy transform hover:-translate-y-1 transition-all flex flex-col items-center justify-center gap-3 group min-h-[160px]"
+                    >
+                        <div className="bg-teal-50 text-teal-700 w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shadow-inner group-hover:bg-teal-700 group-hover:text-white transition-colors duration-200">
+                            📋
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-black text-navy group-hover:text-navy">OMR Evaluation</h2>
+                            <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Sheets &amp; Scanner</p>
+                        </div>
+                    </Link>
+                )}
             </div>
         </div>
     );
@@ -394,6 +414,7 @@ const TeacherDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [showTemplateCart, setShowTemplateCart] = useState(false);
+    const [isLeftMenuOpen, setIsLeftMenuOpen] = useState(false);
 
     const logoMap = {
         'Physics': '/physicslogo.jpeg',
@@ -404,93 +425,142 @@ const TeacherDashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-background flex flex-col font-sans">
-            {/* Top Navigation Bar - Manchester Navy */}
-            <nav className="bg-navy p-4 text-white flex justify-between items-center z-10 shadow-2xl border-b-4 border-gold">
+        <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
+            {/* Top Navigation Bar - Compact padding (px-6 py-3.5), Dashboard Menu at RIGHT Corner */}
+            <nav className="bg-navy py-3.5 px-6 text-white flex justify-between items-center relative z-50 shadow-md border-b-2 border-gold">
+                {/* Left Side: Institutional Logo & Title */}
                 <div
-                    className="flex items-center cursor-pointer hover:opacity-80 transition gap-4 ml-4"
+                    className="flex items-center cursor-pointer hover:opacity-90 transition gap-3"
                     onClick={() => navigate('/teacher/dashboard')}
                 >
-                    <div className="w-12 h-12 flex items-center justify-center shadow-lg transform -rotate-2 hover:rotate-0 transition-transform duration-300">
-                        <img src="/ManchesterLogo.jpeg" alt="Logo" className="w-full h-full object-contain rounded-lg border-2 border-gold/30" />
+                    <div className="w-10 h-10 flex items-center justify-center shadow-md">
+                        <img src="/ManchesterLogo.jpeg" alt="Logo" className="w-full h-full object-contain rounded-lg border border-gold/40" />
                     </div>
                     <div className="flex flex-col">
-                        <h1 className="text-xl font-black tracking-tight uppercase leading-none">
-                            Teacher Portal
+                        <h1 className="text-base font-black tracking-tight uppercase leading-none">
+                            Faculty Portal
                         </h1>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1.5 mt-0.5">
                             {user?.subject && logoMap[user.subject] && (
-                                <img src={logoMap[user.subject]} alt={user.subject} className="w-5 h-5 object-contain rounded-sm" />
+                                <img src={logoMap[user.subject]} alt={user.subject} className="w-4 h-4 object-contain rounded-xs" />
                             )}
-                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em]">
+                            <span className="text-[9px] font-black text-gold uppercase tracking-[0.18em]">
                                 {user?.subject || 'Faculty'} Department
                             </span>
                         </div>
                     </div>
                 </div>
 
-                {/* Top Navigation Options */}
-                <div className="space-x-3 flex items-center mr-4">
+                {/* Right Side: Back (if not on home), Notification Bell, Right-Corner Menu & Logout */}
+                <div className="space-x-3 flex items-center">
                     {location.pathname !== '/teacher/dashboard' && (
                         <button
                             onClick={() => navigate('/teacher/dashboard')}
-                            className="bg-white/5 border border-gold/30 text-gold px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-white/10 transition flex items-center gap-2 cursor-pointer"
+                            className="bg-white/5 border border-gold/30 text-gold px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-white/10 transition flex items-center gap-1.5 cursor-pointer"
                         >
-                            <span>←</span> Back
+                            <span>←</span> Back to Workspace
                         </button>
                     )}
-                    <Link
-                        to="/teacher/dashboard/assignments"
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
-                            location.pathname.includes('assignments') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
-                        }`}
-                    >
-                        Assignments
-                    </Link>
-                    <Link
-                        to="/teacher/dashboard/grand-tests"
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
-                            location.pathname.includes('grand-tests') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
-                        }`}
-                    >
-                        GT Papers
-                    </Link>
-                    <Link
-                        to="/teacher/dashboard/previous-year-papers"
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition ${
-                            location.pathname.includes('previous-year-papers') ? 'bg-gold text-navy shadow-lg' : 'bg-white/5 text-gold border border-gold/30 hover:bg-white/10'
-                        }`}
-                    >
-                        PYQs
-                    </Link>
 
                     {/* Teacher Notification Bell */}
                     <TeacherNotificationBell />
 
-                    {/* Template Cart */}
+                    {/* Right Corner Menu Button (☰) */}
                     <button
-                        id="teacher-template-cart-btn"
-                        onClick={() => setShowTemplateCart(true)}
-                        title="Browse Templates"
-                        className="relative bg-gold text-navy w-10 h-10 rounded-xl flex items-center justify-center font-black text-lg hover:scale-110 transition-all shadow-lg cursor-pointer"
+                        onClick={() => setIsLeftMenuOpen(true)}
+                        className="text-gold hover:text-white text-2xl font-black p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer flex items-center justify-center leading-none"
+                        title="Open Dashboard Menu"
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-                        </svg>
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center leading-none">T</span>
+                        ☰
                     </button>
 
-                    <div className="w-px h-8 bg-gold/20 mx-1"></div>
+                    <div className="w-px h-6 bg-gold/20 mx-0.5"></div>
                     <button
                         onClick={() => { logout(); navigate('/'); }}
-                        className="bg-red-500/10 border border-red-500/30 text-red-500 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all shadow-sm cursor-pointer"
+                        className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-red-500 hover:text-white transition-all shadow-2xs cursor-pointer"
                     >
                         Logout
                     </button>
                 </div>
             </nav>
 
-            <div className="flex-1 p-10 max-w-7xl mx-auto w-full">
+            {/* ── Right Slide-Over Menu (right-0, border-l-4 border-gold) ── */}
+            {isLeftMenuOpen && (
+                <>
+                    <div
+                        className="fixed inset-0 bg-black/60 z-50 backdrop-blur-xs transition-opacity"
+                        onClick={() => setIsLeftMenuOpen(false)}
+                    />
+                    <div className="fixed inset-y-0 right-0 w-80 bg-navy text-white z-50 shadow-2xl border-l-4 border-gold flex flex-col animate-slide-left overflow-y-auto">
+                        {/* Drawer Header */}
+                        <div className="p-6 border-b border-gold/20 flex justify-between items-start bg-navy/90">
+                            <div className="flex items-center gap-3">
+                                <img src="/ManchesterLogo.jpeg" alt="Logo" className="w-10 h-10 object-contain rounded-lg border border-gold/40" />
+                                <div>
+                                    <h3 className="font-black text-sm uppercase tracking-wide text-white">Manchester Portal</h3>
+                                    <p className="text-[10px] text-gold font-bold uppercase tracking-widest">{user?.subject || 'Faculty'} Department</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsLeftMenuOpen(false)}
+                                className="text-gold hover:text-white text-xl font-bold w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Faculty Profile Card in Drawer */}
+                        <div className="p-5 border-b border-gold/15 bg-white/5 mx-4 my-4 rounded-2xl">
+                            <div className="text-[10px] font-black text-gold uppercase tracking-widest mb-1">Faculty Account</div>
+                            <div className="text-sm font-black text-white">{user?.name || 'Prof. Faculty'}</div>
+                            <div className="text-xs text-slate-300 font-medium">{user?.email || 'faculty@manchester.edu'}</div>
+                        </div>
+
+                        {/* Drawer Navigation Links */}
+                        <div className="px-4 py-2 space-y-1.5 flex-1">
+                            <button
+                                onClick={() => { setIsLeftMenuOpen(false); navigate('/teacher/dashboard'); }}
+                                className="w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-gold transition flex items-center gap-3 cursor-pointer"
+                            >
+                                <span>🏛️</span> Workspace Home
+                            </button>
+                            <button
+                                onClick={() => { setIsLeftMenuOpen(false); navigate('/teacher/dashboard/previous-year-papers'); }}
+                                className="w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-gold transition flex items-center gap-3 cursor-pointer"
+                            >
+                                <span>📚</span> PYQ Archives &amp; Papers
+                            </button>
+                            {user?.omrAccess !== false && (
+                                <button
+                                    onClick={() => { setIsLeftMenuOpen(false); navigate('/teacher/dashboard/omr-evaluation'); }}
+                                    className="w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-teal-400 transition flex items-center gap-3 cursor-pointer"
+                                >
+                                    <span>📋</span> OMR Evaluation &amp; Scanner
+                                </button>
+                            )}
+                            <button
+                                onClick={() => { setIsLeftMenuOpen(false); setShowTemplateCart(true); }}
+                                className="w-full text-left px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-gold transition flex items-center gap-3 cursor-pointer"
+                            >
+                                <span>🏛️</span> Institutional Templates
+                            </button>
+                        </div>
+
+                        {/* Drawer Footer */}
+                        <div className="p-5 border-t border-gold/20">
+                            <button
+                                onClick={() => { logout(); navigate('/'); }}
+                                className="w-full py-2.5 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer text-center"
+                            >
+                                Sign Out
+                            </button>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Main Content Area - Controlled Padding & Balanced Width */}
+            <div className="flex-1 py-5 px-4 sm:px-6 max-w-6xl mx-auto w-full">
                 <Routes>
                     <Route path="/" element={<TeacherDashboardHome />} />
                     <Route path="add-question" element={<AddQuestion />} />
@@ -498,6 +568,8 @@ const TeacherDashboard = () => {
                     <Route path="grand-tests" element={<GrandTestList />} />
                     <Route path="previous-year-papers" element={<PreviousYearPapers />} />
                     <Route path="assignments" element={<AssignmentGenerator onBack={() => navigate('/teacher/dashboard')} />} />
+                    <Route path="omr-evaluation" element={<OMREvaluation />} />
+                    <Route path="omr" element={<OMREvaluation />} />
                 </Routes>
             </div>
 

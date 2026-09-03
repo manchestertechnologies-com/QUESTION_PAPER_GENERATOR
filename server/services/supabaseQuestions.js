@@ -86,8 +86,38 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         } catch (e) {}
     }
 
+    // Extract options from match_options if options are still empty
+    if (rawOptions.length === 0 && row.match_options) {
+        try {
+            const mOpts = typeof row.match_options === 'string' ? JSON.parse(row.match_options) : row.match_options;
+            if (mOpts && typeof mOpts === 'object') {
+                ['A', 'B', 'C', 'D'].forEach(k => {
+                    if (mOpts[k]) rawOptions.push(mOpts[k]);
+                });
+                if (rawOptions.length === 0) {
+                    rawOptions.push(...Object.values(mOpts));
+                }
+            }
+        } catch (e) {}
+    }
+
     // Sanitize option texts
     const options = rawOptions.map(cleanDifficultyTags).filter(Boolean);
+
+    // Build structured matchPairs from column_a and column_b
+    const matchPairs = [];
+    if (Array.isArray(row.matchPairs) && row.matchPairs.length > 0) {
+        matchPairs.push(...row.matchPairs);
+    } else if (Array.isArray(row.column_a) && row.column_a.length > 0) {
+        const colB = Array.isArray(row.column_b) ? row.column_b : [];
+        const maxLen = Math.max(row.column_a.length, colB.length);
+        for (let i = 0; i < maxLen; i++) {
+            matchPairs.push({
+                left: row.column_a[i] || '',
+                right: colB[i] || ''
+            });
+        }
+    }
 
     // Map answer
     let answer = row.correct_option || row.num_answer || '';
@@ -111,7 +141,10 @@ function mapSupabaseToQuestion(row, usageMap = null) {
     // Extract difficulty level and clean markers
     const level = extractDifficulty(row.solution_text, row.question);
     const cleanSolution = cleanDifficultyTags(row.solution_text || '');
-    const cleanQuestion = cleanDifficultyTags(row.question || '');
+    let cleanQuestion = cleanDifficultyTags(row.question || '');
+    if (!cleanQuestion && type === 'MATCH_FOLLOWING') {
+        cleanQuestion = 'Match the statements/terms in Column A with Column B:';
+    }
 
     // Resolve usage information if available
     const qIdStr = (row.id || '').toString();
@@ -133,6 +166,7 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         imageUrl: row.image_url || row.imageUrl || null,
         solutionImageUrl: row.solution_image_url || row.solutionImageUrl || null,
         options: options,
+        matchPairs: matchPairs,
         answer: answer,
         correct_option: row.correct_option,
         num_answer: row.num_answer,
@@ -455,10 +489,11 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
 }
 
 /**
- * High-speed cached metadata query (zero-egress RPC).
+ * High-speed cached metadata query (filtered by subject and class).
  */
-async function getSubjectMetadata(subject = '') {
-    const cacheKey = (subject || 'ALL').trim().toLowerCase();
+async function getSubjectMetadata(subject = '', klass = '') {
+    const cleanClass = klass ? klass.toString().replace(/[^0-9]/g, '').trim() : '';
+    const cacheKey = `${(subject || 'ALL').trim().toLowerCase()}_${cleanClass || 'ALL'}`;
     const cached = metadataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < METADATA_TTL_MS)) {
         return cached.data;
@@ -466,17 +501,40 @@ async function getSubjectMetadata(subject = '') {
 
     try {
         const subParam = subject ? subject.trim() : null;
-        const res = await pool.query(
-            `SELECT public.get_subject_meta($1) as meta;`,
-            [subParam]
-        );
+        const klassParam = cleanClass || null;
 
-        const meta = res.rows[0]?.meta || { total: 0, chapters: [], concepts: [] };
-        const result = {
-            total: parseInt(meta.total) || 0,
-            chapters: Array.isArray(meta.chapters) ? meta.chapters : [],
-            concepts: Array.isArray(meta.concepts) ? meta.concepts : []
-        };
+        let result;
+        if (!klassParam) {
+            // All classes
+            const res = await pool.query(
+                `SELECT public.get_subject_meta($1) as meta;`,
+                [subParam]
+            );
+            const meta = res.rows[0]?.meta || { total: 0, chapters: [], concepts: [] };
+            result = {
+                total: parseInt(meta.total) || 0,
+                chapters: Array.isArray(meta.chapters) ? meta.chapters : [],
+                concepts: Array.isArray(meta.concepts) ? meta.concepts : []
+            };
+        } else {
+            // Class-specific (e.g. Class 11 or Class 12)
+            const query = `
+                SELECT 
+                    count(*)::bigint as total,
+                    array_agg(DISTINCT q.chapter ORDER BY q.chapter) as chapters,
+                    jsonb_agg(DISTINCT jsonb_build_object('concept', q.topic, 'chapter', q.chapter)) as concepts
+                FROM public.questions q
+                WHERE ($1::text IS NULL OR q.subject ILIKE '%' || $1 || '%')
+                  AND q.klass = $2;
+            `;
+            const res = await pool.query(query, [subParam, klassParam]);
+            const row = res.rows[0] || {};
+            result = {
+                total: parseInt(row.total) || 0,
+                chapters: Array.isArray(row.chapters) ? row.chapters.filter(Boolean) : [],
+                concepts: Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : []
+            };
+        }
 
         metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });
         return result;

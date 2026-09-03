@@ -77,15 +77,56 @@ async function populatePaperQuestions(paper) {
     return pObj;
 }
 
+// Helper to match subject assignment in exam
+function findMatchingAssignment(exam, paper, user) {
+    if (!exam || !Array.isArray(exam.subjectAssignments)) return null;
+    const pSub = (paper.subject || '').toLowerCase().trim();
+    const pTitle = (paper.title || '').toLowerCase().trim();
+    const uId = user?.id ? user.id.toString() : '';
+    const uEmail = (user?.email || '').toLowerCase().trim();
+
+    // 1. Check if assignment explicitly matches this paper or teacher
+    let match = exam.subjectAssignments.find(sa => 
+        (sa.submittedPaperId && sa.submittedPaperId.toString() === paper._id.toString()) ||
+        (sa.teacherId && uId && sa.teacherId.toString() === uId) ||
+        (sa.teacherEmail && uEmail && sa.teacherEmail.toLowerCase().trim() === uEmail)
+    );
+    if (match) return match;
+
+    // 2. Match by subject name (Exact or Botany/Zoology/Biology/Physics/Chemistry/Maths)
+    match = exam.subjectAssignments.find(sa => {
+        const saSub = (sa.subject || '').toLowerCase().trim();
+        if (saSub === pSub) return true;
+        if (saSub.includes('physic') && pSub.includes('physic')) return true;
+        if (saSub.includes('chem') && pSub.includes('chem')) return true;
+        if (saSub.includes('math') && pSub.includes('math')) return true;
+        if (saSub.includes('botan') && (pSub.includes('botan') || pTitle.includes('botan'))) return true;
+        if (saSub.includes('zool') && (pSub.includes('zool') || pTitle.includes('zool'))) return true;
+        if (saSub.includes('bio') && pSub.includes('bio')) return true;
+        return false;
+    });
+    if (match) return match;
+
+    // 3. Fallback for NEET Botany / Zoology when paper subject is Biology
+    if (pSub.includes('bio')) {
+        match = exam.subjectAssignments.find(sa => {
+            const saSub = (sa.subject || '').toLowerCase().trim();
+            return (saSub.includes('botan') || saSub.includes('zool')) && !sa.submittedPaperId;
+        });
+    }
+    return match;
+}
+
 // @route   POST /api/papers
 // @desc    Save a paper (stores Supabase question IDs and paper pattern)
 // @access  Teacher / Admin
 router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
         const { examId, ...rest } = req.body;
+        const paperSubject = req.body.subject || (req.user.role === 'admin' ? 'Physics' : (req.user.subject || 'Physics'));
         const paperData = {
             ...rest,
-            subject: req.user.role === 'admin' ? (req.body.subject || 'Physics') : (req.user.subject || 'Physics'),
+            subject: paperSubject,
             teacherId: req.user.id
         };
 
@@ -104,15 +145,7 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         }
 
         if (exam) {
-            const subName = (paper.subject || '').toLowerCase().trim();
-            const assignment = exam.subjectAssignments.find(sa => {
-                const saSub = (sa.subject || '').toLowerCase().trim();
-                return saSub === subName ||
-                       (subName.includes('math') && saSub.includes('math')) ||
-                       (subName.includes('bio') && saSub.includes('bio')) ||
-                       (subName.includes('physic') && saSub.includes('physic')) ||
-                       (subName.includes('chem') && saSub.includes('chem'));
-            });
+            const assignment = findMatchingAssignment(exam, paper, req.user);
 
             if (assignment) {
                 assignment.submittedPaperId = paper._id;
@@ -280,15 +313,7 @@ router.put('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) => 
             const OnlineExam = require('../models/OnlineExam');
             const exam = await OnlineExam.findById(paper.examId);
             if (exam) {
-                const subName = (paper.subject || '').toLowerCase().trim();
-                const assignment = exam.subjectAssignments.find(sa => {
-                    const saSub = (sa.subject || '').toLowerCase().trim();
-                    return saSub === subName ||
-                           (subName.includes('math') && saSub.includes('math')) ||
-                           (subName.includes('bio') && saSub.includes('bio')) ||
-                           (subName.includes('physic') && saSub.includes('physic')) ||
-                           (subName.includes('chem') && saSub.includes('chem'));
-                });
+                const assignment = findMatchingAssignment(exam, paper, req.user);
                 if (assignment) {
                     assignment.submittedPaperId = paper._id;
                     const qCount = Array.isArray(paper.questions) ? paper.questions.length : 0;
@@ -317,7 +342,7 @@ router.get('/:id/export-word', [auth, checkRole(['teacher', 'admin'])], async (r
         const paper = await Paper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Paper not found.' });
 
-        if (req.user.role === 'teacher' && paper.teacherId.toString() !== req.user.id) {
+        if (req.user.role === 'teacher' && paper.teacherId && paper.teacherId.toString() !== req.user.id) {
             return res.status(403).json({ msg: 'Access denied: not your paper.' });
         }
 
@@ -349,15 +374,41 @@ router.delete('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) 
         const paper = await Paper.findById(req.params.id);
         if (!paper) return res.status(404).json({ msg: 'Paper not found' });
 
-        if (req.user.role !== 'admin' && paper.teacherId.toString() !== req.user.id) {
-            return res.status(403).json({ msg: 'Access denied' });
+        if (req.user.role !== 'admin') {
+            const tId = paper.teacherId ? paper.teacherId.toString() : '';
+            const isOwner = tId && tId === req.user.id;
+            const isSameSubject = paper.subject && req.user.subject && (
+                paper.subject.toLowerCase() === req.user.subject.toLowerCase() ||
+                (req.user.subject.toLowerCase() === 'biology' && ['botany', 'zoology', 'biology'].includes(paper.subject.toLowerCase()))
+            );
+            if (!isOwner && !isSameSubject) {
+                return res.status(403).json({ msg: 'Access denied: not authorized to delete this paper' });
+            }
         }
 
         await Paper.findByIdAndDelete(req.params.id);
-        res.json({ msg: 'Paper removed' });
+
+        // Also clean up any references in OnlineExam subjectAssignments
+        try {
+            const OnlineExam = require('../models/OnlineExam');
+            await OnlineExam.updateMany(
+                { 'subjectAssignments.submittedPaperId': req.params.id },
+                {
+                    $set: {
+                        'subjectAssignments.$.submittedPaperId': null,
+                        'subjectAssignments.$.status': 'Pending',
+                        'subjectAssignments.$.questionsCount': 0
+                    }
+                }
+            );
+        } catch (linkErr) {
+            console.error('Error unlinking deleted paper from exams:', linkErr.message);
+        }
+
+        res.json({ msg: 'Paper removed successfully' });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error('Delete paper error:', err.message);
+        res.status(500).json({ msg: 'Server Error', error: err.message });
     }
 });
 

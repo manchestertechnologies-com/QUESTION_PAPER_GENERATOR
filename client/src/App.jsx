@@ -11,6 +11,7 @@ import CreatePaper from './pages/teacher/CreatePaper';
 // New exam & lab pages
 import LabLogin from './pages/lab/LabLogin';
 import LabExamList from './pages/lab/LabExamList';
+import StaticExamPortal from './pages/exam/StaticExamPortal';
 import ExamInstructions from './pages/exam/ExamInstructions';
 import ExamEngine from './pages/exam/ExamEngine';
 import Scorecard from './pages/exam/Scorecard';
@@ -83,6 +84,12 @@ function App() {
                         {/* ── Lab Portal ── */}
                         <Route path="/lab-login" element={<LabLogin />} />
                         <Route path="/lab/exams" element={<LabExamList />} />
+
+                        {/* ── Static Universal Exam Portal (Single Static Link for All Online Exams) ── */}
+                        <Route path="/exam" element={<StaticExamPortal />} />
+                        <Route path="/online-exam" element={<StaticExamPortal />} />
+                        <Route path="/exam-portal" element={<StaticExamPortal />} />
+                        <Route path="/exam/portal" element={<StaticExamPortal />} />
 
                         {/* ── Exam Flow (Public — accessible via shared link or lab) ── */}
                         <Route path="/exam/:examId/instructions" element={<ExamInstructions />} />

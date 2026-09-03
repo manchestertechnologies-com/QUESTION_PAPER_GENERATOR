@@ -14,6 +14,7 @@ import React, { useState, useMemo } from 'react';
 import A4PaperEngine from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
 import { optionLabel } from '../utils/sanitize';
+import { triggerPrintMode, A4AnswerKeySheet, A4SolutionKeySheet } from './PrintableKeys';
 
 // ─── Marks helpers ────────────────────────────────────────────────────────────
 export function formatMarks(type = '', classes = []) {
@@ -48,6 +49,7 @@ const DEFAULT_SETTINGS = {
     fontFamily: 'Georgia, "Times New Roman", serif',
     fontSize: '13px',
     lineHeight: '1.45',
+    optionFormat: 'auto',
     columns: 1,
     columnGap: '24px',
     showMarks: false,
@@ -153,6 +155,15 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                     <select style={selectStyle} value={settings.showMarks ? 'yes' : 'no'} onChange={e => update('showMarks', e.target.value === 'yes')}>
                         <option value="no">Hidden (Standard)</option>
                         <option value="yes">Display Marks</option>
+                    </select>
+                </SettingField>
+
+                <SettingField label="Option Labeling Style">
+                    <select style={selectStyle} value={settings.optionFormat || 'auto'} onChange={e => update('optionFormat', e.target.value)}>
+                        <option value="auto">Auto (Exam Standard)</option>
+                        <option value="1, 2, 3, 4">1, 2, 3, 4 (Numeric)</option>
+                        <option value="A, B, C, D">A, B, C, D (Letters)</option>
+                        <option value="(a), (b), (c), (d)">(a), (b), (c), (d) (Small Letters)</option>
                     </select>
                 </SettingField>
             </div>
@@ -297,12 +308,22 @@ export default function PaperRenderer({
     settings: externalSettings,
     setSettings: externalSetSettings,
     showSettingsPanel = false,
+    docMode: externalDocMode,
+    onDocModeChange,
     onProceedToAlignment,
     onProceedToFinalize,
 }) {
     const [internalSettings, setInternalSettings] = useState(DEFAULT_SETTINGS);
     const settings = externalSettings || internalSettings;
     const setSettings = externalSetSettings || setInternalSettings;
+
+    // View mode: 'paper' | 'answer_key' | 'solutions'
+    const [internalDocMode, setInternalDocMode] = useState('paper');
+    const docMode = externalDocMode !== undefined ? externalDocMode : internalDocMode;
+    const setDocMode = (m) => {
+        setInternalDocMode(m);
+        if (onDocModeChange) onDocModeChange(m);
+    };
 
     // Preview Controls state
     const [zoom, setZoom] = useState(100);
@@ -314,26 +335,58 @@ export default function PaperRenderer({
         window.print();
     };
 
+    const zoomScale = (zoom || 100) / 100;
+
     return (
         <div className="paper-renderer-wrapper w-full flex flex-col items-center">
             
             {/* ── PREVIEW TOOLBAR ── */}
             <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-xl border-2 border-navy/20 flex flex-wrap items-center justify-between gap-4 mb-6 w-full max-w-5xl no-print">
-                {/* Mode & Columns Switcher */}
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
-                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
-                    >
-                        <span>{settings.columns === 2 ? '📰 2-Columns (Dense)' : '📄 Single Column'}</span>
-                        <span className="text-[10px] bg-navy text-gold px-1.5 py-0.5 rounded">Switch</span>
-                    </button>
-                    <span className="text-xs font-bold text-gray-500">
-                        {questions.length} Questions
-                    </span>
+                {/* Document Type Switcher (Paper vs Answer Key vs Solutions) */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-300 gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setDocMode('paper')}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                                docMode === 'paper' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
+                            }`}
+                        >
+                            <span>📄</span> Question Paper
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDocMode('answer_key')}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                                docMode === 'answer_key' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
+                            }`}
+                        >
+                            <span>🔑</span> Answer Key
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setDocMode('solutions')}
+                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                                docMode === 'solutions' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
+                            }`}
+                        >
+                            <span>💡</span> Detailed Solutions
+                        </button>
+                    </div>
+
+                    {/* Columns Switcher (Only applicable for Question Paper) */}
+                    {docMode === 'paper' && (
+                        <button
+                            type="button"
+                            onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
+                            className="bg-slate-100 hover:bg-slate-200 text-navy px-3 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span>{settings.columns === 2 ? '📰 2-Columns' : '📄 1-Column'}</span>
+                        </button>
+                    )}
                 </div>
 
-                {/* View Controls (Zoom, Mode) */}
+                {/* View Controls (Zoom, Print/Save PDF) */}
                 <div className="flex items-center gap-3">
                     <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
                         <button
@@ -360,8 +413,10 @@ export default function PaperRenderer({
                     </div>
 
                     <button
+                        type="button"
                         onClick={handlePrint}
                         className="bg-gold text-navy hover:bg-navy hover:text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        title="Print or Save active A4 document as PDF"
                     >
                         <span>🖨</span> Print / Save PDF
                     </button>
@@ -371,6 +426,7 @@ export default function PaperRenderer({
                 <div className="flex items-center gap-2">
                     {onProceedToAlignment && (
                         <button
+                            type="button"
                             onClick={onProceedToAlignment}
                             className="bg-navy text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
@@ -379,6 +435,7 @@ export default function PaperRenderer({
                     )}
                     {onProceedToFinalize && (
                         <button
+                            type="button"
                             onClick={onProceedToFinalize}
                             className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
@@ -395,14 +452,161 @@ export default function PaperRenderer({
                 </div>
             )}
 
-            {/* ── TRUE A4 ENGINE RENDERING ── */}
-            <A4PaperEngine
-                paper={paper}
-                activeTemplate={activeTemplate}
-                isAssignment={isAssignment}
-                settings={settings}
-                zoom={zoom}
-            />
+            {/* ── TRUE A4 PAGES RENDERING (Paper vs Answer Key vs Solutions) ── */}
+            {docMode === 'paper' && (
+                <A4PaperEngine
+                    paper={paper}
+                    activeTemplate={activeTemplate}
+                    isAssignment={isAssignment}
+                    settings={settings}
+                    zoom={zoom}
+                />
+            )}
+
+            {docMode === 'answer_key' && (
+                <div
+                    className="a4-print-document"
+                    style={{
+                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
+                        transformOrigin: 'top center',
+                        transition: 'transform 0.2s ease',
+                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
+                        width: '794px',
+                        maxWidth: '100%',
+                    }}
+                >
+                    <A4AnswerKeySheet
+                        paper={{ ...paper, watermarkText: activeTemplate?.watermarkText || paper?.watermarkText || settings?.watermarkText }}
+                        questions={questions}
+                        startQNo={settings.startQNo || 1}
+                        settings={settings}
+                        institutionName={activeTemplate?.institutionName || 'INSTITUTION EXAMINATION CELL'}
+                    />
+                </div>
+            )}
+
+            {docMode === 'solutions' && (
+                <div
+                    className="a4-print-document"
+                    style={{
+                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
+                        transformOrigin: 'top center',
+                        transition: 'transform 0.2s ease',
+                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
+                        width: '794px',
+                        maxWidth: '100%',
+                    }}
+                >
+                    <A4SolutionKeySheet
+                        paper={{ ...paper, watermarkText: activeTemplate?.watermarkText || paper?.watermarkText || settings?.watermarkText }}
+                        questions={questions}
+                        startQNo={settings.startQNo || 1}
+                        settings={settings}
+                        institutionName={activeTemplate?.institutionName || 'INSTITUTION EXAMINATION CELL'}
+                    />
+                </div>
+            )}
+
+            {/* ── GLOBAL DOCUMENT AND PRINT STYLES ── */}
+            <style>{`
+                .a4-sheet-page {
+                    width: 794px;
+                    min-height: 1123px;
+                    background: #ffffff;
+                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+                    border: 1px solid #e2e8f0;
+                    margin: 0 auto 28px auto;
+                    box-sizing: border-box;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .a4-watermark-layer {
+                    position: absolute;
+                    inset: 0;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    pointer-events: none;
+                    user-select: none;
+                    z-index: 0;
+                    overflow: hidden;
+                }
+                .a4-watermark-text {
+                    font-size: 4.5rem;
+                    font-weight: 800;
+                    color: rgba(0, 0, 0, 0.035);
+                    transform: rotate(-35deg);
+                    text-transform: uppercase;
+                    letter-spacing: 0.15em;
+                    white-space: nowrap;
+                    text-align: center;
+                    line-height: 1;
+                }
+
+                @media print {
+                    @page {
+                        size: A4 portrait;
+                        margin: 10mm 12mm 10mm 12mm;
+                    }
+                    html, body {
+                        background: #fff !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
+                    }
+
+                    .no-print,
+                    .no-print * {
+                        display: none !important;
+                    }
+
+                    body * {
+                        visibility: hidden;
+                    }
+
+                    .a4-print-document,
+                    .a4-print-document * {
+                        visibility: visible !important;
+                    }
+
+                    .a4-print-document {
+                        position: static !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        transform: none !important;
+                    }
+
+                    .a4-sheet-page {
+                        box-shadow: none !important;
+                        border: none !important;
+                        margin: 0 auto !important;
+                        width: 100% !important;
+                        min-height: auto !important;
+                        background: transparent !important;
+                        page-break-after: auto !important;
+                        break-after: auto !important;
+                    }
+
+                    .a4-watermark-layer {
+                        position: fixed !important;
+                        inset: 0 !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        z-index: 0 !important;
+                    }
+
+                    .a4-page-content {
+                        padding: 0 !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

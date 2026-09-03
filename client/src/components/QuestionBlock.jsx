@@ -12,6 +12,7 @@
  */
 import React from 'react';
 import MathRenderer from './MathRenderer';
+import { parseMTFFromText } from './MatchTable';
 import { optionLabel } from '../utils/sanitize';
 
 // Dynamic option grid calculator based on length:
@@ -40,16 +41,7 @@ function getDynamicOptGrid(options = [], singleColMode = false) {
                 display: 'grid',
                 gridTemplateColumns: `repeat(${options.length}, 1fr)`,
                 gap: '2px 8px',
-                marginTop: '4px',
-                alignItems: 'start',
-            };
-        }
-        if (maxLen <= 35 && options.length <= 4) {
-            return {
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '2px 10px',
-                marginTop: '4px',
+                marginTop: '3px',
                 alignItems: 'start',
             };
         }
@@ -57,66 +49,64 @@ function getDynamicOptGrid(options = [], singleColMode = false) {
             display: 'grid',
             gridTemplateColumns: '1fr',
             gap: '2px 6px',
-            marginTop: '4px',
+            marginTop: '3px',
             alignItems: 'start',
         };
     }
 
-    // Full width Single Column mode
-    if (maxLen <= 20 && options.length <= 4) {
-        // Very short: all in 1 line
+    // In Single Column Paper Mode (~720px wide)
+    if (options.length === 4 && maxLen <= 18 && !hasComplexFormula) {
         return {
             display: 'grid',
-            gridTemplateColumns: `repeat(${options.length}, 1fr)`,
-            gap: '2px 16px',
-            marginTop: '4px',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '2px 10px',
+            marginTop: '3px',
             alignItems: 'start',
         };
     }
-    if (maxLen <= 52 && options.length <= 4) {
-        // Medium: 2 on left, 2 on right (2x2)
+    if (options.length === 4 && maxLen <= 45 && !hasComplexFormula) {
         return {
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '2px 16px',
-            marginTop: '4px',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '2px 12px',
+            marginTop: '3px',
             alignItems: 'start',
         };
     }
-    // Very long: 1 below another
     return {
         display: 'grid',
         gridTemplateColumns: '1fr',
         gap: '2px 6px',
-        marginTop: '4px',
+        marginTop: '3px',
         alignItems: 'start',
     };
 }
 
 const Q = {
     wrap: {
-        display: 'inline-block',
+        display: 'block',
         width: '100%',
-        breakInside: 'avoid',
-        WebkitColumnBreakInside: 'avoid',
-        pageBreakInside: 'avoid',
-        marginBottom: '10px',
+        marginBottom: '0px',
         color: '#111',
         fontSize: 'inherit',
         lineHeight: '1.38',
         boxSizing: 'border-box',
         verticalAlign: 'top',
+        fontWeight: 'normal',
+        position: 'relative',
+        zIndex: 1,
     },
     row: {
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'flex-start',
-        gap: '6px',
+        width: '100%',
     },
     num: {
         fontWeight: 700,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         whiteSpace: 'nowrap',
-        minWidth: '24px',
+        minWidth: '22px',
         fontSize: '1em',
         lineHeight: '1.38',
         color: '#000',
@@ -124,9 +114,14 @@ const Q = {
     body: {
         flex: 1,
         minWidth: 0,
+        fontWeight: 'inherit',
+        fontStyle: 'inherit',
+        fontFamily: 'inherit',
     },
     qTextBold: {
-        fontWeight: 700,
+        fontWeight: 400,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         color: '#000',
         display: 'inline',
         lineHeight: '1.38',
@@ -134,7 +129,9 @@ const Q = {
         overflowWrap: 'break-word',
     },
     marks: {
-        fontWeight: 700,
+        fontWeight: 500,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         whiteSpace: 'nowrap',
         fontSize: '0.85em',
         alignSelf: 'flex-start',
@@ -148,64 +145,69 @@ const Q = {
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
         minWidth: 0,
-        fontSize: '0.96em',
+        fontSize: '1em',
         fontWeight: 400,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         color: '#111',
     },
     optLbl: {
         fontWeight: 700,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         whiteSpace: 'nowrap',
-        minWidth: '20px',
+        minWidth: '22px',
         lineHeight: '1.45',
-        color: '#222',
+        color: '#111',
     },
-    // Standardized diagram image wrapper
-    diagramImg: (maxH = '135px', maxW = '240px') => ({
-        display: 'block',
-        maxWidth: maxW,
-        maxHeight: maxH,
-        width: 'auto',
-        height: 'auto',
-        objectFit: 'contain',
-        borderRadius: '4px',
-        backgroundColor: '#fff',
-        boxSizing: 'border-box',
-        margin: '4px auto',
-    }),
-    sideBySideContainer: {
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: '12px',
-        marginTop: '4px',
-    },
-    sideLeftContent: {
-        flex: '1 1 65%',
-        minWidth: 0,
-    },
-    sideRightDiagram: {
-        flex: '0 0 35%',
-        maxWidth: '220px',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: '2px',
+    // Standardized diagram image wrapper with isolated per-question dimensions & adaptive ML scaling
+    diagramImg: (q = {}, defaultMaxH = '200px', isTwoCol = false) => {
+        const zoom = (typeof q === 'object' && q.diagramZoom) ? Number(q.diagramZoom) : 1;
+        const baseH = (typeof q === 'object' && (q.diagramMaxHeight || q.diagramHeight))
+            ? parseInt(q.diagramMaxHeight || q.diagramHeight, 10)
+            : (typeof q === 'string' ? parseInt(q, 10) : (isTwoCol ? 190 : 220));
+        
+        const computedH = `${Math.round(baseH * zoom)}px`;
+        const maxW = (typeof q === 'object' && q.diagramWidth) ? q.diagramWidth : '100%';
+        const align = (typeof q === 'object' && q.diagramAlignment) ? q.diagramAlignment : 'center';
+        const margin = align === 'left' ? '4px auto 4px 0' : align === 'right' ? '4px 0 4px auto' : '4px auto';
+
+        return {
+            display: 'block',
+            maxWidth: maxW || '100%',
+            minHeight: '80px',
+            maxHeight: computedH,
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            borderRadius: '4px',
+            backgroundColor: '#ffffff',
+            boxSizing: 'border-box',
+            margin: margin,
+            position: 'relative',
+            zIndex: 2,
+        };
     },
     matchTable: {
         width: '100%',
         borderCollapse: 'collapse',
-        margin: '6px 0 8px',
-        fontSize: '0.92em',
+        margin: '4px 0 6px',
+        fontSize: 'inherit',
         tableLayout: 'fixed',
+        backgroundColor: '#ffffff',
+        position: 'relative',
+        zIndex: 2,
     },
     matchTh: {
         border: '1px solid #999',
         padding: '3px 6px',
         background: '#f5f5f5',
-        fontWeight: 700,
+        fontWeight: 500,
+        fontFamily: 'inherit',
         textAlign: 'left',
         width: '50%',
         color: '#111',
+        fontSize: 'inherit',
     },
     matchTd: {
         border: '1px solid #999',
@@ -215,45 +217,37 @@ const Q = {
         overflowWrap: 'break-word',
         width: '50%',
         fontWeight: 400,
+        fontFamily: 'inherit',
         color: '#111',
+        fontSize: 'inherit',
     },
     assertRow: {
         display: 'flex',
         gap: '6px',
-        marginBottom: '4px',
+        marginBottom: '3px',
         alignItems: 'flex-start',
         wordBreak: 'break-word',
         overflowWrap: 'break-word',
+        fontFamily: 'inherit',
+        fontSize: 'inherit',
     },
     assertLabel: {
-        fontWeight: 700,
+        fontWeight: 400,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         whiteSpace: 'nowrap',
         color: '#000',
+        fontSize: 'inherit',
     },
     assertText: {
         flex: 1,
         fontWeight: 400,
+        fontStyle: 'normal',
+        fontFamily: 'inherit',
         color: '#111',
+        fontSize: 'inherit',
     },
 };
-
-/**
- * Intelligent Layout Decision:
- * Decides whether diagram should be rendered side-by-side on the right, or inline/full-width
- */
-function shouldRenderSideBySide(q, singleColMode = false) {
-    if (!q.imageUrl && !q.image_url) return false;
-    // In 2-column paper mode, column width is narrower, so inline is cleaner
-    if (singleColMode) return false;
-
-    // Check options length: if 4 standard short/medium options, side-by-side is optimal
-    const options = Array.isArray(q.options) ? q.options : [];
-    if (options.length >= 2 && options.length <= 4) {
-        const totalOptLength = options.reduce((sum, opt) => sum + String(opt || '').length, 0);
-        return totalOptLength < 250; // Side-by-side works cleanly when text isn't massive
-    }
-    return false;
-}
 
 /** Standard 4 assertion-reason options (NEET/CET format) */
 const AR_OPTIONS = [
@@ -282,24 +276,109 @@ function cleanQuestionText(text) {
 }
 
 /**
- * MCQ Body with Intelligent Diagram Placement
+ * Interactive & Print-Perfect Diagram Viewer with Zoom Controls (+ / -)
  */
-function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
+function DiagramViewer({ q, imageUrl, diagramMaxHeight = '200px', isTwoCol = false }) {
+    const [localZoom, setLocalZoom] = useState(q?.diagramZoom ? Number(q.diagramZoom) : 1);
+
+    if (!imageUrl) return null;
+
+    const handleZoomIn = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = Math.min(2.5, +(localZoom + 0.15).toFixed(2));
+        setLocalZoom(next);
+        if (q) q.diagramZoom = next;
+    };
+
+    const handleZoomOut = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = Math.max(0.5, +(localZoom - 0.15).toFixed(2));
+        setLocalZoom(next);
+        if (q) q.diagramZoom = next;
+    };
+
+    const handleReset = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setLocalZoom(1);
+        if (q) q.diagramZoom = 1;
+    };
+
+    return (
+        <div 
+            className="diagram-container resizable-diagram-wrap group/diagram relative" 
+            style={{ 
+                textAlign: q?.diagramAlignment || 'center', 
+                margin: '5px auto', 
+                background: '#ffffff', 
+                position: 'relative', 
+                zIndex: 2,
+                display: 'block',
+                clear: 'both',
+                maxWidth: '100%',
+            }}
+        >
+            <img
+                src={imageUrl}
+                alt="Question Diagram"
+                style={Q.diagramImg({ ...q, diagramZoom: localZoom }, diagramMaxHeight, isTwoCol)}
+                loading="lazy"
+            />
+            
+            {/* Interactive Per-Diagram Zoom Bar (hoverable on screen, hidden on print) */}
+            <div className="no-print opacity-0 group-hover/diagram:opacity-100 transition-opacity absolute top-1 right-1 bg-slate-900/90 text-white rounded-lg p-1 flex items-center gap-1 text-[10px] shadow-lg z-10">
+                <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    className="w-5 h-5 rounded bg-white/20 hover:bg-amber-400 hover:text-navy flex items-center justify-center font-black cursor-pointer leading-none text-xs"
+                    title="Zoom Out Diagram (-)"
+                >
+                    −
+                </button>
+                <span className="font-mono text-[9px] px-1 font-bold text-amber-300">
+                    {Math.round(localZoom * 100)}%
+                </span>
+                <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    className="w-5 h-5 rounded bg-white/20 hover:bg-amber-400 hover:text-navy flex items-center justify-center font-black cursor-pointer leading-none text-xs"
+                    title="Zoom In Diagram (+)"
+                >
+                    +
+                </button>
+                <button
+                    type="button"
+                    onClick={handleReset}
+                    className="px-1.5 h-5 rounded bg-white/15 hover:bg-white/30 text-[8px] font-bold uppercase cursor-pointer"
+                    title="Reset Diagram Zoom"
+                >
+                    Reset
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * MCQ Body with Clear Centered Diagram Placement & Uniform Typography
+ */
+function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '180px', settings = null }) {
     const qText = cleanQuestionText(q.questionText || q.question || '');
     const imageUrl = q.imageUrl || q.image_url;
     const options = Array.isArray(q.options) ? q.options : [];
-    const isSideBySide = shouldRenderSideBySide(q, singleColMode);
 
     // Render Options List
     const renderOptions = (forceSingle = false) => {
         if (options.length === 0) return null;
         return (
-            <div style={forceSingle ? { display: 'grid', gridTemplateColumns: '1fr', gap: '2px 6px', marginTop: '4px' } : getDynamicOptGrid(options, singleColMode)}>
+            <div style={forceSingle ? { display: 'grid', gridTemplateColumns: '1fr', gap: '2px 6px', marginTop: '3px' } : getDynamicOptGrid(options, singleColMode)}>
                 {options.map((opt, i) => (
                     <div key={i} style={Q.optRow}>
-                        <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
-                        <span style={{ flex: 1, minWidth: 0, fontWeight: 400 }}>
-                            <MathRenderer inline text={opt} />
+                        <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
+                        <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
+                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
                         </span>
                     </div>
                 ))}
@@ -307,129 +386,44 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '150px' }) {
         );
     };
 
-    if (imageUrl && isSideBySide) {
-        // SIDE-BY-SIDE: Left (Question Text + Options), Right (Diagram)
-        return (
-            <div style={Q.sideBySideContainer}>
-                <div style={Q.sideLeftContent}>
-                    <div style={Q.qTextBold}>
-                        <MathRenderer inline text={qText} />
-                    </div>
-                    {renderOptions(true)}
-                </div>
-                <div style={Q.sideRightDiagram}>
-                    <img
-                        src={imageUrl}
-                        alt="Diagram"
-                        style={Q.diagramImg(diagramMaxHeight, '100%')}
-                        loading="lazy"
-                    />
-                </div>
-            </div>
-        );
-    }
+    const mtfData = parseMTFFromText(qText);
 
-    // INLINE / STANDARD LAYOUT
+    // Centered, clear, readable layout: Prompt -> Diagram (if present) -> Options
     return (
         <>
             <div style={Q.qTextBold}>
-                <MathRenderer inline text={qText} />
+                <MathRenderer inline text={mtfData ? mtfData.stem : qText} />
             </div>
-            {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                    <img
-                        src={imageUrl}
-                        alt="Diagram"
-                        style={{ ...Q.diagramImg(diagramMaxHeight, '240px'), margin: '0 auto' }}
-                        loading="lazy"
-                    />
-                </div>
-            )}
-            {renderOptions(false)}
-        </>
-    );
-}
 
-/**
- * Assertion & Reason Body
- */
-function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight }) {
-    const { assertion, reason } = parseAssertionReason(q);
-    const opts = q.options && q.options.length > 0 ? q.options : AR_OPTIONS;
-    const qText = cleanQuestionText(q.questionText || q.question || '');
-    const imageUrl = q.imageUrl || q.image_url;
+            {/* Sub-statements if present */}
+            {q.statements && Array.isArray(q.statements) && q.statements.length > 0 && (
+                <div style={{ borderLeft: '2px solid #555', paddingLeft: '8px', margin: '3px 0 4px' }}>
+                    {q.statements.map((stmt, si) => (
+                        <div key={si} style={{ marginBottom: '2px', fontWeight: 400, fontSize: 'inherit' }}>
+                            <strong>Statement {si + 1}:</strong> <MathRenderer inline text={stmt} />
+                        </div>
+                    ))}
+                </div>
+            )}
 
-    return (
-        <>
-            {qText && !q.assertion && (
-                <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
-                    <MathRenderer inline text={qText} />
-                </div>
-            )}
-            <div style={Q.assertRow}>
-                <span style={Q.assertLabel}>Assertion (A):</span>
-                <span style={Q.assertText}>
-                    <MathRenderer inline text={assertion} />
-                </span>
-            </div>
-            {reason && (
-                <div style={Q.assertRow}>
-                    <span style={Q.assertLabel}>Reason (R):</span>
-                    <span style={Q.assertText}>
-                        <MathRenderer inline text={reason} />
-                    </span>
-                </div>
-            )}
-            {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                    <img
-                        src={imageUrl}
-                        alt="Diagram"
-                        style={{ ...Q.diagramImg(diagramMaxHeight, '220px'), margin: '0 auto' }}
-                        loading="lazy"
-                    />
-                </div>
-            )}
-            <div style={{ marginTop: '5px', ...getDynamicOptGrid(opts, singleColMode) }}>
-                {opts.map((opt, i) => (
-                    <div key={i} style={{ ...Q.optRow, marginBottom: '2px' }}>
-                        <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
-                        <span style={{ flex: 1, minWidth: 0, fontWeight: 400 }}>
-                            <MathRenderer inline text={opt} />
-                        </span>
+            {/* Assertion & Reason if present on MCQ */}
+            {q.assertion && (
+                <div style={{ margin: '4px 0' }}>
+                    <div style={Q.assertRow}>
+                        <span style={Q.assertLabel}>Assertion (A):</span>
+                        <span style={Q.assertText}><MathRenderer inline text={q.assertion} /></span>
                     </div>
-                ))}
-            </div>
-        </>
-    );
-}
-
-/**
- * Match the Following Body
- */
-function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
-    const pairs = q.matchPairs || [];
-    const opts = q.options || [];
-    const qText = cleanQuestionText(q.questionText || q.question || '');
-    const imageUrl = q.imageUrl || q.image_url;
-
-    return (
-        <>
-            {qText && (
-                <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
-                    <MathRenderer inline text={qText} />
+                    {q.reason && (
+                        <div style={Q.assertRow}>
+                            <span style={Q.assertLabel}>Reason (R):</span>
+                            <span style={Q.assertText}><MathRenderer inline text={q.reason} /></span>
+                        </div>
+                    )}
                 </div>
             )}
-            {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                    <img
-                        src={imageUrl}
-                        alt="Diagram"
-                        style={{ ...Q.diagramImg(diagramMaxHeight, '220px'), margin: '0 auto' }}
-                    />
-                </div>
-            )}
-            {pairs.length > 0 && (
+
+            {/* Match pairs table if present on MCQ */}
+            {q.matchPairs && Array.isArray(q.matchPairs) && q.matchPairs.length > 0 && (
                 <table style={Q.matchTable}>
                     <thead>
                         <tr>
@@ -438,7 +432,7 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {pairs.map((pair, pi) => (
+                        {q.matchPairs.map((pair, pi) => (
                             <tr key={pi}>
                                 <td style={Q.matchTd}>
                                     <strong>({String.fromCharCode(65 + pi)})</strong>{' '}
@@ -453,13 +447,167 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
                     </tbody>
                 </table>
             )}
+
+            {/* Unstructured MTF parsed table */}
+            {(!q.matchPairs || q.matchPairs.length === 0) && mtfData && (
+                <table style={Q.matchTable}>
+                    <thead>
+                        <tr>
+                            <th style={Q.matchTh}>{mtfData.col1Header}</th>
+                            <th style={Q.matchTh}>{mtfData.col2Header}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Array.from({ length: mtfData.maxRows }).map((_, rIdx) => (
+                            <tr key={rIdx}>
+                                <td style={Q.matchTd}>
+                                    {mtfData.items1[rIdx] && (
+                                        <>
+                                            <strong>{mtfData.items1[rIdx].label}</strong>{' '}
+                                            <MathRenderer inline text={mtfData.items1[rIdx].content} />
+                                        </>
+                                    )}
+                                </td>
+                                <td style={Q.matchTd}>
+                                    {mtfData.items2[rIdx] && (
+                                        <>
+                                            <strong>{mtfData.items2[rIdx].label}</strong>{' '}
+                                            <MathRenderer inline text={mtfData.items2[rIdx].content} />
+                                        </>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+
+            {imageUrl && (
+                <DiagramViewer q={q} imageUrl={imageUrl} diagramMaxHeight={diagramMaxHeight} isTwoCol={singleColMode} />
+            )}
+            {renderOptions(false)}
+        </>
+    );
+}
+
+/**
+ * Assertion & Reason Body
+ */
+function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight, settings = null }) {
+    const { assertion, reason } = parseAssertionReason(q);
+    const opts = q.options && q.options.length > 0 ? q.options : AR_OPTIONS;
+    const qText = cleanQuestionText(q.questionText || q.question || '');
+    const imageUrl = q.imageUrl || q.image_url;
+
+    return (
+        <>
+            {qText && !q.assertion && (
+                <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
+                    <MathRenderer inline text={qText} />
+                </div>
+            )}
+            <div className="assert-row" data-assert-block="true" style={Q.assertRow}>
+                <span style={Q.assertLabel}>Assertion (A):</span>
+                <span style={Q.assertText}>
+                    <MathRenderer inline text={assertion} />
+                </span>
+            </div>
+            {reason && (
+                <div className="assert-row" data-assert-block="true" style={Q.assertRow}>
+                    <span style={Q.assertLabel}>Reason (R):</span>
+                    <span style={Q.assertText}>
+                        <MathRenderer inline text={reason} />
+                    </span>
+                </div>
+            )}
+            {imageUrl && (
+                <DiagramViewer q={q} imageUrl={imageUrl} diagramMaxHeight={diagramMaxHeight} isTwoCol={singleColMode} />
+            )}
+            <div style={{ marginTop: '3px', ...getDynamicOptGrid(opts, singleColMode) }}>
+                {opts.map((opt, i) => (
+                    <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
+                        <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
+                        <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
+                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </>
+    );
+}
+
+/**
+ * Match the Following Body
+ */
+function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight, settings = null }) {
+    const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0)
+        ? q.matchPairs
+        : (Array.isArray(q.column_a) && q.column_a.length > 0)
+            ? q.column_a.map((left, pi) => ({ left, right: (q.column_b && q.column_b[pi]) || '' }))
+            : (Array.isArray(q.columnA) && q.columnA.length > 0)
+                ? q.columnA.map((left, pi) => ({ left, right: (q.columnB && q.columnB[pi]) || '' }))
+                : [];
+
+    const opts = (Array.isArray(q.options) && q.options.length > 0)
+        ? q.options
+        : (q.match_options && typeof q.match_options === 'object')
+            ? ['A', 'B', 'C', 'D'].map(k => q.match_options[k]).filter(Boolean)
+            : [];
+
+    const qText = cleanQuestionText(q.questionText || q.question || '');
+    const imageUrl = q.imageUrl || q.image_url;
+
+    return (
+        <>
+            {qText && (
+                <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
+                    <MathRenderer inline text={qText} />
+                </div>
+            )}
+            {imageUrl && (
+                <DiagramViewer q={q} imageUrl={imageUrl} diagramMaxHeight={diagramMaxHeight} isTwoCol={singleColMode} />
+            )}
+            {pairs.length > 0 && (
+                <table className="match-table" style={Q.matchTable}>
+                    <thead>
+                        <tr>
+                            <th style={Q.matchTh}>Column A</th>
+                            <th style={Q.matchTh}>Column B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pairs.map((pair, pi) => {
+                            const leftText = pair.left || '';
+                            const rightText = pair.right || '';
+                            const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'][pi] || `(${pi + 1})`;
+                            const letter = `(${String.fromCharCode(97 + pi)})`; // (a), (b), (c)...
+                            const hasLeftLabel = /^\s*(\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+[\.\)])/.test(leftText);
+                            const hasRightLabel = /^\s*(\([a-zA-Z0-9ivxLCDM]+\)|[a-zA-Z0-9ivxLCDM]+[\.\)])/i.test(rightText);
+
+                            return (
+                                <tr key={pi}>
+                                    <td style={Q.matchTd}>
+                                        {!hasLeftLabel && <span style={{ fontWeight: 500, marginRight: '4px' }}>{letter}</span>}
+                                        <MathRenderer inline text={leftText} />
+                                    </td>
+                                    <td style={Q.matchTd}>
+                                        {!hasRightLabel && <span style={{ fontWeight: 500, marginRight: '4px' }}>{roman}</span>}
+                                        <MathRenderer inline text={rightText} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            )}
             {opts.length > 0 && (
-                <div style={getDynamicOptGrid(opts, true)}>
+                <div style={getDynamicOptGrid(opts, singleColMode)}>
                     {opts.map((opt, i) => (
-                        <div key={i} style={Q.optRow}>
-                            <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
-                            <span style={{ flex: 1, minWidth: 0, fontWeight: 400 }}>
-                                <MathRenderer inline text={opt} />
+                        <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
+                            <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
+                            <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
+                                <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
                             </span>
                         </div>
                     ))}
@@ -472,7 +620,7 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight }) {
 /**
  * Statement-Based Body
  */
-function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight }) {
+function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight, settings = null }) {
     const statements = q.statements || [];
     const opts = q.options || [];
     const qText = cleanQuestionText(q.questionText || q.question || '');
@@ -481,35 +629,29 @@ function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight }) {
     return (
         <>
             {qText && (
-                <div style={{ ...Q.qTextBold, marginBottom: '4px' }}>
+                <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
                     <MathRenderer inline text={qText} />
                 </div>
             )}
             {statements.length > 0 && (
-                <div style={{ borderLeft: '2px solid #666', paddingLeft: '8px', margin: '4px 0 6px' }}>
+                <div style={{ borderLeft: '2px solid #888', paddingLeft: '8px', margin: '3px 0 4px' }}>
                     {statements.map((stmt, si) => (
-                        <div key={si} style={{ marginBottom: '2px', fontWeight: 400 }}>
-                            <strong>Statement {si + 1}:</strong> <MathRenderer inline text={stmt} />
+                        <div key={si} style={{ marginBottom: '2px', fontWeight: 400, fontSize: 'inherit' }}>
+                            <span style={{ fontWeight: 500 }}>Statement {si + 1}:</span> <MathRenderer inline text={stmt} />
                         </div>
                     ))}
                 </div>
             )}
             {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '6px 0' }}>
-                    <img
-                        src={imageUrl}
-                        alt="Diagram"
-                        style={{ ...Q.diagramImg(diagramMaxHeight, '220px'), margin: '0 auto' }}
-                    />
-                </div>
+                <DiagramViewer q={q} imageUrl={imageUrl} diagramMaxHeight={diagramMaxHeight} isTwoCol={singleColMode} />
             )}
             {opts.length > 0 && (
                 <div style={getDynamicOptGrid(opts, singleColMode)}>
                     {opts.map((opt, i) => (
-                        <div key={i} style={Q.optRow}>
-                            <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
-                            <span style={{ flex: 1, minWidth: 0, fontWeight: 400 }}>
-                                <MathRenderer inline text={opt} />
+                        <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
+                            <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
+                            <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
+                                <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
                             </span>
                         </div>
                     ))}
@@ -533,10 +675,15 @@ export default function QuestionBlock({
     formatMarks,
     extraStyle = {},
     diagramMaxHeight = '150px',
+    settings = null,
 }) {
     if (!q) return null;
 
     const qType = (q.type || q.q_type || 'MCQ').toUpperCase();
+    const effectiveFontSize = q.fontSize || fontSize || '13px';
+    const effectiveFontWeight = q.fontWeight || 'normal';
+    const effectiveFontStyle = q.fontStyle || 'normal';
+    const effectiveFontFamily = q.fontFamily || 'inherit';
 
     const renderBody = () => {
         if (qType.includes('ASSERTION')) {
@@ -546,6 +693,7 @@ export default function QuestionBlock({
                     classes={classes}
                     singleColMode={singleColMode}
                     diagramMaxHeight={diagramMaxHeight}
+                    settings={settings}
                 />
             );
         }
@@ -556,6 +704,7 @@ export default function QuestionBlock({
                     classes={classes}
                     singleColMode={singleColMode}
                     diagramMaxHeight={diagramMaxHeight}
+                    settings={settings}
                 />
             );
         }
@@ -566,6 +715,7 @@ export default function QuestionBlock({
                     classes={classes}
                     singleColMode={singleColMode}
                     diagramMaxHeight={diagramMaxHeight}
+                    settings={settings}
                 />
             );
         }
@@ -576,12 +726,24 @@ export default function QuestionBlock({
                 classes={classes}
                 singleColMode={singleColMode}
                 diagramMaxHeight={diagramMaxHeight}
+                settings={settings}
             />
         );
     };
 
     return (
-        <div style={{ ...Q.wrap, fontSize, lineHeight, ...extraStyle }} className="question-block">
+        <div
+            style={{
+                ...Q.wrap,
+                fontSize: effectiveFontSize,
+                fontWeight: effectiveFontWeight,
+                fontStyle: effectiveFontStyle,
+                fontFamily: effectiveFontFamily,
+                lineHeight,
+                ...extraStyle
+            }}
+            className="question-block"
+        >
             <div style={Q.row}>
                 <span style={Q.num}>{displayNum}.</span>
                 <div style={Q.body}>{renderBody()}</div>

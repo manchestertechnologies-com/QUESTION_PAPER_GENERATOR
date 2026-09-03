@@ -32,6 +32,7 @@ const grandTestRoutes = require('./routes/grandTests.js');
 const previousYearPaperRoutes = require('./routes/previousYearPapers.js');
 const examBlueprintRoutes = require('./routes/examBlueprints.js');
 const notificationRoutes = require('./routes/notifications.js');
+const testModuleRoutes = require('./routes/testModule.js');
 
 dotenv.config();
 
@@ -124,6 +125,7 @@ app.use('/api/grand-tests', grandTestRoutes);
 app.use('/api/previous-year-papers', previousYearPaperRoutes);
 app.use('/api/exam-blueprints', examBlueprintRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/test-module', testModuleRoutes);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 404 handler
