@@ -11,6 +11,7 @@ import CreatePaper from './pages/teacher/CreatePaper';
 // New exam & lab pages
 import LabLogin from './pages/lab/LabLogin';
 import LabExamList from './pages/lab/LabExamList';
+import StudentLabPortal from './pages/exam/StudentLabPortal';
 import StaticExamPortal from './pages/exam/StaticExamPortal';
 import ExamInstructions from './pages/exam/ExamInstructions';
 import ExamEngine from './pages/exam/ExamEngine';
@@ -81,11 +82,18 @@ function App() {
                             </ProtectedRoute>
                         } />
 
-                        {/* ── Lab Portal ── */}
+                        {/* ── Dedicated Student Lab Examination Portal ── */}
+                        <Route path="/lab-exam" element={<StudentLabPortal />} />
+                        <Route path="/student-exam" element={<Navigate to="/lab-exam" replace />} />
+                        <Route path="/student/exam" element={<Navigate to="/lab-exam" replace />} />
+                        <Route path="/lab" element={<StudentLabPortal />} />
                         <Route path="/lab-login" element={<LabLogin />} />
                         <Route path="/lab/exams" element={<LabExamList />} />
 
-                        {/* ── Static Universal Exam Portal (Single Static Link for All Online Exams) ── */}
+                        {/* ── Teacher OMR Route ── */}
+                        <Route path="/teacher/omr" element={<Navigate to="/teacher/dashboard/omr" replace />} />
+
+                        {/* ── Static Universal Exam Portal ── */}
                         <Route path="/exam" element={<StaticExamPortal />} />
                         <Route path="/online-exam" element={<StaticExamPortal />} />
                         <Route path="/exam-portal" element={<StaticExamPortal />} />
@@ -97,7 +105,12 @@ function App() {
                         <Route path="/exam/:examId/scorecard/:sessionId" element={<Scorecard />} />
                         <Route path="/exam/disqualified" element={<Disqualified />} />
 
-                        {/* ── Bridge App ── */}
+                        {/* ── Admin Bridge App ── */}
+                        <Route path="/admin/bridge" element={
+                            <ProtectedRoute role="admin">
+                                <BridgeApp />
+                            </ProtectedRoute>
+                        } />
                         <Route path="/bridge-app" element={<BridgeApp />} />
 
                         {/* Fallback */}

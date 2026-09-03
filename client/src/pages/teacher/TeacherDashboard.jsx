@@ -18,6 +18,7 @@ import GrandTestList from '../admin/GrandTestList';
 import PreviousYearPapers from '../admin/PreviousYearPapers';
 import AssignmentGenerator from './AssignmentGenerator';
 import OMREvaluation from './OMREvaluation';
+import TeacherOmr from './omr/TeacherOmr';
 import api from '../../api';
 
 // ── Teacher Notification Bell Component ──────────────────────────────────────
@@ -569,7 +570,8 @@ const TeacherDashboard = () => {
                     <Route path="previous-year-papers" element={<PreviousYearPapers />} />
                     <Route path="assignments" element={<AssignmentGenerator onBack={() => navigate('/teacher/dashboard')} />} />
                     <Route path="omr-evaluation" element={<OMREvaluation />} />
-                    <Route path="omr" element={<OMREvaluation />} />
+                    <Route path="omr/*" element={<TeacherOmr />} />
+                    <Route path="omr" element={<TeacherOmr />} />
                 </Routes>
             </div>
 

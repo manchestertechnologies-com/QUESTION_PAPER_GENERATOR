@@ -14,12 +14,13 @@ export default function LabLogin() {
     const navigate = useNavigate();
 
     /* Background slideshow */
-    const BG_IMAGES = ['/pacecollege1.jpg', '/pacecollege2.jpg'];
+    const BG_IMAGES = ['/ManchesterLogo.jpeg'];
     useEffect(() => {
         setMounted(true);
-        const t = setInterval(() => setBgIndex(i => (i + 1) % BG_IMAGES.length), 7000);
-        return () => clearInterval(t);
-    }, []);
+        if (localStorage.getItem('lab_token')) {
+            navigate('/lab/exams');
+        }
+    }, [navigate]);
 
     const handleLabLogin = async (e) => {
         e.preventDefault();
@@ -29,28 +30,9 @@ export default function LabLogin() {
             const res = await api.post('/api/lab/login', { labId: form.labId, password: form.password });
             localStorage.setItem('lab_token', res.data.token);
             localStorage.setItem('lab_user', JSON.stringify(res.data.user));
-            setStep('student');
+            navigate('/lab/exams');
         } catch (e) {
             setError(e.response?.data?.msg || 'Login failed. This terminal may not be authorized.');
-        }
-        setLoading(false);
-    };
-
-    const handleStudentProceed = async (e) => {
-        e.preventDefault();
-        if (!form.rollNumber) return setError('Roll Number is required');
-        setError('');
-        setLoading(true);
-        try {
-            const res = await api.get(`/api/lab/student/${form.rollNumber.trim()}`);
-            const d = res.data;
-            localStorage.setItem('student_info', JSON.stringify({
-                studentName: d.name, rollNumber: d.rollNumber,
-                studentEmail: d.email, section: d.section
-            }));
-            navigate('/lab/exams');
-        } catch (err) {
-            setError(err.response?.data?.msg || 'Student not found. Please check your roll number.');
         }
         setLoading(false);
     };
@@ -82,18 +64,18 @@ export default function LabLogin() {
                 <div style={s.leftPanel}>
                     <div style={s.leftInner}>
                         <div style={s.logoWrap}>
-                            <img src="/pacelogo.png" alt="PACE" style={s.logo} />
+                            <img src="/ManchesterLogo.jpeg" alt="Manchester" style={{ ...s.logo, objectFit: 'contain', borderRadius: '16px' }} />
                         </div>
 
                         <div style={s.collegeNameWrap}>
-                            <div style={s.paceWord}>PACE</div>
+                            <div style={{ ...s.paceWord, fontSize: '32px', letterSpacing: '0.05em' }}>Manchester</div>
                             <div style={s.collegeRest}>Pre University College</div>
                         </div>
 
                         <div style={s.goldRule} />
 
                         <p style={s.tagline}>
-                            Shaping futures through excellence in education since 1994
+                            The Land of Opportunity • Shaping futures through excellence in education
                         </p>
 
                         <div style={s.leftFooter}>
@@ -102,7 +84,7 @@ export default function LabLogin() {
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                                     <circle cx="12" cy="10" r="3" />
                                 </svg>
-                                Shivamogga, Karnataka
+                                Campus, Karnataka
                             </div>
                         </div>
                     </div>
@@ -112,141 +94,82 @@ export default function LabLogin() {
                 <div style={s.rightPanel}>
                     <div style={s.formCard}>
 
-                        {/* Step indicator */}
-                        <div style={s.stepRow}>
-                            <div style={{ ...s.stepDot, background: '#c5a059' }} />
-                            <div style={{ ...s.stepLine, background: step === 'student' ? '#c5a059' : 'rgba(0,31,109,0.15)' }} />
-                            <div style={{ ...s.stepDot, background: step === 'student' ? '#c5a059' : 'rgba(0,31,109,0.2)' }} />
-                            <div style={s.stepLabels}>
-                                <span style={{ ...s.stepLbl, color: '#001f6d', fontWeight: 700 }}>Lab Verify</span>
-                                <span style={{ ...s.stepLbl, color: step === 'student' ? '#001f6d' : '#94a3b8', fontWeight: step === 'student' ? 700 : 400 }}>Student Login</span>
+                        <div style={{ animation: 'slideUp 0.45s cubic-bezier(0.22,1,0.36,1)' }}>
+                            <div style={s.formHeader}>
+                                <div style={s.formIconWrap}>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 22, height: 22, strokeWidth: 2, color: '#c5a059' }}>
+                                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <div style={s.formTitle}>Lab Terminal Verification</div>
+                                    <div style={s.formSubtitle}>Restricted to authorized examination systems</div>
+                                </div>
                             </div>
+
+                            <form onSubmit={handleLabLogin} style={s.form}>
+                                <Field label="Lab Terminal ID" hint="Default: LAB-001">
+                                    <input
+                                        style={s.input}
+                                        className="pace-input"
+                                        type="text"
+                                        placeholder="LAB-001"
+                                        required
+                                        value={form.labId}
+                                        onChange={e => setForm(f => ({ ...f, labId: e.target.value }))}
+                                        autoComplete="off"
+                                    />
+                                </Field>
+
+                                <Field label="Terminal Access Password" hint="Default: lab@123">
+                                    <div style={s.passWrap}>
+                                        <input
+                                            style={{ ...s.input, paddingRight: 44 }}
+                                            className="pace-input"
+                                            type={showPass ? 'text' : 'password'}
+                                            placeholder="••••••••••"
+                                            required
+                                            value={form.password}
+                                            onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                                        />
+                                        <button type="button" style={s.eyeBtn} onClick={() => setShowPass(v => !v)}>
+                                            {showPass
+                                                ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2 }}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                                                : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                                            }
+                                        </button>
+                                    </div>
+                                </Field>
+
+                                {error && <ErrorBanner msg={error} />}
+
+                                <button style={s.primaryBtn} className="pace-btn" type="submit" disabled={loading}>
+                                    {loading
+                                        ? <><Spinner /> Verifying Terminal…</>
+                                        : <>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2.5 }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+                                            Verify & View Available Exams →
+                                        </>
+                                    }
+                                </button>
+                            </form>
+
+                            {/* Credentials Helper Box */}
+                            <div style={{ marginTop: '16px', padding: '10px 14px', borderRadius: '12px', background: 'rgba(197,160,89,0.12)', border: '1px solid rgba(197,160,89,0.3)', textAlign: 'center' }}>
+                                <p style={{ margin: 0, fontSize: '11px', color: '#001f6d', fontWeight: 600 }}>
+                                    Default Terminal: <strong style={{ color: '#b45309' }}>LAB-001</strong> · Password: <strong style={{ color: '#b45309' }}>lab@123</strong>
+                                </p>
+                            </div>
+
+                            <button type="button" style={{ ...s.backBtn, marginTop: 14, width: '100%' }} onClick={() => navigate('/')}>
+                                ← Return to Faculty / Admin Portal
+                            </button>
                         </div>
-
-                        {/* ── LAB STEP ── */}
-                        {step === 'lab' && (
-                            <div key="lab" style={{ animation: 'slideUp 0.45s cubic-bezier(0.22,1,0.36,1)' }}>
-                                <div style={s.formHeader}>
-                                    <div style={s.formIconWrap}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 22, height: 22, strokeWidth: 2, color: '#c5a059' }}>
-                                            <rect x="3" y="11" width="18" height="11" rx="2" />
-                                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div style={s.formTitle}>Terminal Verification</div>
-                                        <div style={s.formSubtitle}>Restricted to authorized lab systems</div>
-                                    </div>
-                                </div>
-
-                                <form onSubmit={handleLabLogin} style={s.form}>
-                                    <Field label="Lab Terminal ID" hint="e.g. LAB-001">
-                                        <input
-                                            style={s.input}
-                                            className="pace-input"
-                                            type="text"
-                                            placeholder="LAB-001"
-                                            required
-                                            value={form.labId}
-                                            onChange={e => setForm(f => ({ ...f, labId: e.target.value }))}
-                                            autoComplete="off"
-                                        />
-                                    </Field>
-
-                                    <Field label="Secure Password">
-                                        <div style={s.passWrap}>
-                                            <input
-                                                style={{ ...s.input, paddingRight: 44 }}
-                                                className="pace-input"
-                                                type={showPass ? 'text' : 'password'}
-                                                placeholder="••••••••••"
-                                                required
-                                                value={form.password}
-                                                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                                            />
-                                            <button type="button" style={s.eyeBtn} onClick={() => setShowPass(v => !v)}>
-                                                {showPass
-                                                    ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2 }}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-                                                    : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                                                }
-                                            </button>
-                                        </div>
-                                    </Field>
-
-                                    {error && <ErrorBanner msg={error} />}
-
-                                    <button style={s.primaryBtn} className="pace-btn" type="submit" disabled={loading}>
-                                        {loading
-                                            ? <><Spinner /> Verifying Terminal…</>
-                                            : <>
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2.5 }}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                                                Verify Lab Terminal
-                                            </>
-                                        }
-                                    </button>
-                                </form>
-
-                                <p style={s.hint}>Contact your lab administrator if you don't have credentials</p>
-                            </div>
-                        )}
-
-                        {/* ── STUDENT STEP ── */}
-                        {step === 'student' && (
-                            <div key="student" style={{ animation: 'slideUp 0.45s cubic-bezier(0.22,1,0.36,1)' }}>
-                                <div style={s.formHeader}>
-                                    <div style={{ ...s.formIconWrap, background: '#ecfdf5', border: '1.5px solid #6ee7b7' }}>
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 22, height: 22, strokeWidth: 2, color: '#059669' }}>
-                                            <path d="M20 6L9 17l-5-5" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <div style={s.formTitle}>Student Access</div>
-                                        <div style={{ ...s.formSubtitle, color: '#059669' }}>Terminal verified · Enter roll number</div>
-                                    </div>
-                                </div>
-
-                                <form onSubmit={handleStudentProceed} style={s.form}>
-                                    <Field label="Student Roll Number" hint="e.g. 2620101">
-                                        <input
-                                            style={s.input}
-                                            className="pace-input"
-                                            type="text"
-                                            placeholder="2620101"
-                                            required
-                                            value={form.rollNumber}
-                                            onChange={e => setForm(f => ({ ...f, rollNumber: e.target.value }))}
-                                            autoFocus
-                                        />
-                                    </Field>
-
-                                    {error && <ErrorBanner msg={error} />}
-
-                                    <button style={s.primaryBtn} className="pace-btn" type="submit" disabled={loading}>
-                                        {loading
-                                            ? <><Spinner /> Verifying Student…</>
-                                            : <>
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ width: 16, height: 16, strokeWidth: 2.5 }}><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                                                Access Exam Portal
-                                            </>
-                                        }
-                                    </button>
-
-                                    <button type="button" style={s.ghostBtn} onClick={() => {
-                                        localStorage.removeItem('lab_token');
-                                        localStorage.removeItem('lab_user');
-                                        setStep('lab');
-                                        setForm(f => ({ ...f, labId: '', password: '' }));
-                                        setError('');
-                                    }}>
-                                        ← Use Different Terminal
-                                    </button>
-                                </form>
-                            </div>
-                        )}
 
                         {/* Card footer */}
                         <div style={s.cardFooter}>
-                            © {new Date().getFullYear()} PACE Pre University College · Examinations
+                            © {new Date().getFullYear()} Manchester Pre University College · Campus
                         </div>
                     </div>
                 </div>
