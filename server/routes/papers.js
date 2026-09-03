@@ -122,49 +122,63 @@ function findMatchingAssignment(exam, paper, user) {
 // @access  Teacher / Admin
 router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { examId, ...rest } = req.body;
-        const paperSubject = req.body.subject || (req.user.role === 'admin' ? 'Physics' : (req.user.subject || 'Physics'));
+        const { examId, title, subject: reqSubject, questions, questionObjects, ...rest } = req.body;
+        const paperSubject = reqSubject || (req.user.role === 'admin' ? 'Physics' : (req.user.subject || 'Physics'));
+        const paperTitle = title || `${paperSubject} Assessment`;
+
         const paperData = {
             ...rest,
+            title: paperTitle,
             subject: paperSubject,
-            teacherId: req.user.id
+            teacherId: (req.user.id || req.user._id || 'admin').toString(),
+            questions: Array.isArray(questions) ? questions : (Array.isArray(questionObjects) ? questionObjects.map(q => q._id || q.id) : []),
+            questionObjects: Array.isArray(questionObjects) ? questionObjects : (Array.isArray(questions) ? questions : [])
         };
+
+        // Validate examId if provided
+        const mongoose = require('mongoose');
+        if (examId && mongoose.Types.ObjectId.isValid(examId)) {
+            paperData.examId = new mongoose.Types.ObjectId(examId);
+        }
 
         const paper = new Paper(paperData);
         await paper.save();
 
-        // If linked to an exam via examId or matching title, update OnlineExam's subjectAssignment
-        const OnlineExam = require('../models/OnlineExam');
-        let exam = null;
-        if (examId) {
-            exam = await OnlineExam.findById(examId);
-        } else if (paper.title) {
-            // Find exam where title is part of paper.title
-            const exams = await OnlineExam.find({}).sort({ createdAt: -1 });
-            exam = exams.find(e => paper.title.toLowerCase().includes(e.title.toLowerCase()));
-        }
+        // Background non-blocking sync: Link to exam and send notifications
+        (async () => {
+            try {
+                const OnlineExam = require('../models/OnlineExam');
+                let exam = null;
+                if (paperData.examId) {
+                    exam = await OnlineExam.findById(paperData.examId);
+                } else if (paper.title) {
+                    const exams = await OnlineExam.find({}).sort({ createdAt: -1 });
+                    exam = exams.find(e => paper.title.toLowerCase().includes(e.title.toLowerCase()));
+                }
 
-        if (exam) {
-            const assignment = findMatchingAssignment(exam, paper, req.user);
+                if (exam) {
+                    const assignment = findMatchingAssignment(exam, paper, req.user);
+                    if (assignment) {
+                        assignment.submittedPaperId = paper._id;
+                        assignment.teacherId = req.user.id;
+                        assignment.teacherName = req.user.name || assignment.teacherName;
+                        assignment.teacherEmail = req.user.email || assignment.teacherEmail;
+                        const qCount = Array.isArray(paper.questions) ? paper.questions.length : 0;
+                        assignment.status = qCount >= (assignment.targetQuestions || 60) ? 'Completed' : 'In Progress';
+                        await exam.save();
+                    }
+                }
 
-            if (assignment) {
-                assignment.submittedPaperId = paper._id;
-                assignment.teacherId = req.user.id;
-                assignment.teacherName = req.user.name || assignment.teacherName;
-                assignment.teacherEmail = req.user.email || assignment.teacherEmail;
-                const qCount = Array.isArray(paper.questions) ? paper.questions.length : 0;
-                assignment.status = qCount >= (assignment.targetQuestions || 60) ? 'Completed' : 'In Progress';
-                await exam.save();
+                await handlePaperFinalization(paper, req.user, exam);
+            } catch (bgErr) {
+                console.error('Background paper finalization error:', bgErr.message);
             }
-        }
+        })();
 
-        // Record question usage & notify admin
-        await handlePaperFinalization(paper, req.user, exam);
-
-        res.json(paper);
+        res.status(201).json(paper);
     } catch (err) {
-        console.error('Save paper error:', err.message);
-        res.status(500).json({ msg: 'Server error saving paper.' });
+        console.error('Save paper error:', err);
+        res.status(500).json({ msg: 'Server error saving paper.', error: err.message });
     }
 });
 

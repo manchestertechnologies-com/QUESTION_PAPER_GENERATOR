@@ -6,7 +6,7 @@ const PaperSchema = new mongoose.Schema({
     classes: [{ type: String }],
     teacherId: { type: String, required: true }, // String to support both MongoDB ObjectId and Supabase User UUID
     examId: { type: mongoose.Schema.Types.ObjectId, ref: 'OnlineExam' },
-    questions: [{ type: String }], // Array of Supabase Question UUIDs or question objects
+    questions: [{ type: mongoose.Schema.Types.Mixed }], // Array of Supabase Question UUIDs or question snapshot objects
     questionObjects: [{ type: mongoose.Schema.Types.Mixed }], // Cached full question snapshots
     templateId: { type: String },
     difficultyDistribution: {

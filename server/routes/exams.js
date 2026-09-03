@@ -268,7 +268,7 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
             if (!exam) return res.status(404).json({ msg: 'Commissioned exam not found.' });
             examType = exam.examType || examType;
 
-            // Collect all submitted papers from exam assignments
+            // 1. Collect all submitted papers from exam assignments
             if (Array.isArray(exam.subjectAssignments)) {
                 for (const sa of exam.subjectAssignments) {
                     if (sa.submittedPaperId) {
@@ -278,33 +278,47 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
                 }
             }
 
-            // Fallback: match by title & subject in Paper collection
+            // 2. Also find papers created with examId matching this exam
+            const linkedPapers = await Paper.find({ examId: exam._id });
+            for (const lp of linkedPapers) {
+                const lpid = lp._id.toString();
+                if (!paperIds.includes(lpid)) paperIds.push(lpid);
+            }
+
+            // 3. Fallback: match by teacher and subject in Paper collection
             if (paperIds.length === 0) {
                 const allPapers = await Paper.find({}).sort({ createdAt: -1 });
                 for (const sa of (exam.subjectAssignments || [])) {
-                    const matchedPaper = allPapers.find(p => 
-                        p.title && p.title.toLowerCase().includes(exam.title.toLowerCase()) &&
-                        (p.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase())
-                    );
+                    const saSub = (sa.subject || '').toLowerCase().trim();
+                    const saTid = sa.teacherId ? sa.teacherId.toString() : null;
+
+                    const matchedPaper = allPapers.find(p => {
+                        const pSub = (p.subject || '').toLowerCase().trim();
+                        const pTid = p.teacherId ? p.teacherId.toString() : null;
+                        const pTitle = (p.title || '').toLowerCase().trim();
+                        const exTitle = (exam.title || '').toLowerCase().trim();
+
+                        if (saTid && pTid === saTid && (pSub === saSub || pSub.includes(saSub) || saSub.includes(pSub))) return true;
+                        if (exTitle && pTitle.includes(exTitle) && (pSub === saSub || pSub.includes(saSub))) return true;
+                        if (pSub === saSub && p.questions && p.questions.length > 0) return true;
+                        return false;
+                    });
+
                     if (matchedPaper) {
-                        paperIds.push(matchedPaper._id.toString());
+                        const mpid = matchedPaper._id.toString();
+                        if (!paperIds.includes(mpid)) paperIds.push(mpid);
                         sa.submittedPaperId = matchedPaper._id;
                     }
                 }
             }
         }
 
-        if (!paperIds || paperIds.length === 0) {
-            return res.status(400).json({ msg: 'No subject papers found to merge. Please ensure faculty have submitted questions or select papers.' });
-        }
-
-        // Fetch all selected papers
         const { Types: { ObjectId } } = require('mongoose');
         const objectIds = paperIds.map(id => typeof id === 'string' ? new ObjectId(id) : id);
-        let papers = await Paper.find({ _id: { $in: objectIds } });
+        let papers = objectIds.length > 0 ? await Paper.find({ _id: { $in: objectIds } }) : [];
 
-        if (papers.length === 0) {
-            return res.status(404).json({ msg: 'Selected subject papers not found.' });
+        if (papers.length === 0 && (!exam || !Array.isArray(exam.questions) || exam.questions.length === 0)) {
+            return res.status(400).json({ msg: 'No subject papers found to merge. Please ensure faculty have submitted questions or select papers from the list.' });
         }
 
         // Sort papers into standard subject order (Physics -> Chemistry -> Mathematics -> Biology/Botany/Zoology)
@@ -397,6 +411,29 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
                     mergedQuestions.push(formattedQ);
                 }
             }
+        }
+
+        // Fallback: If no papers hydrated but exam already has questions directly attached
+        if (mergedQuestions.length === 0 && exam && Array.isArray(exam.questions) && exam.questions.length > 0) {
+            for (const q of exam.questions) {
+                const sub = q.subject || 'General';
+                const defSecName = q.sectionName || `${sub} - Section A`;
+                if (!sectionsMap[defSecName]) {
+                    sectionsMap[defSecName] = {
+                        sectionName: defSecName,
+                        numQuestions: 1,
+                        allowedToAnswer: 0,
+                        markingRules: { correct: q.marks || 4, incorrect: -(q.negativeMarks || 1), unattempted: 0 }
+                    };
+                } else {
+                    sectionsMap[defSecName].numQuestions += 1;
+                }
+                mergedQuestions.push(q);
+            }
+        }
+
+        if (mergedQuestions.length === 0) {
+            return res.status(400).json({ msg: 'No questions found across subject assignments to merge. Please ensure faculty have generated papers for this exam.' });
         }
 
         const mergedExamTitle = title || (exam ? exam.title : `Merged ${examType} Comprehensive Exam`);
