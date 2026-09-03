@@ -313,10 +313,10 @@ function DiagramViewer({ q, imageUrl, diagramMaxHeight = '200px', isTwoCol = fal
 
     return (
         <div 
-            className="diagram-container resizable-diagram-wrap group/diagram relative" 
+            className="diagram-container resizable-diagram-wrap group/diagram relative inline-block max-w-full" 
             style={{ 
                 textAlign: q?.diagramAlignment || 'center', 
-                margin: '5px auto', 
+                margin: '4px auto', 
                 background: '#ffffff', 
                 position: 'relative', 
                 zIndex: 2,
@@ -332,23 +332,23 @@ function DiagramViewer({ q, imageUrl, diagramMaxHeight = '200px', isTwoCol = fal
                 loading="lazy"
             />
             
-            {/* Interactive Per-Diagram Zoom Bar (hoverable on screen, hidden on print) */}
-            <div className="no-print opacity-0 group-hover/diagram:opacity-100 transition-opacity absolute top-1 right-1 bg-slate-900/90 text-white rounded-lg p-1 flex items-center gap-1 text-[10px] shadow-lg z-10">
+            {/* Interactive Per-Diagram Zoom Bar: Always visible on screen, completely hidden during print/PDF */}
+            <div className="no-print opacity-90 hover:opacity-100 transition-opacity absolute top-0.5 right-0.5 bg-navy/90 text-gold rounded-lg px-1.5 py-0.5 flex items-center gap-1 text-[10px] shadow-md border border-gold/40 z-20 select-none">
                 <button
                     type="button"
                     onClick={handleZoomOut}
-                    className="w-5 h-5 rounded bg-white/20 hover:bg-amber-400 hover:text-navy flex items-center justify-center font-black cursor-pointer leading-none text-xs"
-                    title="Zoom Out Diagram (-)"
+                    className="w-5 h-5 rounded bg-white/10 hover:bg-gold hover:text-navy text-gold flex items-center justify-center font-black cursor-pointer leading-none text-xs transition"
+                    title="Zoom Out Diagram (−)"
                 >
                     −
                 </button>
-                <span className="font-mono text-[9px] px-1 font-bold text-amber-300">
+                <span className="font-mono text-[9px] px-1 font-bold text-white">
                     {Math.round(localZoom * 100)}%
                 </span>
                 <button
                     type="button"
                     onClick={handleZoomIn}
-                    className="w-5 h-5 rounded bg-white/20 hover:bg-amber-400 hover:text-navy flex items-center justify-center font-black cursor-pointer leading-none text-xs"
+                    className="w-5 h-5 rounded bg-white/10 hover:bg-gold hover:text-navy text-gold flex items-center justify-center font-black cursor-pointer leading-none text-xs transition"
                     title="Zoom In Diagram (+)"
                 >
                     +
@@ -356,7 +356,7 @@ function DiagramViewer({ q, imageUrl, diagramMaxHeight = '200px', isTwoCol = fal
                 <button
                     type="button"
                     onClick={handleReset}
-                    className="px-1.5 h-5 rounded bg-white/15 hover:bg-white/30 text-[8px] font-bold uppercase cursor-pointer"
+                    className="px-1 h-4 rounded bg-white/10 hover:bg-white/20 text-[8px] text-white/80 font-bold uppercase cursor-pointer"
                     title="Reset Diagram Zoom"
                 >
                     Reset
@@ -364,6 +364,29 @@ function DiagramViewer({ q, imageUrl, diagramMaxHeight = '200px', isTwoCol = fal
             </div>
         </div>
     );
+}
+
+/**
+ * Intelligent Option Content Renderer: Supports text, formulas, and interactive option diagrams (+ / - zoom)
+ */
+function OptionContentRenderer({ opt, q, isTwoCol = false }) {
+    const rawText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '');
+    
+    // Check if option contains an image
+    const imgMatch = rawText.match(/\{\{IMG::(.*?)\}\}/i) || rawText.match(/!\[.*?\]\((.*?)\)/i) || (rawText.startsWith('http') && rawText.match(/\.(png|jpg|jpeg|webp|svg)/i) ? [null, rawText] : null);
+
+    if (imgMatch && imgMatch[1]) {
+        const imgSrc = imgMatch[1];
+        const textWithoutImg = rawText.replace(/\{\{IMG::.*?\}\}/gi, '').replace(/!\[.*?\]\(.*?\)/gi, '').trim();
+        return (
+            <div className="option-diagram-wrapper inline-block max-w-full">
+                {textWithoutImg && <div className="mb-1"><MathRenderer inline text={textWithoutImg} /></div>}
+                <DiagramViewer q={q} imageUrl={imgSrc} diagramMaxHeight="90px" isTwoCol={isTwoCol} />
+            </div>
+        );
+    }
+
+    return <MathRenderer inline text={rawText} />;
 }
 
 /**
@@ -383,7 +406,7 @@ function BodyMCQ({ q, classes, singleColMode, diagramMaxHeight = '180px', settin
                     <div key={i} style={Q.optRow}>
                         <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
                         <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
-                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
+                            <OptionContentRenderer opt={opt} q={q} isTwoCol={singleColMode} />
                         </span>
                     </div>
                 ))}
@@ -533,7 +556,7 @@ function BodyAssertionReason({ q, classes, singleColMode, diagramMaxHeight, sett
                     <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
                         <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
                         <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
-                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
+                            <OptionContentRenderer opt={opt} q={q} isTwoCol={singleColMode} />
                         </span>
                     </div>
                 ))}
@@ -612,7 +635,7 @@ function BodyMatchFollowing({ q, classes, singleColMode, diagramMaxHeight, setti
                         <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
                             <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
                             <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
-                                <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
+                                <OptionContentRenderer opt={opt} q={q} isTwoCol={singleColMode} />
                             </span>
                         </div>
                     ))}
@@ -656,7 +679,7 @@ function BodyStatementBased({ q, classes, singleColMode, diagramMaxHeight, setti
                         <div key={i} className="optRow option-item" data-option-row="true" style={{ ...Q.optRow, marginBottom: '1px' }}>
                             <span style={Q.optLbl}>({optionLabel(i, classes, q, settings)})</span>
                             <span style={{ flex: 1, minWidth: 0, fontWeight: 400, fontStyle: 'normal', fontSize: 'inherit' }}>
-                                <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '')} />
+                                <OptionContentRenderer opt={opt} q={q} isTwoCol={singleColMode} />
                             </span>
                         </div>
                     ))}
