@@ -41,6 +41,7 @@ const DashboardHome = () => {
     const [selectedAnswerKeyExam, setSelectedAnswerKeyExam] = useState(null);
     const [selectedOnlineLaunchExam, setSelectedOnlineLaunchExam] = useState(null);
     const [selectedPqrsExam, setSelectedPqrsExam] = useState(null);
+    const [selectedAnalysisExam, setSelectedAnalysisExam] = useState(null);
     const [activePqrsSet, setActivePqrsSet] = useState('P');
     const [soeSubjectFilter, setSoeSubjectFilter] = useState('All');
     const [copiedLink, setCopiedLink] = useState(false);
