@@ -34,9 +34,14 @@ function getDynamicOptGrid(options = [], singleColMode = false) {
         return plain.length;
     }));
 
+    const hasComplexFormula = options.some(opt => {
+        const str = String(opt || '');
+        return str.includes('\\frac') || str.includes('\\sqrt') || str.includes('\\begin') || str.includes('\\sum') || str.includes('$$') || str.length > 80;
+    });
+
     if (singleColMode) {
         // Two-column paper mode
-        if (maxLen <= 12 && options.length <= 4) {
+        if (maxLen <= 12 && options.length <= 4 && !hasComplexFormula) {
             return {
                 display: 'grid',
                 gridTemplateColumns: `repeat(${options.length}, 1fr)`,
