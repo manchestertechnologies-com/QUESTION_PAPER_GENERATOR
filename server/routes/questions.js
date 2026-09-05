@@ -97,9 +97,18 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         const { classes, chapter, concept, type, subject, search, level, usage } = req.query;
         let filters = {};
 
-        // Subject-level access control — teachers can ONLY access their own subject
+        // Subject-level access control — allow Biology/Botany/Zoology faculty to query between Botany/Zoology/Biology
+        const teacherSub = (req.user.subject || '').toLowerCase();
+        const isBioFaculty = ['biology', 'botany', 'zoology'].some(b => teacherSub.includes(b));
+
         if (req.user.role === 'teacher') {
-            filters.subject = req.user.subject;
+            if (isBioFaculty && subject && ['biology', 'botany', 'zoology'].some(b => subject.toLowerCase().includes(b))) {
+                filters.subject = subject;
+            } else if (req.user.subject) {
+                filters.subject = req.user.subject;
+            } else if (subject) {
+                filters.subject = subject;
+            }
         } else if (subject) {
             filters.subject = subject;
         }
@@ -138,7 +147,17 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 // @access  Teacher / Admin
 router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const subject = req.query.subject || (req.user.role === 'teacher' ? req.user.subject : '');
+        const teacherSub = (req.user.subject || '').toLowerCase();
+        const isBioFaculty = ['biology', 'botany', 'zoology'].some(b => teacherSub.includes(b));
+        const requestedSub = req.query.subject || '';
+
+        let subject = requestedSub;
+        if (!subject) {
+            subject = req.user.role === 'teacher' ? req.user.subject : '';
+        } else if (req.user.role === 'teacher' && !isBioFaculty && req.user.subject) {
+            subject = req.user.subject;
+        }
+
         const klass = req.query.class || req.query.klass || '';
         const meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
         res.json(meta);

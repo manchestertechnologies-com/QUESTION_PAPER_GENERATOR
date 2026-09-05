@@ -297,8 +297,12 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
             whereClauses.push(`q.subject IN ('Physics', 'PHYSICS')`);
         } else if (sub.includes('chem')) {
             whereClauses.push(`q.subject IN ('Chemistry', 'CHEMISTRY')`);
+        } else if (sub.includes('botan')) {
+            whereClauses.push(`(q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Biology%' OR q.subject = 'BOTANY' OR q.subject = 'BIOLOGY')`);
+        } else if (sub.includes('zool')) {
+            whereClauses.push(`(q.subject ILIKE '%Zoology%' OR q.subject ILIKE '%Biology%' OR q.subject = 'ZOOLOGY' OR q.subject = 'BIOLOGY')`);
         } else if (sub.includes('bio')) {
-            whereClauses.push(`q.subject IN ('Biology', 'BIOLOGY')`);
+            whereClauses.push(`(q.subject ILIKE '%Biology%' OR q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Zoology%' OR q.subject IN ('Biology', 'Botany', 'Zoology', 'BIOLOGY', 'BOTANY', 'ZOOLOGY'))`);
         } else {
             whereClauses.push(`q.subject ILIKE $${paramIndex++}`);
             values.push(`%${filters.subject}%`);
@@ -500,41 +504,49 @@ async function getSubjectMetadata(subject = '', klass = '') {
     }
 
     try {
-        const subParam = subject ? subject.trim() : null;
-        const klassParam = cleanClass || null;
+        const sub = (subject || '').trim().toLowerCase();
+        let subWhere = '';
+        let subValues = [];
+        let pIdx = 1;
 
-        let result;
-        if (!klassParam) {
-            // All classes
-            const res = await pool.query(
-                `SELECT public.get_subject_meta($1) as meta;`,
-                [subParam]
-            );
-            const meta = res.rows[0]?.meta || { total: 0, chapters: [], concepts: [] };
-            result = {
-                total: parseInt(meta.total) || 0,
-                chapters: Array.isArray(meta.chapters) ? meta.chapters : [],
-                concepts: Array.isArray(meta.concepts) ? meta.concepts : []
-            };
-        } else {
-            // Class-specific (e.g. Class 11 or Class 12)
-            const query = `
-                SELECT 
-                    count(*)::bigint as total,
-                    array_agg(DISTINCT q.chapter ORDER BY q.chapter) as chapters,
-                    jsonb_agg(DISTINCT jsonb_build_object('concept', q.topic, 'chapter', q.chapter)) as concepts
-                FROM public.questions q
-                WHERE ($1::text IS NULL OR q.subject ILIKE '%' || $1 || '%')
-                  AND q.klass = $2;
-            `;
-            const res = await pool.query(query, [subParam, klassParam]);
-            const row = res.rows[0] || {};
-            result = {
-                total: parseInt(row.total) || 0,
-                chapters: Array.isArray(row.chapters) ? row.chapters.filter(Boolean) : [],
-                concepts: Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : []
-            };
+        if (sub.includes('math')) {
+            subWhere = `q.subject IN ('Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS')`;
+        } else if (sub.includes('physic')) {
+            subWhere = `q.subject IN ('Physics', 'PHYSICS')`;
+        } else if (sub.includes('chem')) {
+            subWhere = `q.subject IN ('Chemistry', 'CHEMISTRY')`;
+        } else if (sub.includes('botan')) {
+            subWhere = `(q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Biology%' OR q.subject = 'BOTANY' OR q.subject = 'BIOLOGY')`;
+        } else if (sub.includes('zool')) {
+            subWhere = `(q.subject ILIKE '%Zoology%' OR q.subject ILIKE '%Biology%' OR q.subject = 'ZOOLOGY' OR q.subject = 'BIOLOGY')`;
+        } else if (sub.includes('bio')) {
+            subWhere = `(q.subject ILIKE '%Biology%' OR q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Zoology%' OR q.subject IN ('Biology', 'Botany', 'Zoology', 'BIOLOGY', 'BOTANY', 'ZOOLOGY'))`;
+        } else if (subject) {
+            subWhere = `q.subject ILIKE $${pIdx++}`;
+            subValues.push(`%${subject.trim()}%`);
         }
+
+        let wherePart = subWhere ? `WHERE ${subWhere}` : '';
+        if (cleanClass) {
+            wherePart += `${wherePart ? ' AND ' : 'WHERE '} q.klass = $${pIdx++}`;
+            subValues.push(cleanClass);
+        }
+
+        const query = `
+            SELECT 
+                count(*)::bigint as total,
+                array_agg(DISTINCT q.chapter ORDER BY q.chapter) as chapters,
+                jsonb_agg(DISTINCT jsonb_build_object('concept', q.topic, 'chapter', q.chapter)) as concepts
+            FROM public.questions q
+            ${wherePart};
+        `;
+        const res = await pool.query(query, subValues);
+        const row = res.rows[0] || {};
+        const result = {
+            total: parseInt(row.total) || 0,
+            chapters: Array.isArray(row.chapters) ? row.chapters.filter(Boolean) : [],
+            concepts: Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : []
+        };
 
         metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });
         return result;
