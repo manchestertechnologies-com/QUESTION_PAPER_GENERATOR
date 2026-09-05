@@ -7,26 +7,33 @@
  * - R Set: Shuffled questions, shuffled options with recalculated answer keys.
  * - S Set: Maximum shuffle (shuffled questions, shuffled options) with recalculated answer keys.
  */
-import { getQuestionCorrectAnswerLabel } from './sanitize.js';
+
+import { getResolvedAnswerLabel } from './sanitize.js';
 
 // Seeded pseudo-random number generator for deterministic shuffling per paper ID + set name
 function createSeededRandom(seedStr) {
     let hash = 0;
-    for (let i = 0; i < seedStr.length; i++) {
-        hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+    const str = String(seedStr || 'default-seed');
+    for (let i = 0; i < str.length; i++) {
+        hash = (hash << 5) - hash + str.charCodeAt(i);
         hash |= 0;
     }
     return function () {
+        // Absolute value prevents negative remainder in JS % operator
         hash = Math.abs((hash * 9301 + 49297) % 233280);
         return hash / 233280;
     };
 }
 
 function shuffleArray(arr, randomFn) {
+    if (!Array.isArray(arr) || arr.length <= 1) return [...(arr || [])];
     const copy = [...arr];
     for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(randomFn() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
+        const rnd = Math.abs(randomFn());
+        const j = Math.floor(rnd * (i + 1));
+        if (j >= 0 && j < copy.length) {
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
     }
     return copy;
 }
@@ -84,7 +91,9 @@ function shuffleQuestionOptions(question, randomFn) {
     const indexed = originalOptions.map((opt, i) => ({ opt, origIdx: i }));
     const shuffledIndexed = shuffleArray(indexed, randomFn);
 
-    const newOptions = shuffledIndexed.map(item => item.opt);
+    const newOptions = shuffledIndexed
+        .filter(item => item && item.opt !== undefined)
+        .map(item => item.opt);
     let newAnsLetter = question.answer;
 
     if (origAnsIdx >= 0) {
@@ -139,29 +148,25 @@ export function generatePaperSet(paper, setName = 'P') {
             break;
 
         case 'R':
-            // R Set: Shuffle questions AND shuffle options inside each question (recalculate answers)
+            // R Set: Options shuffle only (questions remain in original order, answers recalculated)
+            processedQuestions = baseQuestions.map((q, idx) => {
+                const qWithShuffledOpts = shuffleQuestionOptions(q, random);
+                return {
+                    ...qWithShuffledOpts,
+                    setQNo: idx + 1,
+                    originalQNo: idx + 1,
+                };
+            });
+            break;
+
+        case 'S':
+        default:
+            // S Set: Both questions shuffled AND options shuffled (answers recalculated)
             {
                 const indexed = baseQuestions.map((q, idx) => ({ ...q, originalQNo: idx + 1 }));
                 const shuffledQs = shuffleArray(indexed, random);
                 processedQuestions = shuffledQs.map((q, idx) => {
                     const qWithShuffledOpts = shuffleQuestionOptions(q, random);
-                    return {
-                        ...qWithShuffledOpts,
-                        setQNo: idx + 1,
-                    };
-                });
-            }
-            break;
-
-        case 'S':
-        default:
-            // S Set: Maximum shuffle (second pass random seed)
-            {
-                const sRandom = createSeededRandom(`${seed}-max-shuffle`);
-                const indexed = baseQuestions.map((q, idx) => ({ ...q, originalQNo: idx + 1 }));
-                const shuffledQs = shuffleArray(indexed, sRandom);
-                processedQuestions = shuffledQs.map((q, idx) => {
-                    const qWithShuffledOpts = shuffleQuestionOptions(q, sRandom);
                     return {
                         ...qWithShuffledOpts,
                         setQNo: idx + 1,
@@ -186,7 +191,7 @@ export function generatePaperSet(paper, setName = 'P') {
 export function generateAnswerKey(questions = [], setName = 'P') {
     return questions.map((q, idx) => {
         const qNum = q.setQNo || (idx + 1);
-        const ans = getQuestionCorrectAnswerLabel(q);
+        const ans = getResolvedAnswerLabel(q);
         return {
             qNo: qNum,
             originalQNo: q.originalQNo || qNum,
@@ -194,7 +199,7 @@ export function generateAnswerKey(questions = [], setName = 'P') {
             type: q.type || 'MCQ',
             subject: q.subject || '',
             chapter: q.chapter || '',
-            solutionText: q.solutionText || '',
+            solutionText: q.solutionText || q.solution || '',
         };
     });
 }

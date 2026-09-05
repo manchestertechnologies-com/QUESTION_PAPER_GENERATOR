@@ -71,7 +71,7 @@ export default function StudentLabPortal() {
             studentName: trimmedName,
             rollNumber: trimmedReg,
             class: studentClass,
-            studentEmail: `${trimmedReg.toLowerCase()}@student.manchester.edu`
+            studentEmail: `${trimmedReg.toLowerCase()}@student.sapthagiri.edu`
         };
 
         localStorage.setItem('student_info', JSON.stringify(info));
@@ -199,10 +199,10 @@ export default function StudentLabPortal() {
                         </div>
                         <div>
                             <h1 className="text-base font-extrabold tracking-wide text-white uppercase">
-                                Manchester Pre University College
+                                Sapthagiri Pre University College
                             </h1>
                             <p className="text-xs text-amber-400 font-semibold tracking-wider flex items-center gap-2">
-                                <span>Campus • The Land of Opportunity</span>
+                                <span>Davanagere • The Land of Opportunity</span>
                                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400/60" />
                                 <span className="text-slate-300">Digital CBT Examination Portal</span>
                             </p>
@@ -303,7 +303,7 @@ export default function StudentLabPortal() {
                             </form>
 
                             <div className="mt-6 pt-4 border-t border-slate-800 text-center text-[11px] text-slate-400">
-                                🔒 Dedicated Lab Portal • Manchester PU College Campus
+                                🔒 Dedicated Lab Portal • Manchester PU College Davanagere
                             </div>
                         </div>
                     </div>
@@ -491,7 +491,7 @@ export default function StudentLabPortal() {
 
             {/* Footer */}
             <footer className="border-t border-slate-800/80 bg-[#071328]/90 py-4 px-6 text-center text-xs text-slate-500">
-                Manchester Pre University College, Campus • Autonomous Examination Terminal
+                Sapthagiri Pre University College, Davanagere • Autonomous Examination Terminal
             </footer>
         </div>
     );

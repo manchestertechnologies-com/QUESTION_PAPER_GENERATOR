@@ -55,7 +55,7 @@ export default function LabExamList() {
             studentName: candidateData.studentName.trim(),
             rollNumber: candidateData.rollNumber.trim(),
             section: candidateData.section.trim() || 'A',
-            studentEmail: `${candidateData.rollNumber.trim()}@student.manchester.edu`
+            studentEmail: `${candidateData.rollNumber.trim()}@student.sapthagiri.edu`
         };
 
         localStorage.setItem('student_info', JSON.stringify(info));
@@ -83,10 +83,10 @@ export default function LabExamList() {
                 <div style={s.topbarInner}>
                     <div style={s.brand}>
                         <div style={{ ...s.brandShield, background: 'transparent', border: 'none' }}>
-                            <img src="/ManchesterLogo.jpeg" alt="Manchester Logo" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }} />
+                            <img src="/ManchesterLogo.jpeg" alt="Sapthagiri Logo" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }} />
                         </div>
                         <div>
-                            <div style={s.brandName}>Manchester Pre University College, Campus</div>
+                            <div style={s.brandName}>Sapthagiri Pre University College, Davanagere</div>
                             <div style={s.brandSub}>Online Examination Portal</div>
                         </div>
                     </div>
@@ -241,7 +241,7 @@ export default function LabExamList() {
 
             {/* Footer strip */}
             <footer style={s.footer}>
-                © {new Date().getFullYear()} Manchester Pre University College, Campus · Online Examination System · Monitored Session
+                © {new Date().getFullYear()} Sapthagiri Pre University College, Davanagere · Online Examination System · Monitored Session
             </footer>
         </div>
     );

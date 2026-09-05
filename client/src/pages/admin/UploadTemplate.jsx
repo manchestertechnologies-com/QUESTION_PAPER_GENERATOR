@@ -109,7 +109,7 @@ const UploadTemplate = () => {
                         <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Template Name *</label>
                         <input
                             type="text" required
-                            placeholder="e.g. Manchester College Standard Layout 2026"
+                            placeholder="e.g. Manchester PU College Standard Layout 2026"
                             className="w-full border-2 border-gray-200 p-3.5 rounded-2xl bg-gray-50/50 font-bold text-sm focus:border-navy outline-none transition-all"
                             value={templateTitle}
                             onChange={e => setTemplateTitle(e.target.value)}

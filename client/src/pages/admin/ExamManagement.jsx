@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import ResizableDiagram from '../../components/ResizableDiagram';
 
 const EXAM_TYPES = ['JEE', 'NEET', 'CET'];
 const STATUS_COLORS = {
@@ -23,15 +25,28 @@ const getOptionsGridStyle = (options) => {
         };
     }
     
-    // Estimate clean text length of options (ignoring LaTeX commands for a better text length estimation)
+    let hasComplexFormula = false;
     const cleanLengths = options.map(opt => {
-        const cleanText = (opt || '')
-            .replace(/\\(text|mathrm|ce|begin|end){[^}]*}/g, '')
-            .replace(/\$\$?[^$]+\$\$?/g, '')
-            .replace(/[{}$_^[\]]/g, '')
-            .trim();
-        return cleanText.length;
+        const str = String(typeof opt === 'object' ? (opt.text || opt.optionText || '') : (opt || ''));
+        const clean = str.replace(/<[^>]+>/g, '').trim();
+        if (/(\$|\\\[|\\\(|\\frac|\\sqrt|\\int|\\rightarrow|\||\^|_)/i.test(clean)) {
+            if (clean.length > 12 || clean.includes('|') || clean.includes('\\rightarrow') || clean.includes('\\frac')) {
+                hasComplexFormula = true;
+            }
+        }
+        return clean.length;
     });
+
+    if (hasComplexFormula) {
+        return {
+            display: 'grid',
+            gridTemplateColumns: '1fr',
+            gap: '8px 24px',
+            marginTop: '8px',
+            marginLeft: '24px',
+            fontSize: '0.95em'
+        };
+    }
     
     const maxLength = Math.max(...cleanLengths);
     const totalLength = cleanLengths.reduce((a, b) => a + b, 0);
@@ -39,10 +54,10 @@ const getOptionsGridStyle = (options) => {
     let columns = '1fr';
     let gap = '10px 24px';
     
-    if (maxLength <= 15 && totalLength <= 60) {
+    if (maxLength <= 10 && totalLength <= 40) {
         columns = '1fr 1fr 1fr 1fr';
         gap = '8px 16px';
-    } else if (maxLength <= 35 && totalLength <= 110) {
+    } else if (maxLength <= 28 && totalLength <= 90) {
         columns = '1fr 1fr';
         gap = '8px 24px';
     }
@@ -543,7 +558,7 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                     <div key={q._id || idx} style={{ color: '#111', breakInside: 'avoid-column' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1, paddingRight: '16px' }}>
-                                                <span style={{ fontWeight: 700, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1.1em' }}>{idx + 1}.</span>
+                                                <span style={{ fontWeight: 400, marginRight: '8px', whiteSpace: 'nowrap', fontSize: '1em' }}>{idx + 1}.</span>
                                                 <div style={{ flex: 1 }}>
                                                     <div style={{ display: 'grid', gridTemplateColumns: settings.bilingualMode ? '1fr 1fr' : '1fr', gap: '20px' }}>
                                                         <div>
@@ -557,18 +572,18 @@ function ExamPrintView({ exam, templates, settings, setSettings, onBack }) {
                                                     </div>
                                                     {q.imageUrl && (
                                                         <div style={{ marginTop: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'center' }}>
-                                                            <img src={q.imageUrl} alt="Diagram" style={{ maxWidth: '70%', maxHeight: '130px', objectFit: 'contain' }} />
+                                                            <ResizableDiagram src={q.imageUrl} alt="Diagram" maxWidth="380px" />
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
-                                            {settings.showMarks && <span style={{ fontWeight: 700, whiteSpace: 'nowrap', fontSize: '0.9em' }}>[{formatMarks(q.type)}]</span>}
+                                            {settings.showMarks && <span style={{ fontWeight: 400, whiteSpace: 'nowrap', fontSize: '1em' }}>[{formatMarks(q.type)}]</span>}
                                         </div>
                                         {q.options && q.options.length > 0 && (
                                             <div style={getOptionsGridStyle(q.options)}>
                                                 {q.options.map((opt, i) => (
-                                                    <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline' }}>
-                                                        <span style={{ marginRight: '6px', fontWeight: 600 }}>{optionLabel(i, q.classes)})</span>
+                                                    <div key={i} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', fontSize: '1em', fontWeight: 400 }}>
+                                                        <span style={{ marginRight: '6px', fontWeight: 400 }}>{optionLabel(i, q.classes)})</span>
                                                         <MathRenderer inline={true} text={opt} />
                                                         {settings.bilingualMode && q.optionsTranslation?.[i] && (
                                                             <span style={{ color: '#6b7280', fontSize: '11px', fontFamily: 'sans-serif', fontStyle: 'italic', marginLeft: '6px' }}>
@@ -641,6 +656,7 @@ const calculateEndTime = (startTimeStr, durationMin) => {
 
 // ─── Main Exam Management Component ───
 export default function ExamManagement() {
+    const navigate = useNavigate();
     const [tab, setTab] = useState('online');
     const [exams, setExams] = useState([]);
     const [papers, setPapers] = useState([]);
@@ -721,14 +737,12 @@ export default function ExamManagement() {
     const togglePaper = (id) => {
         setMergeForm(f => {
             if (f.paperIds.includes(id)) return { ...f, paperIds: f.paperIds.filter(p => p !== id) };
-            const reqCount = f.examType === 'JEE' ? 3 : 4;
-            if (f.paperIds.length >= reqCount) return f;
             return { ...f, paperIds: [...f.paperIds, id] };
         });
     };
 
     const handleMerge = async () => {
-        if (mergeForm.paperIds.length === 0) return setMsg(`Select at least 1 paper.`);
+        if (mergeForm.paperIds.length === 0) return setMsg(`Select at least 1 paper to merge.`);
         setLoading(true);
         try {
             const payload = {
@@ -737,8 +751,8 @@ export default function ExamManagement() {
                 end_time: localToUtcIso(mergeForm.end_time),
                 allowedStudents: mergeForm.allowedStudents ? mergeForm.allowedStudents.split(',').map(s => s.trim()).filter(Boolean) : []
             };
-            await api.post('/api/exams/merge', payload);
-            setMsg('✅ Exam created successfully!');
+            const res = await api.post('/api/exams/merge', payload);
+            setMsg('✅ Composite Exam & Master Question Paper created successfully!');
             setShowMergeModal(false);
             setMergeForm({ title: '', examType: 'NEET', paperIds: [], instructions: '', start_time: '', end_time: '', duration_minutes: 180, allowedStudents: '', shuffleQuestions: false });
             fetchExams();
@@ -805,6 +819,16 @@ export default function ExamManagement() {
         setLoading(false);
     };
 
+    const handleToggleOnlineVisibility = async (examId) => {
+        try {
+            const res = await api.put(`/api/exams/${examId}/toggle-online-visibility`);
+            setMsg(res.data.msg || 'Online exam visibility updated');
+            fetchExams();
+        } catch (e) {
+            setMsg(e.response?.data?.msg || 'Failed to toggle visibility');
+        }
+    };
+
     const handleDeleteExam = async (examId) => {
         if (!window.confirm('Are you sure you want to delete this exam? This will remove all student sessions as well.')) return;
         try {
@@ -818,7 +842,8 @@ export default function ExamManagement() {
 
     const handlePrint = async (exam) => {
         try {
-            const res = await api.get(`/api/exams/admin/${exam._id}`);
+            const examId = exam._id || exam.id;
+            const res = await api.get(`/api/exams/admin/${examId}`);
             const data = res.data;
 
             const defaultOffline = `General Instructions for Offline Exam:
@@ -842,9 +867,9 @@ export default function ExamManagement() {
     };
 
     const copyShareLink = (examId) => {
-        const url = `${window.location.origin}/exam`;
+        const url = `${window.location.origin}/exam/${examId}/instructions`;
         navigator.clipboard.writeText(url);
-        setMsg('✅ Permanent Static Exam Portal link copied to clipboard!');
+        setMsg('✅ Exam link copied to clipboard!');
     };
 
     if (printExamDetail) {
@@ -863,9 +888,51 @@ export default function ExamManagement() {
         <div style={styles.container}>
             <div style={styles.header}>
                 <h2 style={styles.title}>📋 Exam Management</h2>
-                <button style={styles.primaryBtn} onClick={() => setShowMergeModal(true)}>
-                    ⊕ Generate Composite Exam
-                </button>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    <button
+                        onClick={() => {
+                            const url = `${window.location.origin}/lab-exam`;
+                            navigator.clipboard.writeText(url);
+                            setMsg(`✅ Permanent Student Lab Portal link copied: ${url}`);
+                        }}
+                        style={{
+                            padding: '10px 18px',
+                            background: '#071328',
+                            color: '#fbbf24',
+                            border: '1.5px solid #f59e0b',
+                            borderRadius: '12px',
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}
+                    >
+                        <span>🖥️</span>
+                        <span>Copy Student Lab Link (/lab-exam)</span>
+                    </button>
+                    <button style={styles.primaryBtn} onClick={() => setShowMergeModal(true)}>
+                        ⊕ Generate Composite Exam
+                    </button>
+                    <button
+                        onClick={() => navigate('/admin/dashboard')}
+                        style={{
+                            padding: '10px 20px',
+                            background: '#f1f5f9',
+                            color: '#334155',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '12px',
+                            fontWeight: 900,
+                            fontSize: '12px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        ← Back
+                    </button>
+                </div>
             </div>
 
             {msg && <div style={styles.msgBar}>{msg} <button style={styles.closeMsg} onClick={() => setMsg('')}>✕</button></div>}
@@ -886,45 +953,78 @@ export default function ExamManagement() {
                         <div style={styles.empty}>No online exams created yet. Click "Generate Composite Exam" to start.</div>
                     ) : (
                         <div style={styles.examGrid}>
-                            {exams.map(exam => (
-                                <div key={exam._id} style={styles.examCard}>
-                                    <div style={styles.examCardHeader}>
-                                        <span style={styles.examType}>{exam.examType}</span>
-                                        <span style={{ ...styles.statusBadge, background: STATUS_COLORS[exam.status] }}>
-                                            {exam.status.toUpperCase()}
-                                        </span>
-                                    </div>
-                                    <h3 style={styles.examCardTitle}>{exam.title}</h3>
-                                    <div style={styles.examMeta}>
-                                        <span>📝 {exam.questions?.length || 0} Questions</span>
-                                        <span>⏱ {exam.duration_minutes} min</span>
-                                    </div>
-                                    {exam.start_time && (
-                                        <div style={styles.examTime}>
-                                            🕐 {new Date(exam.start_time).toLocaleString()} → {exam.end_time ? new Date(exam.end_time).toLocaleString() : 'Open'}
+                            {exams.map(exam => {
+                                const isOnlineActive = exam.isOnlineVisible !== false && exam.status !== 'draft' && exam.status !== 'archived';
+                                return (
+                                    <div key={exam._id} style={styles.examCard}>
+                                        <div style={styles.examCardHeader}>
+                                            <span style={styles.examType}>{exam.examType}</span>
+                                            <span style={{ ...styles.statusBadge, background: STATUS_COLORS[exam.status] || '#16a34a' }}>
+                                                {exam.status.toUpperCase()}
+                                            </span>
                                         </div>
-                                    )}
-                                    {['scheduled', 'live'].includes(exam.status) && (
-                                        <ExamCountdown 
-                                            startTime={exam.start_time} 
-                                            endTime={exam.end_time} 
-                                            status={exam.status}
-                                            onZero={fetchExams}
-                                        />
-                                    )}
-                                    <div style={{ ...styles.examActions, marginTop: 12 }}>
-                                        <button style={styles.actionBtn} onClick={() => openConfigModal(exam)}>⚙️ Configure</button>
-                                        <button style={styles.actionBtn} onClick={() => copyShareLink(exam._id)}>🔗 Share Link</button>
-                                        <button style={{ ...styles.actionBtn, background: '#7c3aed' }}
-                                            onClick={() => window.open(`/admin/dashboard/results?examId=${exam._id}`, '_self')}>
-                                            📊 Results
-                                        </button>
-                                        <button style={{ ...styles.actionBtn, background: '#ef4444' }} onClick={() => handleDeleteExam(exam._id)}>
-                                            Delete
-                                        </button>
+                                        <h3 style={styles.examCardTitle}>{exam.title}</h3>
+                                        <div style={styles.examMeta}>
+                                            <span>📝 {exam.questions?.length || 0} Questions</span>
+                                            <span>⏱ {exam.duration_minutes} min</span>
+                                        </div>
+                                        {exam.start_time && (
+                                            <div style={styles.examTime}>
+                                                🕐 {new Date(exam.start_time).toLocaleString()} → {exam.end_time ? new Date(exam.end_time).toLocaleString() : 'Open'}
+                                            </div>
+                                        )}
+
+                                        {/* Quick Online Exam Visibility Switch */}
+                                        <div style={{ marginTop: 10, marginBottom: 4 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleOnlineVisibility(exam._id)}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '11px',
+                                                    fontWeight: 800,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'space-between',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    border: isOnlineActive ? '1.5px solid #16a34a' : '1.5px solid #94a3b8',
+                                                    background: isOnlineActive ? '#f0fdf4' : '#f8fafc',
+                                                    color: isOnlineActive ? '#15803d' : '#64748b'
+                                                }}
+                                                title="Click to toggle visibility on student online CBT portal"
+                                            >
+                                                <span>{isOnlineActive ? '🟢 Visible in Online Exam' : '⚪ Hidden from Students'}</span>
+                                                <span style={{ textDecoration: 'underline', fontSize: '10px' }}>
+                                                    {isOnlineActive ? 'Hide' : 'Enable'}
+                                                </span>
+                                            </button>
+                                        </div>
+
+                                        {['scheduled', 'live'].includes(exam.status) && (
+                                            <ExamCountdown 
+                                                startTime={exam.start_time} 
+                                                endTime={exam.end_time} 
+                                                status={exam.status}
+                                                onZero={fetchExams}
+                                            />
+                                        )}
+                                        <div style={{ ...styles.examActions, marginTop: 10 }}>
+                                            <button style={styles.actionBtn} onClick={() => openConfigModal(exam)}>⚙️ Configure</button>
+                                            <button style={styles.actionBtn} onClick={() => copyShareLink(exam._id)}>🔗 Link</button>
+                                            <button style={{ ...styles.actionBtn, background: '#7c3aed' }}
+                                                onClick={() => window.open(`/admin/dashboard/results?examId=${exam._id}`, '_self')}>
+                                                📊 Results
+                                            </button>
+                                            <button style={{ ...styles.actionBtn, background: '#ef4444' }} onClick={() => handleDeleteExam(exam._id)}>
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -1019,10 +1119,8 @@ export default function ExamManagement() {
                             <label style={styles.label}>
                                 Select Papers ({mergeForm.paperIds.length} selected)
                             </label>
-                            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                                {mergeForm.examType === 'NEET' && 'Required: Physics, Chemistry, Botany, Zoology (50 Qs each)'}
-                                {mergeForm.examType === 'JEE' && 'Required: Physics, Chemistry, Mathematics (25 Qs each: 20 MCQs + 5 Numerical)'}
-                                {mergeForm.examType === 'CET' && 'Required: Physics, Chemistry, Mathematics, Biology (60 Qs each)'}
+                            <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 8, fontWeight: 500 }}>
+                                Merge any 2, 3, 4 or more subject papers into a single Grand Composite Exam & A4 Question Paper with continuous/section numbering and PQRS sets support (e.g. NEET: Physics, Chemistry, Botany, Zoology | CET: Physics, Chemistry, Maths, Biology | JEE: Physics, Chemistry, Maths).
                             </div>
 
                             {/* Grand Test Papers Section */}

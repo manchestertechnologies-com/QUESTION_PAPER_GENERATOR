@@ -16,8 +16,10 @@ import api from '../../api';
 import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
-import { optionLabel, getQuestionCorrectAnswerLabel } from '../../utils/sanitize';
-import { triggerPrintMode, PrintableAnswerKey, PrintableSolutionKey } from '../../components/PrintableKeys';
+import A4AnswerKey from '../../components/A4AnswerKey';
+import A4SolutionKey from '../../components/A4SolutionKey';
+import ResizableDiagram from '../../components/ResizableDiagram';
+import { optionLabel, getResolvedAnswerLabel } from '../../utils/sanitize';
 
 // Helper component to render complete options for a question
 const QuestionOptionsDisplay = ({ options = [] }) => {
@@ -707,12 +709,11 @@ const AssignmentGenerator = () => {
 
                                                 {/* Diagram */}
                                                 {diagramImg && (
-                                                    <div className="mt-2.5 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-1 shadow-xs">
-                                                        <img
+                                                    <div className="mt-2.5 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-2 shadow-xs">
+                                                        <ResizableDiagram
                                                             src={diagramImg}
                                                             alt="Diagram"
-                                                            className="max-h-36 object-contain mx-auto"
-                                                            onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                            maxWidth="100%"
                                                         />
                                                     </div>
                                                 )}
@@ -788,7 +789,7 @@ const AssignmentGenerator = () => {
                                                     </span>
                                                     {q.answer && (
                                                         <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                                                            Answer: ({q.answer})
+                                                            Answer: ({getResolvedAnswerLabel(q)})
                                                         </span>
                                                     )}
                                                 </div>
@@ -798,12 +799,11 @@ const AssignmentGenerator = () => {
                                                 </div>
 
                                                 {diagramImg && (
-                                                    <div className="mt-2 max-w-xs border border-gray-200 rounded-xl overflow-hidden bg-white p-1">
-                                                        <img
+                                                    <div className="mt-2 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-2">
+                                                        <ResizableDiagram
                                                             src={diagramImg}
                                                             alt="Diagram"
-                                                            className="max-h-32 object-contain mx-auto"
-                                                            onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                            maxWidth="100%"
                                                         />
                                                     </div>
                                                 )}
@@ -851,128 +851,27 @@ const AssignmentGenerator = () => {
                 </div>
             )}
 
-            {/* ── MODAL: ANSWER KEY ── */}
+            {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showAnswerKeyModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Official Key</span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    {title || `${subject} Assignment`} Answer Key
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('answer_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Answer Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAnswerKeyModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                                {visibleQs.map((q, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center text-xs font-bold hover:border-navy transition"
-                                    >
-                                        <span className="text-gray-500">Q.{startQNo + idx}</span>
-                                        <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
-                                            {getQuestionCorrectAnswerLabel(q)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowAnswerKeyModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4AnswerKey
+                    paper={{ title: title || `${subject} Assignment`, subject, classes: [selectedClass] }}
+                    questions={visibleQs}
+                    startQNo={startQNo}
+                    setName={setName}
+                    onClose={() => setShowAnswerKeyModal(false)}
+                />
             )}
 
-            {/* ── MODAL: SOLUTIONS ── */}
+            {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showSolutionsModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Solutions Guide</span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    {title || `${subject} Assignment`} Step-by-Step Solutions
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('solution_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Solution Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSolutionsModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto space-y-4">
-                            {visibleQs.map((q, idx) => (
-                                <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 space-y-2">
-                                    <div className="flex justify-between items-center border-b pb-2">
-                                        <span className="font-black text-sm text-navy">Question {startQNo + idx}</span>
-                                        <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
-                                            Correct Answer: Option ({getQuestionCorrectAnswerLabel(q)})
-                                        </span>
-                                    </div>
-                                    <div className="text-xs font-normal text-gray-800">
-                                        <MathRenderer text={q.questionText || q.question || ''} />
-                                    </div>
-                                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
-                                        <span className="font-bold text-navy block mb-1">Explanation:</span>
-                                        {q.solutionText ? (
-                                            <MathRenderer text={q.solutionText} />
-                                        ) : (
-                                            'Detailed step-by-step solution available.'
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowSolutionsModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close Solutions
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4SolutionKey
+                    paper={{ title: title || `${subject} Assignment`, subject, classes: [selectedClass] }}
+                    questions={visibleQs}
+                    startQNo={startQNo}
+                    setName={setName}
+                    onClose={() => setShowSolutionsModal(false)}
+                />
             )}
-
 
             {/* ── MODAL: ANALYSIS ── */}
             <PaperAnalysisModal

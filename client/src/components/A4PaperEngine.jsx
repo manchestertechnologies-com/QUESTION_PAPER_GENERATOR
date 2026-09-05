@@ -4,10 +4,10 @@
  * Professional High-Fidelity A4 Assessment & Assignment Engine
  *
  * Provides:
- *  - 100% Continuous Flow-Based Layout with Zero Space Wastage
- *  - Native @media print pagination with break-inside: avoid on questions
- *  - Single-Column & Double-Column (NEET/CET/JEE Exam standard) layouts
- *  - True Non-Flow Background Watermark Layer (position: absolute/fixed, z-index: 0)
+ *  - Continuous 100% Capacity A4 Document Flow (no artificial early cuts or empty page gaps)
+ *  - Native @media print pagination with break-inside: avoid on every question block
+ *  - 1-Column and 2-Column (NEET/CET/JEE Exam standard) layouts
+ *  - Instructions Cover Page support (optional / standard for large tests)
  *  - Zoom & View controls
  */
 import React, { useMemo } from 'react';
@@ -24,6 +24,7 @@ export default function A4PaperEngine({
     zoom = 100,
     fitMode = 'actual',
     singlePageMode = false,
+    onDiagramResize,
 }) {
     const questions = useMemo(() => paper?.questions || [], [paper]);
     const classes = useMemo(() => paper?.classes || [], [paper]);
@@ -33,6 +34,7 @@ export default function A4PaperEngine({
     }, [paper, questions, classes]);
 
     const isAssignmentPaper = isAssignment || paper?.category === 'assignment' || (paper?.title && /assignment/i.test(paper.title));
+    const showCover = !isAssignmentPaper && settings.showCoverPage === true;
     const startQNo = settings.startQNo || 1;
     const endQNo = settings.endQNo ?? (startQNo + questions.length - 1);
     const visibleCount = Math.max(0, endQNo - startQNo + 1);
@@ -40,7 +42,6 @@ export default function A4PaperEngine({
 
     const zoomScale = (zoom || 100) / 100;
     const isTwoCol = settings.columns === 2;
-    const watermarkText = activeTemplate?.watermarkText || settings?.watermarkText || paper?.watermarkText || '';
 
     return (
         <div className="a4-engine-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -57,18 +58,40 @@ export default function A4PaperEngine({
                     maxWidth: '100%',
                 }}
             >
-                {/* ── Unified Flow Question Paper Sheet ── */}
-                <div className="a4-sheet-page a4-questions-page">
-                    
-                    {/* True Background Watermark Layer (Independent of Document Flow) */}
-                    {watermarkText && (
-                        <div className="a4-watermark-layer">
-                            <div className="a4-watermark-text">
-                                {watermarkText}
-                            </div>
-                        </div>
-                    )}
-
+                {/* ── Single Unified Question Paper Sheet ── */}
+                <div className="a4-sheet-page a4-questions-page" style={{ position: 'relative' }}>
+                    {/* Official Manchester PU College Circular Emblem Watermark - Fixed across all pages */}
+                    <div 
+                        className="a4-watermark-wrapper"
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            width: '100vw',
+                            height: '100vh',
+                            pointerEvents: 'none',
+                            zIndex: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                        }}
+                    >
+                        <img 
+                            src="/ManchesterLogo.jpeg" 
+                            alt="Manchester PU College Crest Watermark" 
+                            className="a4-watermark-logo"
+                            style={{
+                                width: '380px',
+                                height: '380px',
+                                objectFit: 'contain',
+                                borderRadius: '50%',
+                                opacity: 0.055,
+                                filter: 'grayscale(100%)',
+                                display: 'block',
+                                pointerEvents: 'none',
+                            }}
+                        />
+                    </div>
                     <div
                         className="a4-page-content"
                         style={{
@@ -76,7 +99,7 @@ export default function A4PaperEngine({
                             fontSize: settings.fontSize,
                             lineHeight: settings.lineHeight,
                             position: 'relative',
-                            zIndex: 1,
+                            zIndex: 1
                         }}
                     >
                         {/* Primary Header at top of Page 1 */}
@@ -89,17 +112,17 @@ export default function A4PaperEngine({
                                 totalMarks={totalMarks}
                                 templateUrl={activeTemplate?.fileUrl}
                                 isAssignment={isAssignment}
+                                setName={paper?.setName || 'P'}
                             />
                         </div>
 
-                        {/* ── Questions Flow (1 Column or 2 Columns) ── */}
+                        {/* ── Questions Flow Immediately On Page 1 (1 Column or 2 Columns) ── */}
                         <div
                             className="a4-questions-flow"
                             style={isTwoCol ? {
                                 columnCount: 2,
-                                columnGap: settings.columnGap || '18px',
-                                columnRule: '1px solid #e5e7eb',
-                                columnFill: 'balance',
+                                columnGap: settings.columnGap || '20px',
+                                columnRule: '1px solid #e0e0e0',
                             } : {}}
                         >
                             {visibleQuestions.map((q, idx) => {
@@ -109,7 +132,10 @@ export default function A4PaperEngine({
                                         key={q._id || displayNum}
                                         className="question-print-item"
                                         style={{
-                                            marginBottom: settings.questionSpacing || '8px',
+                                            breakInside: 'avoid',
+                                            WebkitColumnBreakInside: 'avoid',
+                                            pageBreakInside: 'avoid',
+                                            marginBottom: settings.questionSpacing || (isTwoCol ? '8px' : '10px'),
                                         }}
                                     >
                                         <QuestionBlock
@@ -117,13 +143,14 @@ export default function A4PaperEngine({
                                             displayNum={displayNum}
                                             classes={classes}
                                             showMarks={settings.showMarks}
-                                            singleColMode={isTwoCol}
+                                            singleColMode={!isTwoCol}
+                                            isTwoCol={isTwoCol}
                                             fontSize={settings.fontSize}
                                             lineHeight={settings.lineHeight}
                                             formatMarks={formatMarks}
                                             extraStyle={{ marginBottom: '0px' }}
                                             diagramMaxHeight={settings.diagramMaxHeight}
-                                            settings={settings}
+                                            onDiagramResize={onDiagramResize}
                                         />
                                     </div>
                                 );
@@ -149,99 +176,82 @@ export default function A4PaperEngine({
                     margin: 0 auto 28px auto;
                     box-sizing: border-box;
                     position: relative;
-                    overflow: hidden;
-                }
-                .a4-watermark-layer,
-                .pdf-watermark-layer {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100vw;
-                    height: 100vh;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    pointer-events: none;
-                    user-select: none;
-                    z-index: 0;
-                    overflow: hidden;
-                    opacity: 0.045;
-                    filter: grayscale(100%);
-                    transform: rotate(-30deg) scale(0.85);
-                }
-                .a4-watermark-text {
-                    font-size: 5rem;
-                    font-weight: 900;
-                    color: rgba(0, 0, 0, 0.9);
-                    text-transform: uppercase;
-                    letter-spacing: 0.18em;
-                    white-space: nowrap;
-                    text-align: center;
-                    line-height: 1;
                 }
                 .a4-cover-page {
                     page-break-after: always;
                     break-after: page;
-                    margin-bottom: 32px;
+                    margin-bottom: 24px;
                 }
                 .a4-page-content {
-                    padding: ${settings.marginTop || '8mm'} ${settings.marginRight || '10mm'} ${settings.marginBottom || '8mm'} ${settings.marginLeft || '10mm'};
+                    padding: ${settings.marginTop || '10mm'} ${settings.marginRight || '12mm'} ${settings.marginBottom || '10mm'} ${settings.marginLeft || '12mm'};
                     box-sizing: border-box;
                     color: #000000;
                     position: relative;
                     z-index: 1;
                 }
+                .a4-subtle-running-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-bottom: 1.5px solid #000;
+                    padding-bottom: 4px;
+                    margin-bottom: 10px;
+                }
+                .a4-page-bottom-marker {
+                    margin-top: 16px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    border-top: 1.5px solid #000;
+                    padding-top: 4px;
+                    font-size: 11px;
+                    color: #222;
+                }
                 .a4-end-paper-marker {
                     text-align: center;
                     font-weight: 700;
-                    font-size: 11px;
-                    padding: 5px 0;
-                    border-top: 1px solid #cbd5e1;
-                    margin-top: 8px;
+                    font-size: 12px;
+                    padding: 6px 0;
+                    border-top: 1px solid #bbb;
+                    margin-top: 12px;
                     break-inside: avoid;
                     page-break-inside: avoid;
-                    color: #475569;
                 }
-                /* Dynamic fluid flow for questions */
                 .question-print-item {
                     display: block !important;
                     width: 100% !important;
-                    break-inside: auto !important;
-                    page-break-inside: auto !important;
-                    -webkit-column-break-inside: auto !important;
-                    orphans: 2;
-                    widows: 2;
-                    vertical-align: top;
                     box-sizing: border-box;
                     position: relative;
                     z-index: 1;
+                    orphans: 2;
+                    widows: 2;
                 }
-                /* Atomic sub-elements protection against page slicing */
-                .optRow,
-                .option-item,
-                [data-option-row],
-                .assert-row,
-                [data-assert-block],
-                .match-table,
-                tr,
-                thead,
-                tbody,
-                .diagram-container,
-                .resizable-diagram-wrap,
-                .katex-display {
+                .math-renderer.inline-math {
+                    display: inline !important;
+                }
+                .math-renderer.block-math,
+                .math-renderer:has(.resizable-diagram-wrap) {
+                    display: block !important;
+                }
+                .resizable-diagram-wrap {
+                    width: 100% !important;
+                    text-align: center !important;
+                    margin: 2px 0 !important;
                     break-inside: avoid !important;
                     page-break-inside: avoid !important;
-                    -webkit-column-break-inside: avoid !important;
+                    position: relative;
+                    z-index: 2;
                 }
-                .diagram-container,
-                .resizable-diagram-wrap,
-                .match-table {
-                    background: #ffffff !important;
+                .resizable-diagram-wrap img {
+                    max-width: 100% !important;
+                    height: auto !important;
+                    background-color: transparent !important;
+                    mix-blend-mode: multiply !important;
                     position: relative !important;
                     z-index: 2 !important;
                 }
-                .math-renderer {
-                    display: inline !important;
+                .diagram-resize-toolbar {
+                    display: flex !important;
                 }
                 .katex-display {
                     display: inline-block !important;
@@ -257,13 +267,17 @@ export default function A4PaperEngine({
                 }
                 .katex {
                     text-rendering: auto !important;
-                    font-size: 1.0em !important;
+                    font-size: 1em !important;
                 }
 
                 @media print {
+                    .diagram-resize-toolbar,
+                    .no-print {
+                        display: none !important;
+                    }
                     @page {
                         size: A4 portrait;
-                        margin: 8mm 10mm 8mm 10mm;
+                        margin: 10mm 12mm 10mm 12mm;
                     }
                     html, body {
                         background: #fff !important;
@@ -271,84 +285,163 @@ export default function A4PaperEngine({
                         padding: 0 !important;
                         width: 100% !important;
                     }
-
-                    .no-print,
-                    .no-print * {
-                        display: none !important;
-                    }
-
                     body * {
-                        visibility: hidden;
+                        visibility: hidden !important;
+                    }
+                    body {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
 
-                    .a4-print-document,
-                    .a4-print-document * {
+                    /* Watermark in print: Fixed viewport background layer on every page */
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-watermark-wrapper,
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-watermark-wrapper * {
                         visibility: visible !important;
                     }
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-watermark-wrapper {
+                        position: fixed !important;
+                        top: 0 !important;
+                        left: 0 !important;
+                        right: 0 !important;
+                        bottom: 0 !important;
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        display: flex !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                        pointer-events: none !important;
+                        z-index: 0 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-watermark-logo {
+                        width: 340px !important;
+                        height: 340px !important;
+                        object-fit: contain !important;
+                        border-radius: 50% !important;
+                        opacity: 0.045 !important;
+                        filter: grayscale(100%) !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        pointer-events: none !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
 
-                    .a4-print-document {
+                    /* ── Target 1: Answer Key Print ── */
+                    body.printing-answer-key .a4-engine-wrapper,
+                    body.printing-answer-key .a4-print-document,
+                    body.printing-answer-key .paper-renderer-wrapper,
+                    body.printing-solution-key .a4-engine-wrapper,
+                    body.printing-solution-key .a4-print-document,
+                    body.printing-solution-key .paper-renderer-wrapper {
+                        display: none !important;
+                        height: 0 !important;
+                        max-height: 0 !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow: hidden !important;
+                    }
+
+                    body.printing-answer-key #print-target-answer-key,
+                    body.printing-answer-key #print-target-answer-key * {
+                        visibility: visible !important;
+                    }
+                    body.printing-answer-key #print-target-answer-key {
                         position: static !important;
+                        top: auto !important;
+                        left: auto !important;
+                        width: 100% !important;
+                        display: block !important;
+                        overflow: visible !important;
+                    }
+
+                    /* ── Target 2: Solution Key Print ── */
+                    body.printing-solution-key #print-target-solution-key,
+                    body.printing-solution-key #print-target-solution-key * {
+                        visibility: visible !important;
+                    }
+                    body.printing-solution-key #print-target-solution-key {
+                        position: static !important;
+                        top: auto !important;
+                        left: auto !important;
+                        width: 100% !important;
+                        display: block !important;
+                        overflow: visible !important;
+                    }
+
+                    /* ── Target 3: Question Paper Print (Default) ── */
+                    body:not(.printing-answer-key) .a4-answer-key-modal,
+                    body:not(.printing-solution-key) .a4-solution-key-modal {
+                        display: none !important;
+                    }
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-print-document,
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-print-document * {
+                        visibility: visible !important;
+                    }
+                    body:not(.printing-answer-key):not(.printing-solution-key) .a4-print-document {
+                        position: absolute !important;
+                        top: 0 !important;
+                        left: 0 !important;
                         width: 100% !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         transform: none !important;
+                        overflow: visible !important;
                     }
 
                     .a4-sheet-page {
                         box-shadow: none !important;
                         border: none !important;
-                        margin: 0 auto !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
                         width: 100% !important;
                         min-height: auto !important;
-                        background: transparent !important;
-                        page-break-after: auto !important;
-                        break-after: auto !important;
+                        height: auto !important;
+                        overflow: visible !important;
                     }
-
-                    .a4-watermark-layer,
-                    .pdf-watermark-layer {
-                        position: fixed !important;
-                        top: 0 !important;
-                        left: 0 !important;
-                        width: 100vw !important;
-                        height: 100vh !important;
-                        z-index: 0 !important;
-                        display: flex !important;
-                        align-items: center !important;
-                        justify-content: center !important;
-                        opacity: 0.045 !important;
-                        filter: grayscale(100%) !important;
-                        transform: rotate(-30deg) scale(0.85) !important;
-                        pointer-events: none !important;
+                    .a4-questions-page {
+                        overflow: visible !important;
                     }
-
+                    .a4-cover-page {
+                        page-break-after: always !important;
+                        break-after: page !important;
+                    }
                     .a4-page-content {
                         padding: 0 !important;
+                        overflow: visible !important;
+                        position: relative !important;
+                        z-index: 1 !important;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
+                    .resizable-diagram-wrap {
+                        margin: 2px auto !important;
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                    }
+                    .resizable-diagram-wrap img {
+                        box-shadow: none !important;
+                        outline: none !important;
+                        border: none !important;
+                        background-color: transparent !important;
+                        mix-blend-mode: multiply !important;
+                        position: relative !important;
+                        z-index: 2 !important;
                     }
                     .question-print-item {
                         display: block !important;
                         width: 100% !important;
                         break-inside: auto !important;
-                        page-break-inside: auto !important;
-                        -webkit-column-break-inside: auto !important;
                         orphans: 2 !important;
                         widows: 2 !important;
+                        position: relative !important;
+                        z-index: 1 !important;
                     }
-                    .optRow,
-                    .option-item,
-                    [data-option-row],
-                    .assert-row,
-                    [data-assert-block],
-                    .match-table,
-                    tr,
-                    thead,
-                    tbody,
-                    .diagram-container,
-                    .resizable-diagram-wrap,
-                    .katex-display {
-                        break-inside: avoid !important;
-                        page-break-inside: avoid !important;
-                        -webkit-column-break-inside: avoid !important;
+                    .a4-questions-flow {
+                        orphans: 2 !important;
+                        widows: 2 !important;
                     }
                 }
             `}</style>

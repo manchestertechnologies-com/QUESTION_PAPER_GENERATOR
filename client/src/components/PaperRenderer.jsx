@@ -14,7 +14,7 @@ import React, { useState, useMemo } from 'react';
 import A4PaperEngine from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
 import { optionLabel } from '../utils/sanitize';
-import { triggerPrintMode, A4AnswerKeySheet, A4SolutionKeySheet } from './PrintableKeys';
+import { generatePaperSet } from '../utils/pqrsGenerator';
 
 // ─── Marks helpers ────────────────────────────────────────────────────────────
 export function formatMarks(type = '', classes = []) {
@@ -48,10 +48,9 @@ export function calcTotal(questions = [], classes = []) {
 const DEFAULT_SETTINGS = {
     fontFamily: 'Georgia, "Times New Roman", serif',
     fontSize: '13px',
-    lineHeight: '1.45',
-    optionFormat: 'auto',
+    lineHeight: '1.42',
     columns: 1,
-    columnGap: '24px',
+    columnGap: '18px',
     showMarks: false,
     showAnswerKey: false,
     showDifficulty: false,
@@ -60,13 +59,13 @@ const DEFAULT_SETTINGS = {
     endQNo: null,
     pageSize: 'A4',
     orientation: 'portrait',
-    marginTop: '15mm',
-    marginBottom: '15mm',
-    marginLeft: '18mm',
-    marginRight: '18mm',
-    questionSpacing: '14px',
-    optionSpacing: '4px',
-    diagramMaxHeight: '150px',
+    marginTop: '10mm',
+    marginBottom: '10mm',
+    marginLeft: '12mm',
+    marginRight: '12mm',
+    questionSpacing: '8px',
+    optionSpacing: '2px',
+    diagramMaxHeight: '180px',
 };
 
 // ─── Settings / Alignment Panel ───────────────────────────────────────────────
@@ -101,10 +100,10 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                 {/* ── Spacing & Layout ── */}
                 <SettingField label="Question Spacing">
                     <select style={selectStyle} value={settings.questionSpacing} onChange={e => update('questionSpacing', e.target.value)}>
-                        <option value="10px">Compact (10px)</option>
-                        <option value="14px">Standard (14px)</option>
-                        <option value="18px">Relaxed (18px)</option>
-                        <option value="24px">Wide (24px)</option>
+                        <option value="8px">Compact (8px)</option>
+                        <option value="10px">Standard (10px - Recommended)</option>
+                        <option value="14px">Relaxed (14px)</option>
+                        <option value="18px">Wide (18px)</option>
                     </select>
                 </SettingField>
 
@@ -117,10 +116,10 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
 
                 <SettingField label="Diagram Max Height">
                     <select style={selectStyle} value={settings.diagramMaxHeight} onChange={e => update('diagramMaxHeight', e.target.value)}>
-                        <option value="120px">Small (120px)</option>
-                        <option value="150px">Standard (150px)</option>
-                        <option value="180px">Large (180px)</option>
-                        <option value="220px">Extra Large (220px)</option>
+                        <option value="200px">Medium (200px)</option>
+                        <option value="260px">Standard / Clear (260px - Recommended)</option>
+                        <option value="300px">Large (300px)</option>
+                        <option value="350px">Extra Large (350px)</option>
                     </select>
                 </SettingField>
 
@@ -155,15 +154,6 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                     <select style={selectStyle} value={settings.showMarks ? 'yes' : 'no'} onChange={e => update('showMarks', e.target.value === 'yes')}>
                         <option value="no">Hidden (Standard)</option>
                         <option value="yes">Display Marks</option>
-                    </select>
-                </SettingField>
-
-                <SettingField label="Option Labeling Style">
-                    <select style={selectStyle} value={settings.optionFormat || 'auto'} onChange={e => update('optionFormat', e.target.value)}>
-                        <option value="auto">Auto (Exam Standard)</option>
-                        <option value="1, 2, 3, 4">1, 2, 3, 4 (Numeric)</option>
-                        <option value="A, B, C, D">A, B, C, D (Letters)</option>
-                        <option value="(a), (b), (c), (d)">(a), (b), (c), (d) (Small Letters)</option>
                     </select>
                 </SettingField>
             </div>
@@ -243,7 +233,7 @@ export function InstructionCoverPage({ paper, questions = [], duration, totalMar
 }
 
 // ─── Paper Header ─────────────────────────────────────────────────────────────
-export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false }) {
+export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false, setName = 'P' }) {
     // Clean assignment title
     let displayTitle = title;
     if (isAssignment) {
@@ -258,10 +248,12 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
         }
     }
 
+    const currentSet = (setName || 'P').toUpperCase();
+
     return (
-        <div style={{ marginBottom: '12px' }}>
-            {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) && (
-                <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '2px solid #000', paddingBottom: '4px' }}>
+        <div style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
+            {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) ? (
+                <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '1.5px solid #000', paddingBottom: '4px' }}>
                     <img
                         src={templateUrl}
                         alt="Header"
@@ -269,31 +261,52 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
                         style={{ maxWidth: '100%', maxHeight: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
                     />
                 </div>
-            )}
-            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-                <div style={{ fontSize: '18px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 2px 0', color: '#000' }}>
-                    {displayTitle || (isAssignment ? `${subject} ASSIGNMENT` : (title || `${subject} Assessment`))}
-                </div>
-                {!isAssignment && (
-                    <div style={{ fontSize: '12px', color: '#222', fontWeight: 600 }}>
-                        Subject: {subject}{classes && classes.length > 0 ? ` | Class: ${classes.join(', ')}` : ''}
+            ) : (
+                /* Official Manchester PU College Davanagere Header Crest */
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '8px' }}>
+                    <div style={{ width: '68px', height: '68px', flexShrink: 0 }}>
+                        <img 
+                            src="/ManchesterLogo.jpeg" 
+                            alt="Manchester PU College" 
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
                     </div>
-                )}
-            </div>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#000', lineHeight: 1.1 }}>
+                            Manchester PU College
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#333', marginTop: '2px' }}>
+                            DAVANAGERE • THE LAND OF OPPORTUNITY
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#000', marginTop: '4px' }}>
+                            {displayTitle || (isAssignment ? `${subject} ASSIGNMENT` : (title || `${subject} Examination`))}
+                        </div>
+                    </div>
+                    {!isAssignment && (
+                        <div style={{ width: '68px', height: '68px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #000', borderRadius: '4px', padding: '2px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SET</span>
+                            <span style={{ fontSize: '22px', fontWeight: 900, lineHeight: 1 }}>{currentSet}</span>
+                        </div>
+                    )}
+                </div>
+            )}
 
-            {isAssignment ? (
-                /* Pure clean Assignment header without any CET/NEET/JEE/Time/Marks */
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', borderBottom: '2px solid #000', padding: '4px 0', fontWeight: 700, fontSize: '11.5px', marginTop: '4px' }}>
+            {!isAssignment && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#111', fontWeight: 700, borderTop: '1px solid #777', paddingTop: '4px', marginTop: '4px' }}>
+                    <span>Subject: <strong>{subject || 'General'}</strong></span>
+                    {classes && classes.length > 0 && <span>Class: <strong>PUC {classes.join(', ')}</strong></span>}
+                    <span>Time: <strong>{duration || '3 Hours'}</strong></span>
+                    <span>Max Marks: <strong>{totalMarks}</strong></span>
+                </div>
+            )}
+
+            {isAssignment && (
+                /* Pure clean Assignment header */
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #777', paddingTop: '4px', fontWeight: 700, fontSize: '11.5px', marginTop: '4px' }}>
                     <span>Subject: <strong>{subject || 'General'}</strong></span>
                     <span>Student Name: _____________________</span>
                     <span>Roll No: ________</span>
                     <span>Date: _________</span>
-                </div>
-            ) : (
-                /* Formal Test Header */
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1.5px solid #000', borderBottom: '2px solid #000', padding: '3px 0', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>
-                    <span>Time: {duration || '3 Hours'}</span>
-                    <span>Max. Marks: {totalMarks}</span>
                 </div>
             )}
         </div>
@@ -305,88 +318,107 @@ export default function PaperRenderer({
     paper,
     activeTemplate,
     isAssignment = false,
+    enableSets = false,
     settings: externalSettings,
     setSettings: externalSetSettings,
     showSettingsPanel = false,
-    docMode: externalDocMode,
-    onDocModeChange,
     onProceedToAlignment,
     onProceedToFinalize,
+    onDiagramResize,
 }) {
     const [internalSettings, setInternalSettings] = useState(DEFAULT_SETTINGS);
     const settings = externalSettings || internalSettings;
     const setSettings = externalSetSettings || setInternalSettings;
 
-    // View mode: 'paper' | 'answer_key' | 'solutions'
-    const [internalDocMode, setInternalDocMode] = useState('paper');
-    const docMode = externalDocMode !== undefined ? externalDocMode : internalDocMode;
-    const setDocMode = (m) => {
-        setInternalDocMode(m);
-        if (onDocModeChange) onDocModeChange(m);
-    };
+    // 4 Sets State (P, Q, R, S) - Opt-in / Admin toggleable
+    const [setsActive, setSetsActive] = useState(enableSets || paper?.enableSets || false);
+    const [activeSet, setActiveSet] = useState(paper?.setName || 'P');
 
     // Preview Controls state
     const [zoom, setZoom] = useState(100);
 
-    const questions = useMemo(() => paper?.questions || [], [paper]);
-    const showCover = !isAssignment && settings.showCoverPage !== false;
+    // Generate active set paper only when sets are active, otherwise return master paper
+    const activePaper = useMemo(() => {
+        if (isAssignment || !paper) return paper;
+        if (!setsActive || activeSet === 'P') return { ...paper, setName: setsActive ? 'P' : '' };
+        return generatePaperSet(paper, activeSet);
+    }, [paper, activeSet, isAssignment, setsActive]);
+
+    const questions = useMemo(() => activePaper?.questions || [], [activePaper]);
 
     const handlePrint = () => {
         window.print();
     };
-
-    const zoomScale = (zoom || 100) / 100;
 
     return (
         <div className="paper-renderer-wrapper w-full flex flex-col items-center">
             
             {/* ── PREVIEW TOOLBAR ── */}
             <div className="sticky top-4 z-40 bg-white/95 backdrop-blur-md px-6 py-3.5 rounded-2xl shadow-xl border-2 border-navy/20 flex flex-wrap items-center justify-between gap-4 mb-6 w-full max-w-5xl no-print">
-                {/* Document Type Switcher (Paper vs Answer Key vs Solutions) */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-300 gap-1">
-                        <button
-                            type="button"
-                            onClick={() => setDocMode('paper')}
-                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
-                                docMode === 'paper' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
-                            }`}
-                        >
-                            <span>📄</span> Question Paper
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setDocMode('answer_key')}
-                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
-                                docMode === 'answer_key' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
-                            }`}
-                        >
-                            <span>🔑</span> Answer Key
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setDocMode('solutions')}
-                            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
-                                docMode === 'solutions' ? 'bg-navy text-gold shadow-sm' : 'text-slate-600 hover:text-navy hover:bg-slate-200/60'
-                            }`}
-                        >
-                            <span>💡</span> Detailed Solutions
-                        </button>
+                {/* 4-Sets Control (P, Q, R, S) */}
+                {!isAssignment && (
+                    <div className="flex items-center gap-2">
+                        {setsActive ? (
+                            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-300">
+                                <span className="text-[10px] font-black text-navy uppercase tracking-wider px-2">Set:</span>
+                                {['P', 'Q', 'R', 'S'].map((s) => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        onClick={() => setActiveSet(s)}
+                                        className={`px-3 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                            activeSet === s
+                                                ? 'bg-navy text-gold shadow-sm scale-105'
+                                                : 'bg-white text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                        title={
+                                            s === 'P' ? 'Set P: Original Order' :
+                                            s === 'Q' ? 'Set Q: Questions Shuffled' :
+                                            s === 'R' ? 'Set R: Options Shuffled' :
+                                            'Set S: Both Questions & Options Shuffled'
+                                        }
+                                    >
+                                        Set {s}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => setSetsActive(false)}
+                                    className="text-slate-400 hover:text-red-500 text-xs px-1.5 py-0.5 rounded cursor-pointer ml-1"
+                                    title="Disable 4-Sets & Return to Standard Paper"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => { setSetsActive(true); setActiveSet('P'); }}
+                                className="bg-slate-100 hover:bg-slate-200 text-navy px-3 py-1.5 rounded-xl font-black text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                                title="Click to generate 4 randomized examination sets (P, Q, R, S)"
+                            >
+                                <span>🎲</span>
+                                <span>Generate 4-Sets (P, Q, R, S)</span>
+                            </button>
+                        )}
                     </div>
+                )}
 
-                    {/* Columns Switcher (Only applicable for Question Paper) */}
-                    {docMode === 'paper' && (
-                        <button
-                            type="button"
-                            onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
-                            className="bg-slate-100 hover:bg-slate-200 text-navy px-3 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
-                        >
-                            <span>{settings.columns === 2 ? '📰 2-Columns' : '📄 1-Column'}</span>
-                        </button>
-                    )}
+                {/* Mode & Columns Switcher */}
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
+                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                    >
+                        <span>{settings.columns === 2 ? '📰 2-Columns (Dense)' : '📄 Single Column'}</span>
+                        <span className="text-[10px] bg-navy text-gold px-1.5 py-0.5 rounded">Switch</span>
+                    </button>
+                    <span className="text-xs font-bold text-gray-500">
+                        {questions.length} Questions
+                    </span>
                 </div>
 
-                {/* View Controls (Zoom, Print/Save PDF) */}
+                {/* View Controls (Zoom, Mode) */}
                 <div className="flex items-center gap-3">
                     <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
                         <button
@@ -413,12 +445,10 @@ export default function PaperRenderer({
                     </div>
 
                     <button
-                        type="button"
                         onClick={handlePrint}
                         className="bg-gold text-navy hover:bg-navy hover:text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                        title="Print or Save active A4 document as PDF"
                     >
-                        <span>🖨</span> Print / Save PDF
+                        <span>🖨</span> Print Set {activeSet}
                     </button>
                 </div>
 
@@ -426,7 +456,6 @@ export default function PaperRenderer({
                 <div className="flex items-center gap-2">
                     {onProceedToAlignment && (
                         <button
-                            type="button"
                             onClick={onProceedToAlignment}
                             className="bg-navy text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
@@ -435,7 +464,6 @@ export default function PaperRenderer({
                     )}
                     {onProceedToFinalize && (
                         <button
-                            type="button"
                             onClick={onProceedToFinalize}
                             className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
@@ -452,161 +480,15 @@ export default function PaperRenderer({
                 </div>
             )}
 
-            {/* ── TRUE A4 PAGES RENDERING (Paper vs Answer Key vs Solutions) ── */}
-            {docMode === 'paper' && (
-                <A4PaperEngine
-                    paper={paper}
-                    activeTemplate={activeTemplate}
-                    isAssignment={isAssignment}
-                    settings={settings}
-                    zoom={zoom}
-                />
-            )}
-
-            {docMode === 'answer_key' && (
-                <div
-                    className="a4-print-document"
-                    style={{
-                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
-                        transformOrigin: 'top center',
-                        transition: 'transform 0.2s ease',
-                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
-                        width: '794px',
-                        maxWidth: '100%',
-                    }}
-                >
-                    <A4AnswerKeySheet
-                        paper={{ ...paper, watermarkText: activeTemplate?.watermarkText || paper?.watermarkText || settings?.watermarkText }}
-                        questions={questions}
-                        startQNo={settings.startQNo || 1}
-                        settings={settings}
-                        institutionName={activeTemplate?.institutionName || 'INSTITUTION EXAMINATION CELL'}
-                    />
-                </div>
-            )}
-
-            {docMode === 'solutions' && (
-                <div
-                    className="a4-print-document"
-                    style={{
-                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
-                        transformOrigin: 'top center',
-                        transition: 'transform 0.2s ease',
-                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
-                        width: '794px',
-                        maxWidth: '100%',
-                    }}
-                >
-                    <A4SolutionKeySheet
-                        paper={{ ...paper, watermarkText: activeTemplate?.watermarkText || paper?.watermarkText || settings?.watermarkText }}
-                        questions={questions}
-                        startQNo={settings.startQNo || 1}
-                        settings={settings}
-                        institutionName={activeTemplate?.institutionName || 'INSTITUTION EXAMINATION CELL'}
-                    />
-                </div>
-            )}
-
-            {/* ── GLOBAL DOCUMENT AND PRINT STYLES ── */}
-            <style>{`
-                .a4-sheet-page {
-                    width: 794px;
-                    min-height: 1123px;
-                    background: #ffffff;
-                    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-                    border: 1px solid #e2e8f0;
-                    margin: 0 auto 28px auto;
-                    box-sizing: border-box;
-                    position: relative;
-                    overflow: hidden;
-                }
-                .a4-watermark-layer {
-                    position: absolute;
-                    inset: 0;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    pointer-events: none;
-                    user-select: none;
-                    z-index: 0;
-                    overflow: hidden;
-                }
-                .a4-watermark-text {
-                    font-size: 4.5rem;
-                    font-weight: 800;
-                    color: rgba(0, 0, 0, 0.035);
-                    transform: rotate(-35deg);
-                    text-transform: uppercase;
-                    letter-spacing: 0.15em;
-                    white-space: nowrap;
-                    text-align: center;
-                    line-height: 1;
-                }
-
-                @media print {
-                    @page {
-                        size: A4 portrait;
-                        margin: 10mm 12mm 10mm 12mm;
-                    }
-                    html, body {
-                        background: #fff !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        width: 100% !important;
-                    }
-
-                    .no-print,
-                    .no-print * {
-                        display: none !important;
-                    }
-
-                    body * {
-                        visibility: hidden;
-                    }
-
-                    .a4-print-document,
-                    .a4-print-document * {
-                        visibility: visible !important;
-                    }
-
-                    .a4-print-document {
-                        position: static !important;
-                        width: 100% !important;
-                        margin: 0 !important;
-                        padding: 0 !important;
-                        transform: none !important;
-                    }
-
-                    .a4-sheet-page {
-                        box-shadow: none !important;
-                        border: none !important;
-                        margin: 0 auto !important;
-                        width: 100% !important;
-                        min-height: auto !important;
-                        background: transparent !important;
-                        page-break-after: auto !important;
-                        break-after: auto !important;
-                    }
-
-                    .a4-watermark-layer {
-                        position: fixed !important;
-                        inset: 0 !important;
-                        top: 0 !important;
-                        left: 0 !important;
-                        width: 100% !important;
-                        height: 100% !important;
-                        z-index: 0 !important;
-                    }
-
-                    .a4-page-content {
-                        padding: 0 !important;
-                    }
-                }
-            `}</style>
+            {/* ── TRUE A4 ENGINE RENDERING ── */}
+            <A4PaperEngine
+                paper={activePaper}
+                activeTemplate={activeTemplate}
+                isAssignment={isAssignment}
+                settings={settings}
+                zoom={zoom}
+                onDiagramResize={onDiagramResize}
+            />
         </div>
     );
 }

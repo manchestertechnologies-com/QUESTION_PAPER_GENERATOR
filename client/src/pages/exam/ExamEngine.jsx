@@ -3,7 +3,37 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
-import MatchTable, { parseMTFFromText } from '../../components/MatchTable';
+import ResizableDiagram from '../../components/ResizableDiagram';
+
+function extractDiagramFromText(rawText, existingImageUrl) {
+    if (!rawText) return { cleanText: '', diagramUrl: existingImageUrl || null };
+    let cleanText = String(rawText);
+    let extractedUrl = existingImageUrl || null;
+
+    const imgMatch1 = cleanText.match(/\{\{IMG::(.*?)\}\}/i);
+    if (imgMatch1) {
+        if (!extractedUrl) extractedUrl = imgMatch1[1].trim();
+        cleanText = cleanText.replace(/(\w+)\s*\{\{IMG::.*?\}\}\s*(\w+)/gi, (m, p1, p2) => p1 + p2);
+        cleanText = cleanText.replace(/\{\{IMG::.*?\}\}/gi, ' ');
+    }
+
+    const imgMatch2 = cleanText.match(/!\[(.*?)\]\((.*?)\)/i);
+    if (imgMatch2) {
+        if (!extractedUrl) extractedUrl = imgMatch2[2].trim();
+        cleanText = cleanText.replace(/(\w+)\s*!\[.*?\]\(.*?\)\s*(\w+)/gi, (m, p1, p2) => p1 + p2);
+        cleanText = cleanText.replace(/!\[.*?\]\(.*?\)/gi, ' ');
+    }
+
+    const imgMatch3 = cleanText.match(/<img[^>]+src=["']([^"']+)["'][^>]*>/i);
+    if (imgMatch3) {
+        if (!extractedUrl) extractedUrl = imgMatch3[1].trim();
+        cleanText = cleanText.replace(/(\w+)\s*<img[^>]*>\s*(\w+)/gi, (m, p1, p2) => p1 + p2);
+        cleanText = cleanText.replace(/<img[^>]*>/gi, ' ');
+    }
+
+    cleanText = cleanText.replace(/\s{2,}/g, ' ').trim();
+    return { cleanText, diagramUrl: extractedUrl };
+}
 
 // ── Palette States ──────────────────────────────────────────────
 // not_visited: #6b7280 (grey)
@@ -59,7 +89,7 @@ export default function ExamEngine() {
         
         try {
             await api.post(`/api/exams/${examId}/malpractice`, {
-                sessionId: session?._id,
+                sessionId: session?._id || session?.id,
                 reason
             });
         } catch (e) {
@@ -420,38 +450,29 @@ export default function ExamEngine() {
                             </div>
                         )}
 
-                        {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (() => {
-                            const isMTF = (Array.isArray(currentQ.matchPairs) && currentQ.matchPairs.length > 0) || parseMTFFromText(currentQ.questionText);
-                            const mtfData = parseMTFFromText(currentQ.questionText);
-                            const diagramImg = currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url;
-
+                        {(() => {
+                            const { cleanText, diagramUrl } = extractDiagramFromText(
+                                currentQ.questionText || currentQ.question,
+                                currentQ.imageUrl || currentQ.image_url
+                            );
                             return (
-                                <div>
-                                    <MathRenderer style={styles.qText} text={mtfData ? mtfData.stem : currentQ.questionText} />
-                                    {currentQ.statements && currentQ.statements.length > 0 && (
-                                        <div style={{ marginTop: '0.75rem', marginBottom: '1rem' }}>
-                                            {currentQ.statements.map((stmt, idx) => (
-                                                <p key={idx} style={{ marginLeft: '1rem', marginBottom: '0.4rem', color: '#1e293b' }}>
-                                                    <strong>Statement {idx + 1}:</strong> {stmt}
-                                                </p>
-                                            ))}
+                                <>
+                                    {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (
+                                        <MathRenderer style={styles.qText} text={cleanText} />
+                                    )}
+                                    {diagramUrl && (
+                                        <div style={{ margin: '12px auto', textAlign: 'center' }}>
+                                            <ResizableDiagram
+                                                src={diagramUrl}
+                                                alt="Question Diagram"
+                                                questionId={currentQ._id || currentQ.id || currentIdx}
+                                                maxWidth="450px"
+                                            />
                                         </div>
                                     )}
-                                    {currentQ.assertion && (
-                                        <div style={{ marginTop: '0.75rem', marginBottom: '1rem', color: '#1e293b' }}>
-                                            <p style={{ marginBottom: '0.4rem' }}><strong>Assertion (A):</strong> {currentQ.assertion}</p>
-                                            <p style={{ marginBottom: '0.4rem' }}><strong>Reason (R):</strong> {currentQ.reason}</p>
-                                        </div>
-                                    )}
-                                    {isMTF && (
-                                        <MatchTable question={currentQ} />
-                                    )}
-                                </div>
+                                </>
                             );
                         })()}
-                        {(currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url) && (
-                            <img src={currentQ.imageUrl || currentQ.diagram || currentQ.image || currentQ.image_url} alt="Question Diagram" style={styles.qImage} />
-                        )}
 
                         {/* Options or Numerical Input */}
                         {currentQ.type === 'NUMERICAL' || currentQ.type === 'numerical' || !currentQ.options || currentQ.options.length === 0 ? (

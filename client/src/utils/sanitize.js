@@ -39,172 +39,242 @@ export function safeHtml(dirty) {
 }
 
 /**
- * Returns the option label for a given index based on question configuration,
- * explicit option labels, or exam type.
- * Preserves exact option format (1, 2, 3, 4 vs A, B, C, D) without unwanted conversions.
- *
+ * Returns the option label for a given index based on exam type.
+ * JEE → A, B, C, D   |   NEET / CET → 1, 2, 3, 4
  * @param {number} idx - 0-based option index
- * @param {string[]|string} classes - array of exam classes on the question (e.g. ['JEE'] or ['NEET'])
- * @param {object} [question] - optional question object
- * @param {object} [settings] - optional paper settings
+ * @param {string[]} classes - array of exam classes on the question (e.g. ['JEE'] or ['NEET'])
  * @returns {string} - label string like 'A' or '1'
  */
-export function optionLabel(idx, classes = [], question = null, settings = null) {
-    if (question) {
-        return getQuestionOptionLabel(question, idx, settings);
-    }
-
-    const ROMAN_LOWER = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'];
-    const ROMAN_UPPER = ['(I)', '(II)', '(III)', '(IV)', '(V)', '(VI)'];
-
-    // Check settings override if provided
-    if (settings?.optionFormat) {
-        const fmt = String(settings.optionFormat).toLowerCase();
-        if (fmt.includes('roman') || fmt.includes('(i)')) {
-            return fmt.includes('upper') ? (ROMAN_UPPER[idx] || String(idx + 1)) : (ROMAN_LOWER[idx] || String(idx + 1));
-        }
-        if (fmt.includes('1') || fmt.includes('numeric')) return String(idx + 1);
-        if (fmt.includes('a') || fmt.includes('alpha')) return String.fromCharCode(65 + idx);
-    }
-
-    const classArr = Array.isArray(classes) ? classes : [classes];
-    const isJEE = classArr.some(c => String(c).toUpperCase() === 'JEE' || String(c).toUpperCase() === 'A, B, C, D');
+export function optionLabel(idx, classes = []) {
+    const isJEE = Array.isArray(classes) && classes.some(c => String(c).toUpperCase() === 'JEE');
     return isJEE ? String.fromCharCode(65 + idx) : String(idx + 1);
 }
 
 /**
- * Dynamically resolves the exact option label for a specific question at optIndex.
- * 1. Checks option object `.label`
- * 2. Checks question `.optionFormat` or settings `.optionFormat`
- * 3. Checks whether stored answer/correct_option is 1,2,3,4 vs A,B,C,D
- * 4. Falls back to exam type
+ * Detects the exact option labels used by a question (e.g. ['A', 'B', 'C', 'D'] vs ['1', '2', '3', '4'])
  */
-export function getQuestionOptionLabel(q, optIndex, settings = null) {
-    if (!q) return String.fromCharCode(65 + optIndex);
+export function getQuestionOptionLabels(q) {
+    if (!q) return ['A', 'B', 'C', 'D'];
+    const options = Array.isArray(q.options) ? q.options : [];
+    const count = options.length || 4;
 
-    const ROMAN_LOWER = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'];
-    const ROMAN_UPPER = ['(I)', '(II)', '(III)', '(IV)', '(V)', '(VI)'];
-
-    // 1. Explicit option object label (e.g. { label: '1', text: '...' })
-    if (Array.isArray(q.options) && q.options[optIndex]) {
-        const opt = q.options[optIndex];
-        if (typeof opt === 'object' && opt !== null && opt.label) {
-            return String(opt.label).trim();
-        }
-        // Check if raw option string starts with embedded label like "(1) ", "1. ", "(A) ", "A: "
-        if (typeof opt === 'string') {
-            const embeddedMatch = opt.match(/^\s*(?:\(([A-Da-d1-4])\)|([A-Da-d1-4])[\.\:\)\-]\s)/);
-            if (embeddedMatch) {
-                return (embeddedMatch[1] || embeddedMatch[2]).toUpperCase();
-            }
-        }
+    // 1. If options array contains objects with explicit label property (e.g. { label: '1', text: '...' })
+    const explicitLabels = options
+        .map(opt => (typeof opt === 'object' && opt && opt.label ? String(opt.label).trim() : null))
+        .filter(Boolean);
+    if (explicitLabels.length === count && count > 0) {
+        return explicitLabels;
     }
 
-    // 2. Global settings optionFormat preference
-    if (settings?.optionFormat && settings.optionFormat !== 'auto') {
-        const fmt = String(settings.optionFormat).toLowerCase();
-        if (fmt.includes('roman') || fmt.includes('(i)')) {
-            return fmt.includes('upper') ? (ROMAN_UPPER[optIndex] || String(optIndex + 1)) : (ROMAN_LOWER[optIndex] || String(optIndex + 1));
-        }
-        if (fmt.includes('1') || fmt.includes('numeric')) return String(optIndex + 1);
-        if (fmt.includes('a') || fmt.includes('alpha')) return String.fromCharCode(65 + optIndex);
-        if (fmt.includes('(a)')) return String.fromCharCode(97 + optIndex);
+    // 2. Explicit question-level format flag
+    const fmt = String(q.optionFormat || q.optionLabelFormat || q.optionType || '').toUpperCase();
+    if (fmt.includes('1234') || fmt === 'NUMERIC' || fmt === '1') {
+        return Array.from({ length: count }, (_, i) => String(i + 1));
+    }
+    if (fmt.includes('ABCD') || fmt === 'ALPHA' || fmt === 'A') {
+        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
     }
 
-    // 3. Question-level optionFormat
-    if (q.optionFormat) {
-        const qFmt = String(q.optionFormat).toLowerCase();
-        if (qFmt.includes('roman') || qFmt.includes('(i)')) {
-            return qFmt.includes('upper') ? (ROMAN_UPPER[optIndex] || String(optIndex + 1)) : (ROMAN_LOWER[optIndex] || String(optIndex + 1));
-        }
-        if (qFmt.includes('1') || qFmt.includes('numeric')) return String(optIndex + 1);
-        if (qFmt.includes('a') || qFmt.includes('alpha')) return String.fromCharCode(65 + optIndex);
+    // 3. Exam type convention (KCET/NEET/CET -> 1, 2, 3, 4; JEE -> A, B, C, D)
+    const allClasses = [
+        ...(Array.isArray(q.classes) ? q.classes : [q.classes]),
+        q.examType,
+        q.exam_type
+    ].filter(Boolean).map(c => String(c).toUpperCase());
+
+    const isExplicitJEE = allClasses.some(c => c === 'JEE');
+    const isExplicitNumericExam = allClasses.some(c => c === 'KCET' || c === 'CET' || c === 'NEET' || c === 'STATE_BOARD');
+
+    if (isExplicitJEE) {
+        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+    }
+    if (isExplicitNumericExam) {
+        return Array.from({ length: count }, (_, i) => String(i + 1));
     }
 
-    // 4. Inspect original answer or correct_option representation
-    const rawAns = String(q.correct_option || q.answer || '').trim();
-    if (/^[1-4]$/.test(rawAns)) {
-        return String(optIndex + 1);
+    // 4. Detect from answer format: if answer is numeric like '1', '2', '12', '1, 2'
+    const rawAns = String(q.answer ?? q.correct_option ?? q.correctAnswer ?? '').trim();
+    if (/^[1-4]$/.test(rawAns) || /^[1-4]{2,4}$/.test(rawAns) || /^[1-4]([\s,;&/]+[1-4])+$/.test(rawAns) || /both.*[1-4]/i.test(rawAns)) {
+        return Array.from({ length: count }, (_, i) => String(i + 1));
     }
-    if (/^[A-Da-d]$/.test(rawAns)) {
-        return String.fromCharCode(65 + optIndex);
+    if (/^[A-Da-d]$/.test(rawAns) || /^[A-Da-d]{2,4}$/.test(rawAns) || /^[A-Da-d]([\s,;&/]+[A-Da-d])+$/.test(rawAns) || /both.*[A-D]/i.test(rawAns)) {
+        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
     }
 
-    // 5. Fallback based on question classes / exam type
-    const classes = Array.isArray(q.classes) ? q.classes : (settings?.classes || []);
-    const isJEE = classes.some(c => String(c).toUpperCase() === 'JEE');
-    return isJEE ? String.fromCharCode(65 + optIndex) : String(optIndex + 1);
+    // 5. Default fallback to numeric
+    return Array.from({ length: count }, (_, i) => String(i + 1));
 }
 
 /**
- * Returns the 0-based option index (0..3) corresponding to the correct answer of question `q`.
+ * Parses raw answer input into 0-based option index array.
+ * Supports:
+ * - Single: 1, 2, 3, 4, A, B, C, D
+ * - Multi comma/space/slash: "1, 2", "1,2", "A, B", "A,B", "1/2", "A/B", "1 & 2", "A & B", "1 or 2", "A or B"
+ * - Concatenated: "12", "23", "34", "123", "AB", "BC", "CD", "AC", "BD", "ABC", "ABCD"
+ * - Phrases: "Both A and B", "Both 1 and 2", "Both (A) and (B)", "Both (1) and (2)", "A and B", "1 and 2"
+ * - Arrays: ['A', 'B'], [1, 2]
  */
-export function getQuestionCorrectOptionIndex(q) {
-    if (!q) return 0;
+export function parseAnswerIndices(rawAns, options = []) {
+    if (rawAns === null || rawAns === undefined) return [];
 
-    const rawAns = String(q.correct_option || q.answer || '').trim();
-    const upperAns = rawAns.toUpperCase();
+    if (Array.isArray(rawAns)) {
+        const set = new Set();
+        rawAns.forEach(item => {
+            parseAnswerIndices(item, options).forEach(idx => set.add(idx));
+        });
+        return Array.from(set).sort((a, b) => a - b);
+    }
 
-    // Direct Letter match
-    if (upperAns === 'A') return 0;
-    if (upperAns === 'B') return 1;
-    if (upperAns === 'C') return 2;
-    if (upperAns === 'D') return 3;
+    if (typeof rawAns === 'number') {
+        if (rawAns >= 1 && rawAns <= 4) return [rawAns - 1];
+        rawAns = String(rawAns);
+    }
 
-    // Direct Number match (1..4)
-    if (rawAns === '1') return 0;
-    if (rawAns === '2') return 1;
-    if (rawAns === '3') return 2;
-    if (rawAns === '4') return 3;
+    const str = String(rawAns).trim();
+    if (!str) return [];
 
-    // Direct Roman Numeral match ((i)..(iv) or i..iv)
-    const lowerAns = rawAns.toLowerCase();
-    if (lowerAns === '(i)' || lowerAns === 'i') return 0;
-    if (lowerAns === '(ii)' || lowerAns === 'ii') return 1;
-    if (lowerAns === '(iii)' || lowerAns === 'iii') return 2;
-    if (lowerAns === '(iv)' || lowerAns === 'iv') return 3;
+    const indicesSet = new Set();
 
-    // Match against options array by label or text
-    if (Array.isArray(q.options) && q.options.length > 0 && rawAns) {
-        // First try matching option.label (e.g. opt.label === '2' or '(ii)')
-        const foundByLabel = q.options.findIndex(opt => {
-            if (typeof opt === 'object' && opt !== null) {
-                const optLbl = (opt.label || '').trim().toLowerCase();
-                return optLbl === lowerAns;
+    // 1. Phrases like "Both A and B", "Both 1 and 2", "Both (A) and (B)", "Both (1) and (2)"
+    const bothMatch = str.match(/both\s*(?:\()?\s*([A-D1-4])\s*(?:\))?\s*(?:and|&|\/|,)\s*(?:\()?\s*([A-D1-4])\s*(?:\))?/i);
+    if (bothMatch) {
+        const toIdx = (char) => {
+            const c = char.toUpperCase();
+            if (/[1-4]/.test(c)) return parseInt(c, 10) - 1;
+            return c.charCodeAt(0) - 65;
+        };
+        indicesSet.add(toIdx(bothMatch[1]));
+        indicesSet.add(toIdx(bothMatch[2]));
+        return Array.from(indicesSet).sort((a, b) => a - b);
+    }
+
+    // 2. Concatenated digits: "12", "23", "34", "13", "123", "1234", "14"
+    if (/^[1-4]{2,4}$/.test(str)) {
+        str.split('').forEach(d => indicesSet.add(parseInt(d, 10) - 1));
+        return Array.from(indicesSet).sort((a, b) => a - b);
+    }
+
+    // 3. Concatenated letters: "AB", "BC", "CD", "AC", "BD", "ABC", "ABCD"
+    if (/^[A-Da-d]{2,4}$/.test(str)) {
+        str.toUpperCase().split('').forEach(ch => indicesSet.add(ch.charCodeAt(0) - 65));
+        return Array.from(indicesSet).sort((a, b) => a - b);
+    }
+
+    // 4. Delimited items: "1, 2", "A, B", "1 & 2", "A and B", "1 / 2", "A or B", "1 or 2", "1;2"
+    const splitTokens = str
+        .split(/[,;&/|\s]+|\band\b|\bor\b/i)
+        .map(t => t.trim().replace(/[\(\)\[\]\.]/g, ''))
+        .filter(Boolean);
+
+    if (splitTokens.length > 1) {
+        let allRecognized = true;
+        const tempIndices = [];
+        for (const token of splitTokens) {
+            if (/^[1-4]$/.test(token)) {
+                tempIndices.push(parseInt(token, 10) - 1);
+            } else if (/^[A-Da-d]$/.test(token)) {
+                tempIndices.push(token.toUpperCase().charCodeAt(0) - 65);
+            } else {
+                allRecognized = false;
+                break;
             }
+        }
+        if (allRecognized && tempIndices.length > 0) {
+            tempIndices.forEach(idx => indicesSet.add(idx));
+            return Array.from(indicesSet).sort((a, b) => a - b);
+        }
+    }
+
+    // 5. Single digit 1-4
+    if (/^[1-4]$/.test(str)) {
+        return [parseInt(str, 10) - 1];
+    }
+
+    // 6. Single letter A-D (or (A), A.)
+    const singleLetter = str.match(/^[\(]?([A-Da-d])[\)\.]?$/);
+    if (singleLetter) {
+        return [singleLetter[1].toUpperCase().charCodeAt(0) - 65];
+    }
+
+    // 7. Match against option text
+    const cleanStr = (s) => String(s || '').replace(/<[^>]+>/g, '').replace(/[\$\s\\{}]/g, '').toLowerCase();
+    const targetStr = cleanStr(str);
+    if (targetStr && options.length > 0) {
+        const matchedIdx = options.findIndex((opt) => {
+            const optText = typeof opt === 'object' && opt ? (opt.text || opt.optionText || '') : String(opt || '');
+            const candidate = cleanStr(optText);
+            if (!candidate) return false;
+            if (candidate === targetStr) return true;
+            if (targetStr.length > 4 && (candidate.includes(targetStr) || targetStr.includes(candidate))) return true;
             return false;
         });
-        if (foundByLabel >= 0) return foundByLabel;
-
-        // Next try matching option text
-        const foundIdx = q.options.findIndex(opt => {
-            const optText = typeof opt === 'object' && opt !== null ? (opt.text || opt.optionText || '') : String(opt || '');
-            return optText.trim().toLowerCase() === lowerAns;
-        });
-        if (foundIdx >= 0) return foundIdx;
+        if (matchedIdx !== -1) return [matchedIdx];
     }
 
-    return 0;
+    return [];
 }
 
 /**
- * Returns the exact correct answer label dynamically matched to the option labels
- * displayed on the question.
- *
- * If question options are labeled 1, 2, 3, 4 -> returns '1', '2', '3', or '4'.
- * If question options are labeled A, B, C, D -> returns 'A', 'B', 'C', or 'D'.
- * Never converts 1, 2, 3, 4 into A, B, C, D.
+ * Returns the exact option label for a question's correct answer.
+ * Seamlessly resolves single or multiple options:
+ * - If question options are numeric (1, 2, 3, 4) and answer is 1 & 2 / AB / Both A and B -> returns "12" or "1, 2"
+ * - If question options are alphabetic (A, B, C, D) and answer is 1 & 2 / AB / Both A and B -> returns "AB" or "A, B"
  */
-export function getQuestionCorrectAnswerLabel(q, settings = null) {
+export function getResolvedAnswerLabel(q) {
     if (!q) return 'N/A';
+    const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
+    const options = Array.isArray(q.options) ? q.options : [];
+    const labels = getQuestionOptionLabels(q);
 
-    const qType = (q.type || q.q_type || '').toUpperCase();
-    if (qType === 'NUMERICAL') {
-        return String(q.num_answer || q.answer || 'N/A');
+    const indices = parseAnswerIndices(rawAns, options);
+    if (indices.length > 0) {
+        const mapped = indices
+            .filter(idx => idx >= 0 && idx < labels.length)
+            .map(idx => labels[idx]);
+        if (mapped.length > 0) {
+            if (mapped.length === 1) return mapped[0];
+
+            // If raw input was strictly compact like "12" or "AB", return compact "12" or "AB"
+            const cleanRaw = String(rawAns).trim();
+            if (/^[1-4]{2,4}$/.test(cleanRaw) || /^[A-Da-d]{2,4}$/.test(cleanRaw)) {
+                return mapped.join('');
+            }
+            return mapped.join(', ');
+        }
     }
 
-    const correctIdx = getQuestionCorrectOptionIndex(q);
-    return getQuestionOptionLabel(q, correctIdx, settings);
+    const cleanRaw = String(rawAns).trim();
+    return cleanRaw || 'N/A';
+}
+
+/**
+ * Returns compact code for answer (e.g. "12" or "AB")
+ */
+export function getResolvedAnswerCode(q) {
+    if (!q) return 'N/A';
+    const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
+    const options = Array.isArray(q.options) ? q.options : [];
+    const labels = getQuestionOptionLabels(q);
+    const indices = parseAnswerIndices(rawAns, options);
+    if (indices.length > 0) {
+        return indices
+            .filter(idx => idx >= 0 && idx < labels.length)
+            .map(idx => labels[idx])
+            .join('');
+    }
+    return String(rawAns).trim() || 'N/A';
+}
+
+/**
+ * Checks whether a given option index (0-based) is among the correct answers.
+ * Supports questions with multiple correct options (e.g. 1 & 2, A & B).
+ */
+export function isOptionCorrect(q, optIndex) {
+    if (!q || optIndex === undefined) return false;
+    const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
+    const options = Array.isArray(q.options) ? q.options : [];
+    const indices = parseAnswerIndices(rawAns, options);
+    return indices.includes(optIndex);
 }
 
 /**

@@ -43,9 +43,16 @@ const SubjectDetails = () => {
             const allT = Array.isArray(teachersRes.data) ? teachersRes.data : [];
             const allP = Array.isArray(papersRes.data) ? papersRes.data : [];
 
+            const isSubMatch = (tSub, targetSub) => {
+                if (!tSub || !targetSub) return false;
+                const a = tSub.toLowerCase().replace(/ematics|s$/g, '');
+                const b = targetSub.toLowerCase().replace(/ematics|s$/g, '');
+                return a === b || a.includes(b) || b.includes(a);
+            };
+
             setAllTeachers(allT);
-            setTeachers(allT.filter(t => (t.subject || '').toLowerCase().includes(subject.toLowerCase()) || subject.toLowerCase().includes((t.subject || '').toLowerCase())));
-            setPapers(allP.filter(p => (p.subject || '').toLowerCase().includes(subject.toLowerCase()) || subject.toLowerCase().includes((p.subject || '').toLowerCase())));
+            setTeachers(allT.filter(t => isSubMatch(t.subject, subject)));
+            setPapers(allP.filter(p => isSubMatch(p.subject, subject)));
         } catch (err) {
             console.error('Error fetching subject details:', err);
         } finally {
@@ -68,6 +75,20 @@ const SubjectDetails = () => {
         }
     };
 
+    const handlePublishToOnlineExam = async (paper) => {
+        try {
+            await api.post('/api/exams/from-paper', {
+                paperId: paper._id || paper.id,
+                title: paper.title || `${subject} Online Examination`,
+                duration_minutes: paper.duration || 180,
+            });
+            alert('✅ Exam successfully created and enabled for Online CBT!');
+            navigate('/admin/dashboard/cbt-exams');
+        } catch (err) {
+            alert('Failed to publish online exam: ' + (err.response?.data?.msg || err.message));
+        }
+    };
+
     const handleCommissionSubmit = async (e) => {
         e.preventDefault();
         if (!commissionForm.title) return alert('Please enter an Exam Title');
@@ -77,7 +98,7 @@ const SubjectDetails = () => {
             if (commissionForm.examType === 'NEET') {
                 subjectsNeeded = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
             } else if (commissionForm.examType === 'CET') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Botany', 'Zoology'];
             } else if (commissionForm.examType === 'JEE') {
                 subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics'];
             } else {
@@ -88,12 +109,12 @@ const SubjectDetails = () => {
 
             const subjectAssignments = subjectsNeeded.map(subName => {
                 const assignedTeacherId = commissionForm.assignedTeachers[subName];
-                const teacherObj = allTeachers.find(t => t._id === assignedTeacherId) || allTeachers.find(t => (t.subject || '').toLowerCase().includes(subName.toLowerCase()));
+                const teacherObj = allTeachers.find(t => (t._id || t.id) === assignedTeacherId) || allTeachers.find(t => (t.subject || '').toLowerCase().includes(subName.toLowerCase()));
                 return {
                     subject: subName,
-                    teacherId: teacherObj ? teacherObj._id : undefined,
+                    teacherId: teacherObj ? (teacherObj._id || teacherObj.id) : undefined,
                     teacherName: teacherObj ? teacherObj.name : `Prof. ${subName} Faculty`,
-                    teacherEmail: teacherObj ? teacherObj.email : `${subName.toLowerCase()}@manchester.edu`,
+                    teacherEmail: teacherObj ? teacherObj.email : `${subName.toLowerCase()}@sapthagiripucollege.edu.in`,
                     targetQuestions: commissionForm.targetPerSubject || defaultTarget,
                     difficultyDistribution: commissionForm.difficultyDistribution,
                     status: 'Not Started'
@@ -225,18 +246,27 @@ const SubjectDetails = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2 mt-auto border-t border-gray-100 pt-4">
+                                    <div className="grid grid-cols-3 gap-2 mt-auto border-t border-gray-100 pt-4">
                                         <button 
-                                            onClick={() => navigate(`/admin/paper-preview/${p._id}`)} 
-                                            className="bg-navy text-gold py-2.5 rounded-xl text-xs font-black uppercase tracking-wider hover:scale-105 transition shadow flex items-center justify-center gap-1 col-span-1"
+                                            onClick={() => navigate(`/admin/dashboard/preview/${p._id || p.id}`)} 
+                                            className="bg-navy text-gold py-2 rounded-xl text-xs font-black uppercase tracking-wider hover:scale-105 transition shadow flex items-center justify-center gap-1 col-span-1"
+                                            title="View Question Paper"
                                         >
-                                            <span>👁</span> View Paper
+                                            <span>👁</span> View
                                         </button>
                                         <button 
                                             onClick={() => setSelectedAnalysisPaper(p)} 
-                                            className="bg-gold/20 border border-gold/60 text-navy hover:bg-gold py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1 col-span-1"
+                                            className="bg-gold/20 border border-gold/60 text-navy hover:bg-gold py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1 col-span-1"
+                                            title="Paper Analytics & Stats"
                                         >
-                                            <span>📊</span> Analysis
+                                            <span>📊</span> Stats
+                                        </button>
+                                        <button 
+                                            onClick={() => handlePublishToOnlineExam(p)} 
+                                            className="bg-emerald-600 text-white hover:bg-emerald-700 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition flex items-center justify-center gap-1 col-span-1 shadow-xs"
+                                            title="Publish directly to Online CBT Exam"
+                                        >
+                                            <span>⚡</span> Online
                                         </button>
                                     </div>
                                 </div>
@@ -278,13 +308,13 @@ const SubjectDetails = () => {
                             </thead>
                             <tbody>
                                 {teachers.map((t, index) => (
-                                    <tr key={t._id} className="border-b border-gray-50 hover:bg-gray-50/60 transition">
+                                    <tr key={t._id || t.id} className="border-b border-gray-50 hover:bg-gray-50/60 transition">
                                         <td className="p-4 text-slate-400 font-black text-xs">{String(index + 1).padStart(2, '0')}</td>
                                         <td className="p-4 font-black text-navy text-sm">{t.name}</td>
                                         <td className="p-4 text-slate-600 font-medium text-xs">{t.email}</td>
                                         <td className="p-4 text-center">
                                             <button 
-                                                onClick={() => handleDeleteTeacher(t._id)} 
+                                                onClick={() => handleDeleteTeacher(t._id || t.id)} 
                                                 className="bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-wider hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg transition"
                                             >
                                                 Revoke

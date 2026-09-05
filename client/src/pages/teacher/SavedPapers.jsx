@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
-import { sanitize, optionLabel, getQuestionCorrectAnswerLabel } from '../../utils/sanitize';
+import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import PaperRenderer, { DEFAULT_SETTINGS, SettingsPanel, formatMarks, calcTotal } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
-import { triggerPrintMode, PrintableAnswerKey, PrintableSolutionKey } from '../../components/PrintableKeys';
+import A4AnswerKey from '../../components/A4AnswerKey';
+import A4SolutionKey from '../../components/A4SolutionKey';
 
 /* ─── Inline styles ─── */
 const S = {
@@ -14,16 +15,16 @@ const S = {
     summaryGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '14px',
-        marginBottom: '18px',
+        gap: '20px',
+        marginBottom: '32px',
     },
     summaryCard: {
         background: '#fff',
         border: '1px solid #f1f5f9',
-        borderRadius: '16px',
-        padding: '16px 20px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)',
-        borderLeft: '5px solid #001f6d',
+        borderRadius: '24px',
+        padding: '24px 30px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+        borderLeft: '8px solid #001f6d',
     },
     summaryLabel: {
         fontSize: '10px',
@@ -31,17 +32,17 @@ const S = {
         textTransform: 'uppercase',
         letterSpacing: '0.15em',
         color: '#001f6d',
-        opacity: 0.6,
-        marginBottom: '4px',
+        opacity: 0.5,
+        marginBottom: '8px',
     },
     summaryValue: {
-        fontSize: '26px',
+        fontSize: '32px',
         fontWeight: 900,
         color: '#001f6d',
         fontFamily: "'Inter', sans-serif",
         lineHeight: 1.1,
     },
-    summarySub: { fontSize: '11px', fontWeight: 600, color: '#94a3b8', marginTop: '4px' },
+    summarySub: { fontSize: '12px', fontWeight: 600, color: '#94a3b8', marginTop: '6px' },
 
     sectionLabel: {
         fontSize: '11px',
@@ -246,13 +247,17 @@ const toDateStr = (date) => {
 /* ═══════════════════════════════════════════════════════════════════════════ */
 /*  PAPER VIEW — uses PaperRenderer engine + Analysis & Key modals             */
 /* ═══════════════════════════════════════════════════════════════════════════ */
-const PaperView = ({ paper, activeTemplate, onBack }) => {
+const PaperView = ({ paper: initialPaper, activeTemplate, onBack }) => {
     const navigate = useNavigate();
+    const [paper, setPaper] = useState(initialPaper);
     const [showSettings, setShowSettings] = useState(false);
     const [showAnalysisModal, setShowAnalysisModal] = useState(false);
     const [showAnswerKeyModal, setShowAnswerKeyModal] = useState(false);
     const [showSolutionsModal, setShowSolutionsModal] = useState(false);
-    const [docMode, setDocMode] = useState('paper');
+
+    useEffect(() => {
+        setPaper(initialPaper);
+    }, [initialPaper]);
 
     const [settings, setSettings] = useState({
         ...DEFAULT_SETTINGS,
@@ -292,22 +297,25 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
 
                         {/* Answer Key */}
                         <button
-                            onClick={() => setDocMode(m => m === 'answer_key' ? 'paper' : 'answer_key')}
-                            className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5 ${
-                                docMode === 'answer_key' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
-                            }`}
+                            onClick={() => setShowAnswerKeyModal(true)}
+                            className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>🔑</span> {docMode === 'answer_key' ? '📄 View Paper' : 'Answer Key (A4)'}
+                            <span>🔑</span> Answer Key
                         </button>
 
                         {/* Solutions Guide */}
                         <button
-                            onClick={() => setDocMode(m => m === 'solutions' ? 'paper' : 'solutions')}
-                            className={`px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5 ${
-                                docMode === 'solutions' ? 'bg-gold text-navy' : 'bg-navy text-gold hover:bg-gold hover:text-navy'
-                            }`}
+                            onClick={() => setShowSolutionsModal(true)}
+                            className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>💡</span> {docMode === 'solutions' ? '📄 View Paper' : 'Solutions (A4)'}
+                            <span>💡</span> Solutions
+                        </button>
+
+                        <button
+                            style={{ ...S.btnBack, background: showSettings ? '#001f6d' : '#f1f5f9', color: showSettings ? '#fff' : '#001f6d' }}
+                            onClick={() => setShowSettings(s => !s)}
+                        >
+                            ⚙️ Layout Settings
                         </button>
 
                         <button style={S.btnPrint} onClick={() => window.print()}>
@@ -329,138 +337,33 @@ const PaperView = ({ paper, activeTemplate, onBack }) => {
                 settings={settings}
                 setSettings={setSettings}
                 showSettingsPanel={false}
-                docMode={docMode}
-                onDocModeChange={setDocMode}
                 printAreaId="qp-print-area"
             />
 
-            {/* ── MODAL: ANSWER KEY ── */}
+            {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showAnswerKeyModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                    Official Key
-                                </span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    {paper.title || `${paper.subject} Assessment`} Answer Key
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('answer_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Answer Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAnswerKeyModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                                {questions.map((q, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center text-xs font-bold hover:border-navy transition"
-                                    >
-                                        <span className="text-gray-500">Q.{startQNo + idx}</span>
-                                        <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
-                                            {getQuestionCorrectAnswerLabel(q)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowAnswerKeyModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4AnswerKey
+                    paper={paper}
+                    questions={questions}
+                    startQNo={startQNo}
+                    setName={paper.setName || 'P'}
+                    onClose={() => setShowAnswerKeyModal(false)}
+                    onQuestionsUpdated={(updatedQs) => {
+                        setPaper(p => ({ ...p, questions: updatedQs }));
+                    }}
+                />
             )}
 
-            {/* ── MODAL: SOLUTIONS GUIDE ── */}
+            {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showSolutionsModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                    Step-by-Step Solutions
-                                </span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    {paper.title || `${paper.subject} Assessment`} Detailed Solutions
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('solution_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Solution Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSolutionsModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto space-y-5">
-                            {questions.map((q, idx) => (
-                                <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 space-y-2">
-                                    <div className="flex justify-between items-center border-b pb-2">
-                                        <span className="font-black text-sm text-navy">Question {startQNo + idx}</span>
-                                        <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
-                                            Correct Answer: Option ({getQuestionCorrectAnswerLabel(q)})
-                                        </span>
-                                    </div>
-                                    <div className="text-xs font-normal text-gray-800">
-                                        <MathRenderer text={q.questionText || q.question || ''} />
-                                    </div>
-                                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
-                                        <span className="font-bold text-navy block mb-1">Explanation:</span>
-                                        {q.solutionText ? (
-                                            <MathRenderer text={q.solutionText} />
-                                        ) : (
-                                            'Detailed step-by-step solution available.'
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowSolutionsModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close Solutions
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4SolutionKey
+                    paper={paper}
+                    questions={questions}
+                    startQNo={startQNo}
+                    setName={paper.setName || 'P'}
+                    onClose={() => setShowSolutionsModal(false)}
+                />
             )}
-
-
 
             {/* ── MODAL: ANALYSIS DASHBOARD ── */}
             <PaperAnalysisModal
@@ -559,19 +462,38 @@ const SavedPapers = () => {
         <div style={S.page}>
 
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
                     <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#001f6d', letterSpacing: '-0.03em', margin: 0, textTransform: 'uppercase' }}>Department Archives</h3>
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Managed Institutional Paper Repository</p>
                 </div>
-                <div style={{
-                    fontSize: '11px', color: '#c5a059',
-                    background: '#001f6d', border: 'none',
-                    borderRadius: '10px', padding: '8px 18px',
-                    fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em',
-                    boxShadow: '0 4px 12px rgba(0,31,109,0.2)',
-                }}>
-                    {papers.length} RECORD{papers.length !== 1 ? 'S' : ''}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                        fontSize: '11px', color: '#c5a059',
+                        background: '#001f6d', border: 'none',
+                        borderRadius: '10px', padding: '8px 18px',
+                        fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em',
+                        boxShadow: '0 4px 12px rgba(0,31,109,0.2)',
+                    }}>
+                        {papers.length} RECORD{papers.length !== 1 ? 'S' : ''}
+                    </div>
+                    <button
+                        onClick={() => navigate('/teacher/dashboard')}
+                        style={{
+                            background: '#f1f5f9',
+                            color: '#334155',
+                            border: '2px solid #e2e8f0',
+                            borderRadius: '10px',
+                            padding: '8px 18px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        ← Back
+                    </button>
                 </div>
             </div>
 

@@ -23,9 +23,8 @@ import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
-import { getQuestionCorrectAnswerLabel } from '../../utils/sanitize';
-import { triggerPrintMode, PrintableAnswerKey, PrintableSolutionKey } from '../../components/PrintableKeys';
-import MathRenderer from '../../components/MathRenderer';
+import A4AnswerKey from '../../components/A4AnswerKey';
+import A4SolutionKey from '../../components/A4SolutionKey';
 import { generatePaperSet, generateAllPQRS, generateAnswerKey } from '../../utils/pqrsGenerator';
 
 const AdminPaperPreview = () => {
@@ -50,13 +49,28 @@ const AdminPaperPreview = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                let paper = null;
+                // 1. First attempt direct single-paper fetch (fast & hydrated)
+                try {
+                    const singlePaperRes = await api.get(`/api/papers/${paperId}`);
+                    if (singlePaperRes.data && (singlePaperRes.data._id || singlePaperRes.data.id)) {
+                        paper = singlePaperRes.data;
+                    }
+                } catch (e) {
+                    console.log('Single paper direct fetch fallback:', e.message);
+                }
+
+                // 2. Fetch templates & fallback papers if needed
                 const [papersRes, templatesRes] = await Promise.all([
-                    api.get('/api/papers/admin/all'),
-                    api.get('/api/templates')
+                    !paper ? api.get('/api/papers/admin/all').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+                    api.get('/api/templates').catch(() => ({ data: [] }))
                 ]);
 
-                const paper = papersRes.data.find(p => (p._id || p.id) === paperId);
-                setSelectedPaper(paper);
+                if (!paper && Array.isArray(papersRes.data)) {
+                    paper = papersRes.data.find(p => String(p._id || p.id) === String(paperId));
+                }
+
+                setSelectedPaper(paper || null);
 
                 if (templatesRes.data && templatesRes.data.length > 0) {
                     setActiveTemplate(templatesRes.data[0]);
@@ -65,7 +79,7 @@ const AdminPaperPreview = () => {
                 setLoading(false);
             } catch (err) {
                 console.error('Error loading paper for admin preview:', err);
-                if (err.response && [400, 401, 403].includes(err.response.status)) {
+                if (err.response && [401, 403].includes(err.response.status)) {
                     logout();
                     navigate('/');
                 }
@@ -75,20 +89,36 @@ const AdminPaperPreview = () => {
         fetchData();
     }, [paperId]);
 
-    // Compute all 4 sets from base paper
-    const pqrsSets = useMemo(() => {
-        if (!selectedPaper) return {};
-        return generateAllPQRS(selectedPaper);
+    // Ensure questions are valid objects before PQRS generation
+    const validPaper = useMemo(() => {
+        if (!selectedPaper) return null;
+        const rawQs = Array.isArray(selectedPaper.questions) ? selectedPaper.questions : [];
+        const cleanQs = rawQs.map((q, idx) => {
+            if (typeof q === 'object' && q !== null) return q;
+            return {
+                _id: String(q || idx),
+                questionText: `Question #${idx + 1}`,
+                options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
+                answer: '1'
+            };
+        });
+        return { ...selectedPaper, questions: cleanQs };
     }, [selectedPaper]);
+
+    // Compute all 4 sets from sanitized paper
+    const pqrsSets = useMemo(() => {
+        if (!validPaper) return {};
+        return generateAllPQRS(validPaper);
+    }, [validPaper]);
 
     // Current displayed paper based on selected set
     const currentPaperSet = useMemo(() => {
-        if (!pqrsSets[activeSet]) return selectedPaper;
+        if (!pqrsSets[activeSet]) return validPaper;
         return pqrsSets[activeSet];
-    }, [pqrsSets, activeSet, selectedPaper]);
+    }, [pqrsSets, activeSet, validPaper]);
 
     const handlePrintPaper = () => {
-        triggerPrintMode('paper');
+        window.print();
     };
 
     const handleDownloadWord = () => {
@@ -98,7 +128,31 @@ const AdminPaperPreview = () => {
     };
 
     const handleDownloadAllSets = () => {
-        triggerPrintMode('paper');
+        window.print();
+    };
+
+    const handleDiagramResize = (qIdOrNum, newHeight, diagramKey = 'main') => {
+        setSelectedPaper(prev => {
+            if (!prev || !Array.isArray(prev.questions)) return prev;
+            return {
+                ...prev,
+                questions: prev.questions.map((q, idx) => {
+                    const isMatch = (q._id && String(q._id) === String(qIdOrNum)) || 
+                                    (q.id && String(q.id) === String(qIdOrNum)) ||
+                                    (idx + 1 === Number(qIdOrNum));
+                    if (!isMatch) return q;
+                    const nextSizes = {
+                        ...(q.customDiagramSizes || {}),
+                        [diagramKey]: newHeight,
+                    };
+                    return {
+                        ...q,
+                        ...(diagramKey === 'main' ? { customDiagramHeight: newHeight } : {}),
+                        customDiagramSizes: nextSizes,
+                    };
+                })
+            };
+        });
     };
 
     if (loading) {
@@ -175,6 +229,12 @@ const AdminPaperPreview = () => {
                         >
                             <span>📝</span> Export Word (.docx)
                         </button>
+                        <button
+                            onClick={() => navigate('/admin/dashboard')}
+                            className="bg-white border-2 border-gray-200 text-slate-600 hover:border-navy hover:text-navy px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                            ← Back
+                        </button>
                     </div>
                 </div>
 
@@ -227,131 +287,34 @@ const AdminPaperPreview = () => {
                     settings={settings}
                     setSettings={setSettings}
                     showSettingsPanel={showAlignment}
+                    onDiagramResize={handleDiagramResize}
                 />
             </div>
 
-            {/* ── MODAL: ANSWER KEY ── */}
+            {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showAnswerKeyModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Recalculated Answer Key</span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    Set {activeSet} Official Answer Key
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('answer_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Answer Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAnswerKeyModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3">
-                                {currentPaperSet?.answerKey?.map((item, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex justify-between items-center text-xs font-bold hover:border-navy transition"
-                                    >
-                                        <span className="text-gray-500">Q.{item.qNo}</span>
-                                        <span className="bg-navy text-gold px-2.5 py-0.5 rounded-md font-black text-sm">
-                                            {item.answer}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowAnswerKeyModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4AnswerKey
+                    paper={selectedPaper}
+                    questions={selectedPaper?.questions || []}
+                    startQNo={settings?.startQNo || 1}
+                    setName={activeSet}
+                    onClose={() => setShowAnswerKeyModal(false)}
+                    onQuestionsUpdated={(updatedQs) => {
+                        setSelectedPaper(prev => prev ? ({ ...prev, questions: updatedQs }) : prev);
+                    }}
+                />
             )}
 
-            {/* ── MODAL: SOLUTIONS ── */}
+            {/* ── MODAL: SOLUTIONS (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
             {showSolutionsModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
-                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
-                        <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Detailed Explanations</span>
-                                <h3 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                    Set {activeSet} Detailed Solutions
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => triggerPrintMode('solution_key')}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                                >
-                                    <span>🖨</span> Print Solution Key
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowSolutionsModal(false)}
-                                    className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto space-y-6">
-                            {currentPaperSet?.questions?.map((q, idx) => (
-                                <div key={idx} className="border border-gray-200 p-5 rounded-2xl bg-gray-50/50 space-y-3">
-                                    <div className="flex justify-between items-center border-b pb-2">
-                                        <span className="font-black text-sm text-navy">Question {idx + 1}</span>
-                                        <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2.5 py-0.5 rounded-md">
-                                            Correct Answer: ({getQuestionCorrectAnswerLabel(q)})
-                                        </span>
-                                    </div>
-                                    <div className="text-xs font-normal text-gray-800">
-                                        <MathRenderer text={q.questionText || q.question || ''} />
-                                    </div>
-                                    <div className="bg-white p-3.5 rounded-xl border border-gray-200 text-xs text-gray-700">
-                                        <span className="font-bold text-navy block mb-1">Explanation / Solution:</span>
-                                        {q.solutionText ? (
-                                            <MathRenderer text={q.solutionText} />
-                                        ) : (
-                                            'Detailed solution available upon evaluation.'
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
-                            <button
-                                onClick={() => setShowSolutionsModal(false)}
-                                className="bg-navy text-gold px-6 py-2 rounded-xl font-bold text-xs uppercase tracking-wider cursor-pointer"
-                            >
-                                Close Solutions
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <A4SolutionKey
+                    paper={selectedPaper}
+                    questions={currentPaperSet?.questions || selectedPaper?.questions || []}
+                    startQNo={settings?.startQNo || 1}
+                    setName={activeSet}
+                    onClose={() => setShowSolutionsModal(false)}
+                />
             )}
-
 
             {/* ── ANALYSIS MODAL ── */}
             <PaperAnalysisModal

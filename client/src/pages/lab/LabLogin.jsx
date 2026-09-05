@@ -14,7 +14,7 @@ export default function LabLogin() {
     const navigate = useNavigate();
 
     /* Background slideshow */
-    const BG_IMAGES = ['/ManchesterLogo.jpeg'];
+    const BG_IMAGES = ['/SapthagiriCampus.webp'];
     useEffect(() => {
         setMounted(true);
         if (localStorage.getItem('lab_token')) {
@@ -64,11 +64,11 @@ export default function LabLogin() {
                 <div style={s.leftPanel}>
                     <div style={s.leftInner}>
                         <div style={s.logoWrap}>
-                            <img src="/ManchesterLogo.jpeg" alt="Manchester" style={{ ...s.logo, objectFit: 'contain', borderRadius: '16px' }} />
+                            <img src="/ManchesterLogo.jpeg" alt="Sapthagiri" style={{ ...s.logo, objectFit: 'contain', borderRadius: '16px' }} />
                         </div>
 
                         <div style={s.collegeNameWrap}>
-                            <div style={{ ...s.paceWord, fontSize: '32px', letterSpacing: '0.05em' }}>Manchester</div>
+                            <div style={{ ...s.paceWord, fontSize: '32px', letterSpacing: '0.05em' }}>Sapthagiri</div>
                             <div style={s.collegeRest}>Pre University College</div>
                         </div>
 
@@ -84,7 +84,7 @@ export default function LabLogin() {
                                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                                     <circle cx="12" cy="10" r="3" />
                                 </svg>
-                                Campus, Karnataka
+                                Davanagere, Karnataka
                             </div>
                         </div>
                     </div>
@@ -169,7 +169,7 @@ export default function LabLogin() {
 
                         {/* Card footer */}
                         <div style={s.cardFooter}>
-                            © {new Date().getFullYear()} Manchester Pre University College · Campus
+                            © {new Date().getFullYear()} Sapthagiri Pre University College · Davanagere
                         </div>
                     </div>
                 </div>

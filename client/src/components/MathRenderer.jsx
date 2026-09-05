@@ -1,32 +1,34 @@
 import React, { useMemo } from 'react';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
+import ResizableDiagram from './ResizableDiagram';
 
 /**
- * MathRenderer.jsx
- *
- * High-performance, robust LaTeX & Chemistry renderer:
- * - Full KaTeX math delimiters: $...$, $$...$$, \(...\), \[...\]
- * - Chemistry reaction arrows: \xrightarrow{...}, \overset{...}{\rightarrow}, ->, -->
- * - Reagent above arrow detection: "CH_2=CH_2 ^{HBr} X" -> "\xrightarrow{HBr}"
- * - Chemistry formula text-spacing safety (protects spaces in \xrightarrow{aq. KOH})
- * - {{IMG::...}} image blocks and diagram containment
- * - Synchronous rendering with zero useEffect race conditions
+ * Renders text that may contain LaTeX math delimiters ($...$, $$...$$, \(...\), \[...\])
+ * and {{IMG::...}} image blocks, into properly formatted HTML with KaTeX math rendering
+ * and interactive resizable diagrams.
  */
 
+// KaTeX-permissive DOMPurify config — allows all KaTeX output HTML safely
 const KATEX_CONFIG = {
     ALLOWED_TAGS: [
+        // Standard inline/block
         'b', 'i', 'u', 'em', 'strong', 'sup', 'sub', 'br', 'span', 'div', 'p',
         'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody',
+        // KaTeX uses these
         'annotation', 'semantics', 'math', 'mrow', 'mi', 'mn', 'mo',
         'mfrac', 'msup', 'msub', 'mspace', 'mtext', 'mover', 'munder',
         'munderover', 'msqrt', 'mroot', 'mfenced', 'mtable', 'mtr', 'mtd',
-        'img', 'svg', 'path', 'g', 'line', 'rect', 'circle', 'use', 'defs', 'mask',
+        // Images
+        'img',
+        // SVG (KaTeX uses SVG for some symbols)
+        'svg', 'path', 'g', 'line', 'rect', 'circle', 'use', 'defs', 'mask',
     ],
     ALLOWED_ATTR: [
         'class', 'style', 'colspan', 'rowspan', 'src', 'alt', 'width', 'height',
         'aria-hidden', 'aria-label', 'role', 'tabindex', 'focusable',
         'mathvariant', 'display', 'xmlns',
+        // SVG attrs
         'viewBox', 'x', 'y', 'd', 'fill', 'stroke', 'stroke-width',
         'transform', 'clip-path', 'mask', 'id', 'href', 'xlink:href',
     ],
@@ -36,140 +38,157 @@ const KATEX_CONFIG = {
 };
 
 /**
- * Pre-processes chemistry reaction chains, arrows, and bare formulas
+ * Converts a raw text string with LaTeX math delimiters into rendered HTML.
  */
-function sanitizeMathString(mathStr) {
-    if (!mathStr) return '';
-    let s = mathStr.trim();
-
-    // 1. Fix chemistry superscript arrows: ^{reagent} between species -> \xrightarrow{reagent}
-    s = s.replace(/\s*\^\{([^}]+)\}\s*([A-Za-z0-9_\(\[\{])/g, ' \\xrightarrow{$1} $2');
-
-    // 2. Fix simple arrows in math mode: -> or --> to \rightarrow or \longrightarrow
-    s = s.replace(/-->/g, ' \\longrightarrow ');
-    s = s.replace(/->/g, ' \\rightarrow ');
-
-    // 3. Fix unescaped spaces inside \xrightarrow{...} e.g. \xrightarrow{aq. KOH} -> \xrightarrow{\text{aq. KOH}}
-    s = s.replace(/\\xrightarrow\{([^}]+)\}/g, (match, inner) => {
-        if (/\s|[a-z]{2,}\./i.test(inner) && !inner.includes('\\text')) {
-            return `\\xrightarrow{\\text{${inner.trim()}}}`;
-        }
-        return match;
-    });
-
-    return s;
-}
-
-/**
- * Safely renders a math string via KaTeX with fallback
- */
-function renderKatexSafe(mathContent, displayMode = false) {
-    const cleaned = sanitizeMathString(mathContent);
-    try {
-        return katex.renderToString(cleaned, {
-            displayMode,
-            throwOnError: false,
-            output: 'html',
-            trust: true,
-            strict: false
-        });
-    } catch {
-        // Fallback: try basic render or return clean text
-        try {
-            return katex.renderToString(mathContent, { displayMode, throwOnError: false, output: 'html' });
-        } catch {
-            return mathContent;
-        }
-    }
-}
-
-/**
- * Converts a raw text string into rendered HTML
- */
-function processText(text, inline = false) {
+function processMathOnly(text) {
     if (!text || typeof text !== 'string') return '';
 
-    // 0) Strip internal tags & legacy font overrides
+    // 0) Strip internal QPV / QBP / DIFFICULTY tags
     let result = text
         .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
-        .replace(/<font[^>]*>/gi, '')
-        .replace(/<\/font>/gi, '')
-        .replace(/font-size\s*:\s*[^;"]+;?/gi, '')
         .trim();
 
-    // 1) Handle {{IMG::...}} image blocks with prominent, clear diagram sizing
-    result = result.replace(/\{\{IMG::(.*?)\}\}/gi, (_match, src) => {
-        return `<div class="diagram-container resizable-diagram-wrap" style="text-align:center;margin:6px auto;background:#ffffff;position:relative;z-index:2;display:block;clear:both;"><img src="${src}" alt="Question Diagram" style="max-width:100%;min-height:85px;max-height:220px;width:auto;height:auto;object-fit:contain;display:block;margin:4px auto;border-radius:4px;background:#ffffff;" loading="lazy" /></div>`;
-    });
-
-    // 2) Handle standard markdown ![alt](src) images with prominent, clear diagram sizing
-    result = result.replace(/!\[(.*?)\]\((.*?)\)/gi, (_match, alt, src) => {
-        return `<div class="diagram-container resizable-diagram-wrap" style="text-align:center;margin:6px auto;background:#ffffff;position:relative;z-index:2;display:block;clear:both;"><img src="${src}" alt="${alt || 'Question Diagram'}" style="max-width:100%;min-height:85px;max-height:220px;width:auto;height:auto;object-fit:contain;display:block;margin:4px auto;border-radius:4px;background:#ffffff;" loading="lazy" /></div>`;
-    });
-
-    // 3) Pre-normalize chemistry superscript arrows in plain text before delimiter parsing
-    // e.g. "CH_2 = CH_2 ^{HBr} X ^{aq. KOH} Y" -> "$CH_2 = CH_2 \xrightarrow{HBr} X \xrightarrow{aq. KOH} Y$"
-    result = result.replace(/\b([A-Za-z0-9_=]{2,}\s*\^\{[^}]+\}[\s\S]*?\b[A-Za-z0-9_]+\b)/g, (match) => {
-        // If not already inside math delimiters
-        if (!match.includes('$')) {
-            return `$${match}$`;
-        }
-        return match;
-    });
-
-    // 4) Render display math: $$...$$
+    // 1) Render display math: $$...$$ (rendered inline-block to preserve sentence flow)
     result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
-        return renderKatexSafe(math, false);
+        try {
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
+        } catch {
+            return math;
+        }
     });
 
-    // 5) Render display math: \[...\]
+    // 2) Render display math: \[...\]
     result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => {
-        return renderKatexSafe(math, false);
+        try {
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
+        } catch {
+            return math;
+        }
     });
 
-    // 6) Render inline math: $...$
+    // 3) Render inline math: $...$ (single dollar)
     result = result.replace(/\$([^$\n]+?)\$/g, (_match, math) => {
-        return renderKatexSafe(math, false);
+        try {
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
+        } catch {
+            return math;
+        }
     });
 
-    // 7) Render inline math: \(...\)
+    // 4) Render inline math: \(...\)
     result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => {
-        return renderKatexSafe(math, false);
+        try {
+            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
+        } catch {
+            return math;
+        }
     });
-
-    // 8) Check for bare un-delimited chemical reactions or LaTeX symbols (e.g. \Delta, \alpha, \beta, \xrightarrow)
-    if (/\\(?:Delta|alpha|beta|gamma|theta|lambda|mu|pi|sigma|omega|rightarrow|xrightarrow|leftarrow|pm|times|div|approx|neq|leq|geq)\b/i.test(result)) {
-        result = result.replace(/(\\(?:Delta|alpha|beta|gamma|theta|lambda|mu|pi|sigma|omega|rightarrow|xrightarrow\{[^}]+\}|leftarrow|pm|times|div|approx|neq|leq|geq)(?:\s*[=+\-*/]\s*[A-Za-z0-9]+)?)/g, (match) => {
-            return renderKatexSafe(match, false);
-        });
-    }
-
-    // 9) Convert linebreaks (\r\n and \n) to <br/> tags
-    result = result.replace(/\r\n/g, '<br/>').replace(/\n/g, '<br/>');
 
     return result;
 }
 
-const MathRenderer = ({ text, className = '', style = {}, inline = false }) => {
+const MathRenderer = ({
+    text,
+    className = '',
+    style = {},
+    inline = false,
+    questionId,
+    initialHeight,
+    customDiagramSizes = {},
+    onSizeChange,
+    isOption = false,
+    optionIndex,
+}) => {
     const safeText = typeof text === 'string' ? text : (text ? String(text) : '');
+    const hasImages = /\{\{IMG::.*?\}\}|!\[.*?\]\(.*?\)/i.test(safeText);
 
-    const renderedHtml = useMemo(() => {
-        const processed = processText(safeText, inline);
-        return DOMPurify.sanitize(processed, KATEX_CONFIG);
-    }, [safeText, inline]);
+    const tokens = useMemo(() => {
+        if (!hasImages) return null;
+        const regex = /(\{\{IMG::.*?\}\}|!\[.*?\]\(.*?\))/gi;
+        const parts = safeText.split(regex);
+        return parts.map((part, index) => {
+            if (!part) return null;
+            const imgMatch1 = part.match(/^\{\{IMG::(.*?)\}\}$/i);
+            if (imgMatch1) {
+                return {
+                    type: 'image',
+                    src: imgMatch1[1].trim(),
+                    alt: 'Question Diagram',
+                    key: index,
+                };
+            }
+            const imgMatch2 = part.match(/^!\[(.*?)\]\((.*?)\)$/i);
+            if (imgMatch2) {
+                return {
+                    type: 'image',
+                    src: imgMatch2[2].trim(),
+                    alt: imgMatch2[1] || 'Question Diagram',
+                    key: index,
+                };
+            }
+            return {
+                type: 'text',
+                html: DOMPurify.sanitize(processMathOnly(part), KATEX_CONFIG),
+                key: index,
+            };
+        }).filter(Boolean);
+    }, [safeText, hasImages]);
+
+    if (!hasImages) {
+        const renderedHtml = DOMPurify.sanitize(processMathOnly(safeText), KATEX_CONFIG);
+        return (
+            <span
+                className={`math-renderer ${inline ? 'inline-math' : ''} ${className}`}
+                style={{ display: 'inline', ...style }}
+                dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            />
+        );
+    }
 
     return (
         <span
-            className={`math-renderer ${inline ? 'inline-math' : ''} ${className}`}
-            style={{
-                display: 'inline',
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-                ...style
-            }}
-            dangerouslySetInnerHTML={{ __html: renderedHtml }}
-        />
+            className={`math-renderer ${inline && !hasImages ? 'inline-math' : 'block-math'} ${className}`}
+            style={{ display: inline && !hasImages ? 'inline' : 'block', ...style }}
+        >
+            {tokens.map((token) => {
+                if (token.type === 'text') {
+                    return (
+                        <span
+                            key={token.key}
+                            dangerouslySetInnerHTML={{ __html: token.html }}
+                        />
+                    );
+                }
+                const tokenKey = isOption
+                    ? (optionIndex !== undefined ? `opt_${optionIndex}` : `opt_${token.key}`)
+                    : `inline_${token.key}`;
+                const resolvedHeight = customDiagramSizes?.[tokenKey] || initialHeight;
+
+                return (
+                    <div
+                        key={token.key}
+                        style={{
+                            display: isOption ? 'inline-block' : 'block',
+                            textAlign: 'center',
+                            margin: isOption ? '2px auto' : '4px auto',
+                            clear: isOption ? 'none' : 'both'
+                        }}
+                    >
+                        <ResizableDiagram
+                            src={token.src}
+                            alt={token.alt}
+                            isOption={isOption}
+                            questionId={questionId}
+                            diagramKey={tokenKey}
+                            initialHeight={resolvedHeight}
+                            isManual={Boolean(customDiagramSizes?.[tokenKey])}
+                            onSizeChange={(h) => onSizeChange && onSizeChange(h, tokenKey)}
+                        />
+                    </div>
+                );
+            })}
+        </span>
     );
 };
 
