@@ -699,50 +699,64 @@ function parseMatchFromText(q) {
     let txt = cleanQuestionText(q.questionText || q.question || '');
     if (!txt) return { introText: '', pairs: [] };
 
-    // Clean up bold asterisks around headers e.g. **Column I** -> Column I
-    txt = txt.replace(/\*\*(Column|List)\s*(I|II|A|B)\*\*/gi, '$1 $2');
+    // Strip bold asterisks from Column/List headers
+    const clean = txt.replace(/\*\*/g, '');
 
-    // Regex to detect Column I / Column II or List I / List II
-    const colSplitRegex = /(?:Column|List)\s*(?:I|A)\b([\s\S]*?)(?:Column|List)\s*(?:II|B)\b([\s\S]*?)(?=Choose the correct|Select the correct|Options:|\([a-d1-4]\)\s*[A-D]|$)/i;
-    const match = txt.match(colSplitRegex);
+    // Check if introductory match phrase exists: e.g. "Match Column I with Column II."
+    const introM = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+(?:the\s+following\s+)?(?:items\s+in\s+)?(?:Column|List)\s*(?:I|A)\s+with\s+(?:Column|List)\s*(?:II|B)[.:\-]?\s*/i);
+    let introText = introM ? introM[0].trim() : 'Match Column I with Column II:';
+    let searchFrom = introM ? introM[0].length : 0;
 
-    if (match) {
-        let introText = txt.substring(0, match.index).trim();
-        introText = introText.replace(/\b(?:Match(?:\s+the\s+following)?(?:\s+items\s+in)?(?:\s+List[-\s]*I\s+with\s+List[-\s]*II)?[:\-]?)\s*$/i, '').trim();
+    // Search for actual Column I / List I and Column II / List II headers
+    const col1Idx = clean.toLowerCase().indexOf('column i', searchFrom) !== -1 
+        ? clean.toLowerCase().indexOf('column i', searchFrom) 
+        : (clean.toLowerCase().indexOf('list i', searchFrom) !== -1 ? clean.toLowerCase().indexOf('list i', searchFrom) : clean.toLowerCase().indexOf('column a', searchFrom));
+        
+    const col2Idx = clean.toLowerCase().indexOf('column ii', searchFrom) !== -1 
+        ? clean.toLowerCase().indexOf('column ii', searchFrom) 
+        : (clean.toLowerCase().indexOf('list ii', searchFrom) !== -1 ? clean.toLowerCase().indexOf('list ii', searchFrom) : clean.toLowerCase().indexOf('column b', searchFrom));
 
-        let rawCol1 = match[1].trim();
-        let rawCol2 = match[2].trim();
+    if (col1Idx !== -1 && col2Idx !== -1 && col2Idx > col1Idx) {
+        const col1HeaderMatch = clean.substring(col1Idx).match(/^(?:Column|List)\s*(?:I|A)\b[:\-]?\s*/i);
+        const col2HeaderMatch = clean.substring(col2Idx).match(/^(?:Column|List)\s*(?:II|B)\b[:\-]?\s*/i);
+        
+        const col1HeaderLen = col1HeaderMatch ? col1HeaderMatch[0].length : 8;
+        const col2HeaderLen = col2HeaderMatch ? col2HeaderMatch[0].length : 9;
 
-        // Clean out leading "with", ":", "-"
-        rawCol1 = rawCol1.replace(/^(?:with|:|-|\.)\s*/i, '').trim();
-        rawCol2 = rawCol2.replace(/^(?:with|:|-|\.)\s*/i, '').trim();
+        let rawCol1 = clean.substring(col1Idx + col1HeaderLen, col2Idx).trim();
+        let rawCol2 = clean.substring(col2Idx + col2HeaderLen).replace(/(?:Choose|Select)\s+(?:the\s+)?correct[\s\S]*$/i, '').trim();
 
-        const extractItems = (colStr, isLeft = true) => {
-            const items = [];
-            const itemRegex = isLeft
-                ? /(?:^|\s)(?:\(([A-Da-d])\)|([A-Da-d])[\.:])\s*([\s\S]*?)(?=(?:\s(?:\([A-Da-d]\)|[A-Da-d][\.:]))|$)/g
-                : /(?:^|\s)(?:\(([0-9ivxIVX]+)\)|([0-9ivxIVX]+)[\.:])\s*([\s\S]*?)(?=(?:\s(?:\([0-9ivxIVX]+\)|[0-9ivxIVX]+[\.:]))|$)/g;
-
-            let im;
-            while ((im = itemRegex.exec(colStr)) !== null) {
-                const label = (im[1] || im[2] || '').trim();
-                const content = cleanStatementText(im[3]);
-                if (content && !/^(?:with|Column|List)$/i.test(content)) {
-                    items.push({ label, text: content });
+        const splitSmart = (colStr, isLeft = true) => {
+            if (!colStr) return [];
+            // 1. Explicit (A)/(a)/(1)/(i) labels
+            const labeled = [];
+            const itemRegex = /(?:^|\s)(?:\(([a-z0-9ivx]+)\)|([a-z0-9ivx]+)[\.:\-])\s*([\s\S]*?)(?=(?:\s(?:\([a-z0-9ivx]+\)|[a-z0-9ivx]+[\.:\-]))|$)/gi;
+            let m;
+            while ((m = itemRegex.exec(colStr)) !== null) {
+                const text = cleanStatementText(m[3]);
+                if (text && !/^(?:with|Column|List)$/i.test(text)) {
+                    labeled.push(text);
                 }
             }
+            if (labeled.length >= 2) return labeled;
 
-            if (items.length >= 2) return items.map(it => it.text);
+            // 2. Newlines or HTML breaks
+            if (colStr.includes('\n') || colStr.includes('<br')) {
+                const lines = colStr.split(/(?:\n|<br\s*\/?>)+/).map(s => cleanStatementText(s.replace(/^[\(\[]?[A-Da-d0-9ivxIVX]+[\)\]\.:\-]\s*/, ''))).filter(s => s && !/^(?:with|Column|List)$/i.test(s));
+                if (lines.length >= 2) return lines;
+            }
 
-            // Fallback: split by newlines if structured as lines
-            const lines = colStr.split(/\n+/).map(s => cleanStatementText(s.replace(/^[\(\[]?[A-Da-d0-9ivxIVX]+[\)\]\.:\-]\s*/, ''))).filter(s => s && !/^(?:with|Column|List)$/i.test(s));
-            if (lines.length >= 2) return lines;
+            // 3. Capitalized phrase chunking (e.g. Dicot root Monocot root Dicot leaf Monocot leaf)
+            const chunks = colStr.match(/[A-Z][a-z0-9_\-\/]*(?:\s+[a-z0-9_\-\/]+)*/g);
+            if (chunks && chunks.length >= 2 && chunks.length <= 8) {
+                return chunks.map(s => s.trim()).filter(Boolean);
+            }
 
             return [];
         };
 
-        const leftItems = extractItems(rawCol1, true);
-        const rightItems = extractItems(rawCol2, false);
+        const leftItems = splitSmart(rawCol1, true);
+        const rightItems = splitSmart(rawCol2, false);
 
         if (leftItems.length >= 2 && rightItems.length >= 2) {
             const maxLen = Math.max(leftItems.length, rightItems.length);
@@ -897,18 +911,27 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                         </tr>
                     </thead>
                     <tbody>
-                        {pairs.map((pair, pi) => (
-                            <tr key={pi}>
-                                <td style={Q.matchTd}>
-                                    <strong style={{ marginRight: '4px' }}>({String.fromCharCode(65 + pi)})</strong>
-                                    <MathRenderer inline text={pair.left || ''} />
-                                </td>
-                                <td style={Q.matchTd}>
-                                    <strong style={{ marginRight: '4px' }}>({pi + 1})</strong>
-                                    <MathRenderer inline text={pair.right || ''} />
-                                </td>
-                            </tr>
-                        ))}
+                        {pairs.map((pair, pi) => {
+                            const leftText = pair.left || '';
+                            const rightText = pair.right || '';
+                            const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'][pi] || `(${pi + 1})`;
+                            const letter = `(${String.fromCharCode(97 + pi)})`; // (a), (b), (c), (d)
+                            const hasLeftLabel = /^\s*(\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+[\.\)])/.test(leftText);
+                            const hasRightLabel = /^\s*(\([a-zA-Z0-9ivxLCDM]+\)|[a-zA-Z0-9ivxLCDM]+[\.\)])/i.test(rightText);
+
+                            return (
+                                <tr key={pi}>
+                                    <td style={Q.matchTd}>
+                                        {!hasLeftLabel && <strong style={{ marginRight: '4px' }}>{letter}</strong>}
+                                        <MathRenderer inline text={leftText} />
+                                    </td>
+                                    <td style={Q.matchTd}>
+                                        {!hasRightLabel && <strong style={{ marginRight: '4px' }}>{roman}</strong>}
+                                        <MathRenderer inline text={rightText} />
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             )}
