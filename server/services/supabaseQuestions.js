@@ -337,8 +337,20 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
     if (filters.chapter) {
         const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
         if (chapters.length > 0) {
-            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
-            values.push(chapters);
+            const chVariants = [];
+            chapters.forEach(ch => {
+                chVariants.push(ch);
+                chVariants.push(ch.replace(/:/g, ' -'));
+                chVariants.push(ch.replace(/:/g, ''));
+                chVariants.push(ch.replace(/\s+and\s+/gi, ' and '));
+                chVariants.push(ch.replace(/\s+and\s+/gi, ' And '));
+                chVariants.push(ch.replace(/\s+their\s+/gi, ' their '));
+                chVariants.push(ch.replace(/\s+their\s+/gi, ' Their '));
+                chVariants.push(ch.replace(/\s+its\s+/gi, ' its '));
+                chVariants.push(ch.replace(/\s+its\s+/gi, ' Its '));
+            });
+            whereClauses.push(`(q.chapter = ANY($${paramIndex}::text[]) OR q.chapter ILIKE ANY($${paramIndex++}::text[]))`);
+            values.push([...new Set(chVariants)]);
         }
     }
 

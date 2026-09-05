@@ -317,46 +317,341 @@ export default function CreatePaper() {
         }
     }, [subject, selectedClass]);
 
-    // Canonicalize biology & assessment chapter names
+    // ── OFFICIAL NCERT BIOLOGY SYLLABUS HIERARCHY (Class 11 & Class 12) ──
+    const NCERT_BIOLOGY_SYLLABUS = useMemo(() => ({
+        'Class 11': {
+            'The Living World': [
+                'Diversity in the Living World',
+                'Taxonomic Categories'
+            ],
+            'Biological Classification': [
+                'Kingdom Monera',
+                'Kingdom Protista',
+                'Kingdom Fungi',
+                'Kingdom Plantae',
+                'Kingdom Animalia',
+                'Viruses, Viroids, Prions and Lichens'
+            ],
+            'Plant Kingdom': [
+                'Algae',
+                'Bryophytes',
+                'Pteridophytes',
+                'Gymnosperms',
+                'Angiosperms'
+            ],
+            'Animal Kingdom': [
+                'Basis of Classification',
+                'Classification of Animals'
+            ],
+            'Morphology of Flowering Plants': [
+                'The Root',
+                'The Stem',
+                'The Leaf',
+                'The Inflorescence',
+                'The Flower',
+                'The Fruit',
+                'The Seed',
+                'Semi-technical Description of a Typical Flowering Plant',
+                'Description of Some Important Families'
+            ],
+            'Anatomy of Flowering Plants': [
+                'The Tissue System',
+                'Anatomy of Dicotyledonous and Monocotyledonous Plants'
+            ],
+            'Structural Organisation in Animals': [
+                'Organ and Organ System',
+                'Frogs'
+            ],
+            'Cell: The Unit of Life': [
+                'What is a Cell?',
+                'Cell Theory',
+                'An Overview of Cell',
+                'Prokaryotic Cells',
+                'Eukaryotic Cells'
+            ],
+            'Biomolecules': [
+                'How to Analyse Chemical Composition?',
+                'Primary and Secondary Metabolites',
+                'Biomacromolecules',
+                'Proteins',
+                'Polysaccharides',
+                'Nucleic Acids',
+                'Structure of Proteins',
+                'Enzymes'
+            ],
+            'Cell Cycle and Cell Division': [
+                'Cell Cycle',
+                'M Phase',
+                'Significance of Mitosis',
+                'Meiosis',
+                'Significance of Meiosis'
+            ],
+            'Photosynthesis in Higher Plants': [
+                'What do we Know?',
+                'Early Experiments',
+                'Where does Photosynthesis take place?',
+                'How many Pigments are involved in Photosynthesis?',
+                'What is Light Reaction?',
+                'The Electron Transport',
+                'Where are the ATP and NADPH Used?',
+                'The C4 Pathway',
+                'Photorespiration',
+                'Factors affecting Photosynthesis'
+            ],
+            'Respiration in Plants': [
+                'Do Plants Breathe?',
+                'Glycolysis',
+                'Fermentation',
+                'Aerobic Respiration',
+                'The Respiratory Balance Sheet',
+                'Amphibolic Pathway',
+                'Respiratory Quotient'
+            ],
+            'Plant Growth and Development': [
+                'Growth',
+                'Differentiation, Dedifferentiation and Redifferentiation',
+                'Development',
+                'Plant Growth Regulators'
+            ],
+            'Breathing and Exchange of Gases': [
+                'Respiratory Organs',
+                'Mechanism of Breathing',
+                'Exchange of Gases',
+                'Transport of Gases',
+                'Regulation of Respiration',
+                'Disorders of Respiratory System'
+            ],
+            'Body Fluids and Circulation': [
+                'Blood',
+                'Lymph (Tissue Fluid)',
+                'Circulatory Pathways',
+                'Double Circulation',
+                'Regulation of Cardiac Activity',
+                'Disorders of Circulatory System'
+            ],
+            'Excretory Products and Their Elimination': [
+                'Human Excretory System',
+                'Urine Formation',
+                'Function of the Tubules',
+                'Mechanism of Concentration of the Filtrate',
+                'Regulation of Kidney Function',
+                'Micturition',
+                'Role of Other Organs in Excretion',
+                'Disorders of the Excretory System'
+            ],
+            'Locomotion and Movement': [
+                'Types of Movement',
+                'Muscle',
+                'Skeletal System',
+                'Joints',
+                'Disorders of Muscular and Skeletal System'
+            ],
+            'Neural Control and Coordination': [
+                'Neural System',
+                'Human Neural System',
+                'Neuron as Structural and Functional Unit of Neural System',
+                'Central Neural System'
+            ],
+            'Chemical Coordination and Integration': [
+                'Endocrine Glands and Hormones',
+                'Human Endocrine System',
+                'Hormones of Heart, Kidney and Gastrointestinal Tract',
+                'Mechanism of Hormone Action'
+            ]
+        },
+        'Class 12': {
+            'Sexual Reproduction in Flowering Plants': [
+                'Flower – A Fascinating Organ of Angiosperms',
+                'Pre-fertilisation: Structures and Events',
+                'Double Fertilisation',
+                'Post-fertilisation: Structures and Events',
+                'Apomixis and Polyembryony'
+            ],
+            'Human Reproduction': [
+                'The Male Reproductive System',
+                'The Female Reproductive System',
+                'Gametogenesis',
+                'Menstrual Cycle',
+                'Fertilisation and Implantation',
+                'Pregnancy and Embryonic Development',
+                'Parturition and Lactation'
+            ],
+            'Reproductive Health': [
+                'Reproductive Health – Problems and Strategies',
+                'Population Explosion and Birth Control',
+                'Medical Termination of Pregnancy (MTP)',
+                'Sexually Transmitted Infections (STIs)',
+                'Infertility'
+            ],
+            'Principles of Inheritance and Variation': [
+                "Mendel's Laws of Inheritance",
+                'Inheritance of One Gene',
+                'Inheritance of Two Genes',
+                'Polygenic Inheritance',
+                'Pleiotropy',
+                'Sex Determination',
+                'Mutation',
+                'Genetic Disorders'
+            ],
+            'Molecular Basis of Inheritance': [
+                'The DNA',
+                'The Search for Genetic Material',
+                'RNA World',
+                'Replication',
+                'Transcription',
+                'Genetic Code',
+                'Translation',
+                'Regulation of Gene Expression',
+                'Human Genome Project',
+                'DNA Fingerprinting'
+            ],
+            'Evolution': [
+                'Origin of Life',
+                'Evolution of Life Forms – A Theory',
+                'What are the Evidences for Evolution?',
+                'What is Adaptive Radiation?',
+                'Biological Evolution',
+                'Mechanism of Evolution',
+                'Hardy-Weinberg Principle',
+                'A Brief Account of Evolution',
+                'Origin and Evolution of Man'
+            ],
+            'Human Health and Disease': [
+                'Common Diseases in Humans',
+                'Immunity',
+                'AIDS',
+                'Cancer',
+                'Drugs and Alcohol Abuse'
+            ],
+            'Microbes in Human Welfare': [
+                'Microbes in Household Products',
+                'Microbes in Industrial Products',
+                'Microbes in Sewage Treatment',
+                'Microbes in Production of Biogas',
+                'Microbes as Biocontrol Agents',
+                'Microbes as Biofertilisers'
+            ],
+            'Biotechnology: Principles and Processes': [
+                'Principles of Biotechnology',
+                'Tools of Recombinant DNA Technology',
+                'Processes of Recombinant DNA Technology'
+            ],
+            'Biotechnology and Its Applications': [
+                'Biotechnological Applications in Agriculture',
+                'Biotechnological Applications in Medicine',
+                'Transgenic Animals',
+                'Ethical Issues'
+            ],
+            'Organisms and Populations': [
+                'Populations'
+            ],
+            'Ecosystem': [
+                'Ecosystem – Structure and Function',
+                'Productivity',
+                'Decomposition',
+                'Energy Flow',
+                'Ecological Pyramids'
+            ],
+            'Biodiversity and Conservation': [
+                'Biodiversity',
+                'Biodiversity Conservation'
+            ]
+        }
+    }), []);
+
+    // Subject discipline mapping for NEET/KCET Botany vs Zoology breakdown
+    const BOTANY_CHAPTERS = useMemo(() => new Set([
+        // Class 11 Botany
+        'The Living World',
+        'Biological Classification',
+        'Plant Kingdom',
+        'Morphology of Flowering Plants',
+        'Anatomy of Flowering Plants',
+        'Cell: The Unit of Life',
+        'Cell Cycle and Cell Division',
+        'Photosynthesis in Higher Plants',
+        'Respiration in Plants',
+        'Plant Growth and Development',
+        // Class 12 Botany
+        'Sexual Reproduction in Flowering Plants',
+        'Principles of Inheritance and Variation',
+        'Molecular Basis of Inheritance',
+        'Microbes in Human Welfare',
+        'Biotechnology: Principles and Processes',
+        'Biotechnology and Its Applications',
+        'Organisms and Populations',
+        'Ecosystem',
+        'Biodiversity and Conservation'
+    ]), []);
+
+    const ZOOLOGY_CHAPTERS = useMemo(() => new Set([
+        // Class 11 Zoology
+        'Animal Kingdom',
+        'Structural Organisation in Animals',
+        'Biomolecules',
+        'Cell: The Unit of Life',
+        'Cell Cycle and Cell Division',
+        'Breathing and Exchange of Gases',
+        'Body Fluids and Circulation',
+        'Excretory Products and Their Elimination',
+        'Locomotion and Movement',
+        'Neural Control and Coordination',
+        'Chemical Coordination and Integration',
+        // Class 12 Zoology
+        'Human Reproduction',
+        'Reproductive Health',
+        'Principles of Inheritance and Variation',
+        'Molecular Basis of Inheritance',
+        'Evolution',
+        'Human Health and Disease',
+        'Biotechnology: Principles and Processes',
+        'Biotechnology and Its Applications'
+    ]), []);
+
+    // Canonicalize biology & assessment chapter names (eliminates duplicate capitalization/punctuation variants)
     const canonicalizeChapterName = (name) => {
         if (!name || typeof name !== 'string') return '';
         const clean = name.trim();
         const lower = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const CANONICAL_LIST = [
+        
+        const ALL_CANONICAL = [
+            // Class 11
             'The Living World',
             'Biological Classification',
             'Plant Kingdom',
+            'Animal Kingdom',
             'Morphology of Flowering Plants',
             'Anatomy of Flowering Plants',
+            'Structural Organisation in Animals',
             'Cell: The Unit of Life',
+            'Biomolecules',
             'Cell Cycle and Cell Division',
             'Photosynthesis in Higher Plants',
             'Respiration in Plants',
             'Plant Growth and Development',
-            'Animal Kingdom',
-            'Structural Organisation in Animals',
-            'Biomolecules',
             'Breathing and Exchange of Gases',
             'Body Fluids and Circulation',
             'Excretory Products and Their Elimination',
             'Locomotion and Movement',
             'Neural Control and Coordination',
             'Chemical Coordination and Integration',
+            // Class 12
             'Sexual Reproduction in Flowering Plants',
+            'Human Reproduction',
+            'Reproductive Health',
             'Principles of Inheritance and Variation',
             'Molecular Basis of Inheritance',
+            'Evolution',
+            'Human Health and Disease',
             'Microbes in Human Welfare',
             'Biotechnology: Principles and Processes',
             'Biotechnology and Its Applications',
             'Organisms and Populations',
             'Ecosystem',
-            'Biodiversity and Conservation',
-            'Human Reproduction',
-            'Reproductive Health',
-            'Evolution',
-            'Human Health and Disease'
+            'Biodiversity and Conservation'
         ];
-        for (const c of CANONICAL_LIST) {
+
+        for (const c of ALL_CANONICAL) {
             if (c.toLowerCase().replace(/[^a-z0-9]/g, '') === lower) {
                 return c;
             }
@@ -364,61 +659,86 @@ export default function CreatePaper() {
         return clean;
     };
 
-    // Distinct chapters and concepts map (Scoped strictly to selected class)
+    // Distinct chapters and concepts map (Scoped strictly to selected subject and class)
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
-        const canonicalMetaChapters = (metaData.chapters || []).map(canonicalizeChapterName).filter(Boolean);
-        const chaptersSet = new Set(canonicalMetaChapters);
+        const subLower = (subject || '').toLowerCase();
+        const isBotany = subLower.includes('botan');
+        const isZoology = subLower.includes('zool');
+        const isBio = subLower.includes('bio') || isBotany || isZoology;
+
+        const cleanClass = selectedClass === 'Both' ? '' : String(selectedClass || '').replace(/^(class|grade|puc)\s*/i, '').trim();
+
+        const chaptersSet = new Set();
         const map = {};
 
-        // Pre-populate map keys for metadata chapters
-        canonicalMetaChapters.forEach(ch => {
-            if (!map[ch]) map[ch] = new Set();
-        });
+        // 1. Seed with standard NCERT syllabus for Biology/Botany/Zoology
+        if (isBio) {
+            const classesToSeed = cleanClass === '11' ? ['Class 11'] : (cleanClass === '12' ? ['Class 12'] : ['Class 11', 'Class 12']);
+            classesToSeed.forEach(cls => {
+                const syl = NCERT_BIOLOGY_SYLLABUS[cls] || {};
+                Object.keys(syl).forEach(ch => {
+                    if (isBotany && !BOTANY_CHAPTERS.has(ch)) return;
+                    if (isZoology && !ZOOLOGY_CHAPTERS.has(ch)) return;
 
-        // Add meta concepts first
-        (metaData.concepts || []).forEach(c => {
-            if (c && typeof c === 'object' && c.chapter && c.name) {
-                const canonCh = canonicalizeChapterName(c.chapter);
-                chaptersSet.add(canonCh);
-                if (!map[canonCh]) map[canonCh] = new Set();
-                map[canonCh].add(c.name.trim());
-            }
-        });
-
-        // Also add from available questions matching this class
-        availableQuestions.forEach(q => {
-            if (selectedClass && selectedClass !== 'Both' && q.classes && q.classes.length > 0) {
-                const cleanTarget = String(selectedClass).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
-                const matches = q.classes.some(c => {
-                    const cleanC = String(c).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
-                    return cleanC === cleanTarget || (cleanTarget === '12' && (cleanC === 'ii' || cleanC === '2')) || (cleanTarget === '11' && (cleanC === 'i' || cleanC === '1'));
+                    chaptersSet.add(ch);
+                    if (!map[ch]) map[ch] = new Set();
+                    syl[ch].forEach(cpt => map[ch].add(cpt));
                 });
-                if (!matches) return;
-            }
+            });
+        }
 
-            const rawCh = q.chapter || 'General';
-            const ch = canonicalizeChapterName(rawCh);
-            // Only include chapters in current class syllabus if metadata exists
-            if (canonicalMetaChapters.length > 0 && !canonicalMetaChapters.includes(ch) && ch !== 'General') {
-                return;
-            }
+        // 2. Add metadata chapters from API
+        (metaData.chapters || []).forEach(rawCh => {
+            const canonCh = canonicalizeChapterName(rawCh);
+            if (!canonCh || canonCh === 'General') return;
+            if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
+            if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
 
-            chaptersSet.add(ch);
-            if (!map[ch]) map[ch] = new Set();
-            const cpt = q.concept || q.topic;
-            if (cpt && cpt !== 'General' && cpt !== ch) {
-                map[ch].add(cpt.trim());
+            chaptersSet.add(canonCh);
+            if (!map[canonCh]) map[canonCh] = new Set();
+        });
+
+        // 3. Add concepts from API metadata
+        (metaData.concepts || []).forEach(c => {
+            if (c && typeof c === 'object' && c.chapter && (c.name || c.concept)) {
+                const canonCh = canonicalizeChapterName(c.chapter);
+                const cptName = (c.name || c.concept).trim();
+                if (canonCh && cptName) {
+                    if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
+                    if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
+
+                    chaptersSet.add(canonCh);
+                    if (!map[canonCh]) map[canonCh] = new Set();
+                    map[canonCh].add(cptName);
+                }
             }
         });
 
-        const sorted = Array.from(chaptersSet).filter(Boolean).sort();
+        // 4. Also scan available questions for any additional chapters/topics
+        availableQuestions.forEach(q => {
+            const rawCh = q.chapter;
+            if (!rawCh || rawCh === 'General') return;
+            const canonCh = canonicalizeChapterName(rawCh);
+
+            if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
+            if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
+
+            chaptersSet.add(canonCh);
+            if (!map[canonCh]) map[canonCh] = new Set();
+            const cpt = q.concept || q.topic;
+            if (cpt && cpt !== 'General' && cpt !== canonCh) {
+                map[canonCh].add(cpt.trim());
+            }
+        });
+
+        const sortedChapters = Array.from(chaptersSet).filter(Boolean).sort();
         const cleanMap = {};
-        sorted.forEach(ch => {
+        sortedChapters.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();
         });
 
-        return { distinctChapters: sorted, chapterConceptsMap: cleanMap };
-    }, [metaData, availableQuestions, selectedClass]);
+        return { distinctChapters: sortedChapters, chapterConceptsMap: cleanMap };
+    }, [metaData, availableQuestions, selectedClass, subject, NCERT_BIOLOGY_SYLLABUS, BOTANY_CHAPTERS, ZOOLOGY_CHAPTERS]);
 
     // Available concepts for checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
@@ -498,7 +818,8 @@ export default function CreatePaper() {
 
             // Chapter check
             if (selectedChapters.length > 0) {
-                if (!selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
+                const canonQ = canonicalizeChapterName(q.chapter);
+                if (!selectedChapters.includes(canonQ) && !selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
             }
 
             // Concept check
