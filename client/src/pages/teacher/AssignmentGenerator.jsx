@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AssignmentGenerator.jsx
  *
  * Dedicated Practice Assignment Generator:
@@ -59,10 +59,6 @@ const AssignmentGenerator = () => {
     const [startQNo, setStartQNo] = useState(1);
     const [endQNo, setEndQNo] = useState(null);
 
-    // Multi-Source Question Repositories
-    const [selectedSources, setSelectedSources] = useState(['REGULAR', 'PYQ', 'GT']);
-    const [chapterAllocations, setChapterAllocations] = useState({});
-
     // Questions Pool & Selection
     const [questionsPool, setQuestionsPool] = useState([]);
     const [selectedQuestions, setSelectedQuestions] = useState([]);
@@ -76,7 +72,6 @@ const AssignmentGenerator = () => {
 
     // Filters
     const [filterChapter, setFilterChapter] = useState('');
-    const [filterSource, setFilterSource] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -102,53 +97,11 @@ const AssignmentGenerator = () => {
         }
     }, [subject]);
 
-    const toggleSource = (src) => {
-        setSelectedSources(prev => {
-            if (prev.includes(src)) {
-                if (prev.length === 1) return prev; // Keep at least one
-                return prev.filter(s => s !== src);
-            } else {
-                return [...prev, src];
-            }
-        });
-    };
-
-    // Calculate Equal Split across selected chapters
-    const calculateEqualChapterSplit = () => {
-        if (selectedChapters.length === 0) return;
-        const total = targetCount || 25;
-        const perChapter = Math.floor(total / selectedChapters.length);
-        const remainder = total % selectedChapters.length;
-
-        const newAlloc = {};
-        selectedChapters.forEach((ch, idx) => {
-            newAlloc[ch] = perChapter + (idx < remainder ? 1 : 0);
-        });
-        setChapterAllocations(newAlloc);
-    };
-
-    // Auto-update chapter allocations when selectedChapters or targetCount changes
-    useEffect(() => {
-        if (selectedChapters.length > 0) {
-            setChapterAllocations(prev => {
-                const total = targetCount || 25;
-                const perChapter = Math.floor(total / selectedChapters.length);
-                const remainder = total % selectedChapters.length;
-                const updated = {};
-                selectedChapters.forEach((ch, idx) => {
-                    updated[ch] = prev[ch] !== undefined ? prev[ch] : (perChapter + (idx < remainder ? 1 : 0));
-                });
-                return updated;
-            });
-        }
-    }, [selectedChapters, targetCount]);
-
-    // Fetch Questions across selected sources
+    // Fetch Questions
     const fetchQuestions = async () => {
         setLoading(true);
         try {
-            const sourcesParam = selectedSources.length > 0 ? selectedSources.join(',') : 'ALL';
-            const res = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&sources=${encodeURIComponent(sourcesParam)}&limit=20000`);
+            const res = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&limit=20000`);
             const qs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             setQuestionsPool(qs);
         } catch (err) {
@@ -160,7 +113,7 @@ const AssignmentGenerator = () => {
 
     useEffect(() => {
         if (subject) fetchQuestions();
-    }, [subject, selectedSources]);
+    }, [subject]);
 
     // Chapters and concepts extraction
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
@@ -223,7 +176,7 @@ const AssignmentGenerator = () => {
     // Scoped pool based on checked chapters & concepts
     const scopedPool = useMemo(() => {
         return questionsPool.filter(q => {
-            if (selectedChapters.length > 0 && !selectedChapters.some(ch => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase())) return false;
+            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) return false;
             if (selectedConcepts.length > 0) {
                 const cpt = q.concept || q.topic;
                 if (!selectedConcepts.includes(cpt)) return false;
@@ -238,18 +191,15 @@ const AssignmentGenerator = () => {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.sourceExam || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.sourcePaperName || '').toLowerCase().includes(searchTerm.toLowerCase());
+                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = !filterChapter || (q.chapter || '').trim().toLowerCase() === filterChapter.trim().toLowerCase();
-            const matchesSource = !filterSource || (q.sourceType || 'REGULAR') === filterSource;
+            const matchesChapter = !filterChapter || q.chapter === filterChapter;
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
-            return matchesSearch && matchesChapter && matchesSource && matchesDifficulty && matchesType;
+            return matchesSearch && matchesChapter && matchesDifficulty && matchesType;
         });
-    }, [scopedPool, searchTerm, filterChapter, filterSource, filterDifficulty, filterType]);
+    }, [scopedPool, searchTerm, filterChapter, filterDifficulty, filterType]);
 
     // Handle Question Click or Swap
     const handleQuestionClick = (q) => {
@@ -284,37 +234,12 @@ const AssignmentGenerator = () => {
         setSelectedQuestions(prev => prev.filter((_, i) => i !== idx));
     };
 
-    // Auto Pick Questions strictly according to chapter allocations
+    // Auto Pick Questions
     const handleAutoPick = () => {
         if (scopedPool.length === 0) return alert('No questions match the selected chapters/concepts.');
-        
-        if (selectedChapters.length > 0) {
-            let picked = [];
-            const pickedIds = new Set();
-
-            selectedChapters.forEach(ch => {
-                const quota = chapterAllocations[ch] ?? Math.round(targetCount / selectedChapters.length);
-                if (quota <= 0) return;
-                const poolForCh = scopedPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
-                const shuffled = [...poolForCh].sort(() => 0.5 - Math.random());
-                const selectedForCh = shuffled.slice(0, quota);
-                selectedForCh.forEach(q => {
-                    picked.push(q);
-                    pickedIds.add(q._id || q.id);
-                });
-            });
-
-            // If shortfall, fill from remaining pool
-            if (picked.length < targetCount) {
-                const remaining = scopedPool.filter(q => !pickedIds.has(q._id || q.id)).sort(() => 0.5 - Math.random());
-                picked.push(...remaining.slice(0, targetCount - picked.length));
-            }
-            setSelectedQuestions(picked.slice(0, targetCount));
-        } else {
-            const count = Math.min(targetCount, scopedPool.length);
-            const shuffled = [...scopedPool].sort(() => 0.5 - Math.random());
-            setSelectedQuestions(shuffled.slice(0, count));
-        }
+        const count = Math.min(targetCount, scopedPool.length);
+        const shuffled = [...scopedPool].sort(() => 0.5 - Math.random());
+        setSelectedQuestions(shuffled.slice(0, count));
     };
 
     // Effective visible questions
@@ -356,7 +281,7 @@ const AssignmentGenerator = () => {
             };
 
             await api.post('/api/papers', payload);
-            alert('✓ Assignment successfully finalized and saved! It is now visible in Department Archives / Saved Papers.');
+            alert('Γ£ô Assignment successfully finalized and saved! It is now visible in Department Archives / Saved Papers.');
             navigate('/teacher/dashboard/saved-papers');
         } catch (err) {
             console.error('Error saving assignment:', err);
@@ -369,9 +294,9 @@ const AssignmentGenerator = () => {
     return (
         <div className="space-y-6 animate-fade-in pb-16">
             
-            {/* ══════════════════════════════════════════════════════════════
+            {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                 PREVIEW MODE
-            ══════════════════════════════════════════════════════════════ */}
+            ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
             {showPreview ? (
                 <div className="space-y-6">
                     {/* Toolbar */}
@@ -380,7 +305,7 @@ const AssignmentGenerator = () => {
                             onClick={() => setShowPreview(false)}
                             className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-5 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>←</span> ✏️ Back to Edit Questions
+                            <span>ΓåÉ</span> Γ£Å∩╕Å Back to Edit Questions
                         </button>
 
                         <div className="flex items-center gap-2.5 flex-wrap">
@@ -388,19 +313,19 @@ const AssignmentGenerator = () => {
                                 onClick={() => setShowAnalysisModal(true)}
                                 className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                             >
-                                <span>📊</span> View Analysis
+                                <span>≡ƒôè</span> View Analysis
                             </button>
                             <button
                                 onClick={() => setShowAnswerKeyModal(true)}
                                 className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                             >
-                                <span>🔑</span> Answer Key
+                                <span>≡ƒöæ</span> Answer Key
                             </button>
                             <button
                                 onClick={() => setShowSolutionsModal(true)}
                                 className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                             >
-                                <span>💡</span> Solutions
+                                <span>≡ƒÆí</span> Solutions
                             </button>
                             <button
                                 onClick={() => setShowSettings(!showSettings)}
@@ -408,20 +333,20 @@ const AssignmentGenerator = () => {
                                     showSettings ? 'bg-amber-500 text-white' : 'bg-white text-gray-700 border-gray-300'
                                 }`}
                             >
-                                <span>⚙️</span> Layout Settings
+                                <span>ΓÜÖ∩╕Å</span> Layout Settings
                             </button>
                             <button
                                 onClick={handleSaveAssignment}
                                 disabled={saving}
                                 className="bg-navy text-gold hover:scale-105 px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5 border border-gold"
                             >
-                                <span>💾</span> {saving ? 'Saving...' : 'Save Assignment'}
+                                <span>≡ƒÆ╛</span> {saving ? 'Saving...' : 'Save Assignment'}
                             </button>
                             <button
                                 onClick={() => window.print()}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                             >
-                                <span>🖨</span> Download / Print PDF
+                                <span>≡ƒû¿</span> Download / Print PDF
                             </button>
                         </div>
                     </div>
@@ -439,9 +364,9 @@ const AssignmentGenerator = () => {
                     </div>
                 </div>
             ) : (
-                /* ══════════════════════════════════════════════════════════════
+                /* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                     BUILDER MODE (CONFIG + FULL QUALITY QUESTIONS SELECTION)
-                ══════════════════════════════════════════════════════════════ */
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */
                 <div className="space-y-6">
                     
                     {/* Header */}
@@ -460,7 +385,7 @@ const AssignmentGenerator = () => {
                                 onClick={() => navigate('/teacher/dashboard')}
                                 className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                             >
-                                ← Back to Portal
+                                ΓåÉ Back to Portal
                             </button>
                             <button
                                 onClick={() => setShowPreview(true)}
@@ -468,7 +393,7 @@ const AssignmentGenerator = () => {
                                 className="bg-navy text-gold hover:scale-105 disabled:opacity-40 disabled:pointer-events-none px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-lg flex items-center gap-2 cursor-pointer"
                             >
                                 <span>Preview Assignment ({selectedQuestions.length})</span>
-                                <span>→</span>
+                                <span>ΓåÆ</span>
                             </button>
                         </div>
                     </div>
@@ -477,7 +402,7 @@ const AssignmentGenerator = () => {
                     {swappingIndex !== null && (
                         <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex items-center justify-between gap-3 animate-pulse">
                             <div className="flex items-center gap-3">
-                                <span className="text-2xl">🔄</span>
+                                <span className="text-2xl">≡ƒöä</span>
                                 <div>
                                     <h4 className="font-black text-xs uppercase tracking-wider">
                                         Swap Mode Active: Replacing Question #{startQNo + swappingIndex}
@@ -491,7 +416,7 @@ const AssignmentGenerator = () => {
                                 onClick={() => setSwappingIndex(null)}
                                 className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
                             >
-                                ✕ Cancel Swap
+                                Γ£ò Cancel Swap
                             </button>
                         </div>
                     )}
@@ -540,65 +465,11 @@ const AssignmentGenerator = () => {
                             </div>
                         </div>
 
-                        {/* Question Database Repositories */}
-                        <div className="space-y-3 pt-4 border-t border-gray-100">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                    <span>🗄️</span> Question Database Repositories
-                                    <span className="text-[10px] text-gray-500 font-semibold">(Select databases to pool questions from)</span>
-                                </label>
-                                <span className="text-[10px] font-bold text-navy bg-navy/10 px-2 py-0.5 rounded-full">
-                                    {selectedSources.length} Selected
-                                </span>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {[
-                                    { id: 'REGULAR', title: '🏛️ Question Bank', desc: 'Standard Chapterwise Database', badge: 'Standard' },
-                                    { id: 'PYQ', title: '📜 Previous Years (PYQs)', desc: 'NEET, JEE & Board Exams Database', badge: 'PYQ' },
-                                    { id: 'GT', title: '🏆 Grand Test Papers', desc: 'Full Mock Papers Database', badge: 'Grand Test' },
-                                ].map(src => {
-                                    const isSelected = selectedSources.includes(src.id);
-                                    return (
-                                        <div
-                                            key={src.id}
-                                            onClick={() => toggleSource(src.id)}
-                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 select-none ${
-                                                isSelected
-                                                    ? 'border-navy bg-navy/5 shadow-xs'
-                                                    : 'border-gray-200 bg-white hover:border-gray-300 opacity-60'
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onChange={() => {}}
-                                                className="w-4 h-4 text-navy rounded border-gray-300 mt-0.5 cursor-pointer flex-shrink-0"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center justify-between gap-1">
-                                                    <p className="font-black text-xs text-navy truncate">{src.title}</p>
-                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
-                                                        src.id === 'PYQ' ? 'bg-indigo-100 text-indigo-800' :
-                                                        src.id === 'GT' ? 'bg-amber-100 text-amber-800' :
-                                                        'bg-slate-100 text-slate-700'
-                                                    }`}>
-                                                        {src.badge}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">{src.desc}</p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
                         {/* Chapter Multi-Select */}
                         <div className="space-y-3 pt-4 border-t border-gray-100">
                             <div className="flex justify-between items-center">
                                 <span className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                    <span>📚</span> Filter Chapters ({selectedChapters.length} Selected)
+                                    <span>≡ƒôÜ</span> Filter Chapters ({selectedChapters.length} Selected)
                                 </span>
                                 <div className="flex gap-2">
                                     <button
@@ -641,64 +512,12 @@ const AssignmentGenerator = () => {
                             </div>
                         </div>
 
-                        {/* Chapter Blueprint Question Allocation */}
-                        {selectedChapters.length > 0 && (
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div>
-                                        <label className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
-                                            <span>🎯</span> Chapter Blueprint Allocations
-                                        </label>
-                                        <p className="text-[11px] text-gray-500 font-medium">
-                                            Specify exact questions required per chapter for auto-pick.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={calculateEqualChapterSplit}
-                                        className="text-[11px] font-black text-navy hover:text-gold hover:bg-navy px-3 py-1 rounded-lg border border-navy/20 transition cursor-pointer"
-                                    >
-                                        ⚡ Auto Split Evenly ({targetCount} Qs)
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-44 overflow-y-auto pr-1">
-                                    {selectedChapters.map(ch => {
-                                        const count = chapterAllocations[ch] ?? 0;
-                                        const poolForCh = scopedPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
-                                        return (
-                                            <div key={ch} className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between gap-2 shadow-2xs">
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-xs font-bold text-navy truncate" title={ch}>{ch}</p>
-                                                    <p className="text-[10px] text-gray-400 font-semibold">{poolForCh.length} in pool</p>
-                                                </div>
-                                                <div className="flex items-center gap-1">
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        max="200"
-                                                        value={count}
-                                                        onChange={e => {
-                                                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                                                            setChapterAllocations(prev => ({ ...prev, [ch]: val }));
-                                                        }}
-                                                        className="w-14 text-center font-black text-xs py-1 px-1 bg-slate-50 border border-slate-300 rounded-lg text-navy focus:bg-white focus:border-navy outline-none"
-                                                    />
-                                                    <span className="text-[10px] font-black text-slate-500">Qs</span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
                         {/* Concepts Multi-Select */}
                         {availableConceptsForSelectedChapters.length > 0 && (
                             <div className="space-y-3 pt-4 border-t border-gray-100">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                        <span>💡</span> Filter Concepts & Topics ({selectedConcepts.length} Selected)
+                                        <span>≡ƒÆí</span> Filter Concepts & Topics ({selectedConcepts.length} Selected)
                                     </span>
                                     <div className="flex gap-2">
                                         <button
@@ -763,30 +582,30 @@ const AssignmentGenerator = () => {
                                     onClick={() => setFullQualityView(!fullQualityView)}
                                     className="bg-slate-100 text-navy hover:bg-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>{fullQualityView ? '🖼 Full Details View (Active)' : '📄 Compact View (Active)'}</span>
+                                    <span>{fullQualityView ? '≡ƒû╝ Full Details View (Active)' : '≡ƒôä Compact View (Active)'}</span>
                                 </button>
 
                                 <button
                                     onClick={handleAutoPick}
                                     className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>⚡</span> Auto Pick ({targetCount})
+                                    <span>ΓÜí</span> Auto Pick ({targetCount})
                                 </button>
 
                                 <button
                                     onClick={() => setShowReviewModal(true)}
                                     className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>👁</span> Review Selected ({selectedQuestions.length})
+                                    <span>≡ƒæü</span> Review Selected ({selectedQuestions.length})
                                 </button>
                             </div>
                         </div>
 
                         {/* Search & Sub-Filters */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                             <input
                                 type="text"
-                                placeholder="🔍 Search questions..."
+                                placeholder="≡ƒöì Search questions..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
@@ -802,24 +621,14 @@ const AssignmentGenerator = () => {
                                 ))}
                             </select>
                             <select
-                                value={filterSource}
-                                onChange={e => setFilterSource(e.target.value)}
-                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                            >
-                                <option value="">All Active Sources</option>
-                                {selectedSources.includes('REGULAR') && <option value="REGULAR">🏛️ Question Bank</option>}
-                                {selectedSources.includes('PYQ') && <option value="PYQ">📜 Previous Years (PYQ)</option>}
-                                {selectedSources.includes('GT') && <option value="GT">🏆 Grand Tests (GT)</option>}
-                            </select>
-                            <select
                                 value={filterDifficulty}
                                 onChange={e => setFilterDifficulty(e.target.value)}
                                 className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
                             >
                                 <option value="">All Difficulties</option>
-                                <option value="easy">🟢 Easy</option>
-                                <option value="medium">🟡 Medium</option>
-                                <option value="hard">🔴 Hard</option>
+                                <option value="easy">≡ƒƒó Easy</option>
+                                <option value="medium">≡ƒƒí Medium</option>
+                                <option value="hard">≡ƒö┤ Hard</option>
                             </select>
                             <select
                                 value={filterType}
@@ -868,31 +677,15 @@ const AssignmentGenerator = () => {
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                    {/* Source Badge */}
-                                                    {q.sourceType === 'PYQ' ? (
-                                                        <span className="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
-                                                            <span>📜 PYQ</span>
-                                                            {q.sourceExam && <span>: {q.sourceExam} {q.sourceYear ? `'${String(q.sourceYear).slice(-2)}` : ''}</span>}
-                                                        </span>
-                                                    ) : q.sourceType === 'GT' ? (
-                                                        <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
-                                                            <span>🏆 GT</span>
-                                                            {q.sourcePaperName && <span className="truncate max-w-[120px]">: {q.sourcePaperName}</span>}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
-                                                            🏛️ Bank
-                                                        </span>
-                                                    )}
                                                     <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
                                                         {q.type || 'MCQ'}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                                                        📖 {q.chapter || 'General'}
+                                                        ≡ƒôû {q.chapter || 'General'}
                                                     </span>
                                                     {conceptName && conceptName !== 'General' && (
                                                         <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                            💡 {conceptName}
+                                                            ≡ƒÆí {conceptName}
                                                         </span>
                                                     )}
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -939,7 +732,7 @@ const AssignmentGenerator = () => {
                 </div>
             )}
 
-            {/* ── MODAL: REVIEW SELECTED BASKET ── */}
+            {/* ΓöÇΓöÇ MODAL: REVIEW SELECTED BASKET ΓöÇΓöÇ */}
             {showReviewModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                     <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -959,7 +752,7 @@ const AssignmentGenerator = () => {
                                 onClick={() => setShowReviewModal(false)}
                                 className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
                             >
-                                ✕
+                                Γ£ò
                             </button>
                         </div>
 
@@ -980,11 +773,11 @@ const AssignmentGenerator = () => {
                                                         Q.{startQNo + idx}
                                                     </span>
                                                     <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
-                                                        📖 {q.chapter || 'General'}
+                                                        ≡ƒôû {q.chapter || 'General'}
                                                     </span>
                                                     {(q.concept || q.topic) && (
                                                         <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                                                            💡 {q.concept || q.topic}
+                                                            ≡ƒÆí {q.concept || q.topic}
                                                         </span>
                                                     )}
                                                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -1028,13 +821,13 @@ const AssignmentGenerator = () => {
                                                     }}
                                                     className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-xs"
                                                 >
-                                                    <span>🔄</span> Swap
+                                                    <span>≡ƒöä</span> Swap
                                                 </button>
                                                 <button
                                                     onClick={() => removeQuestionByIndex(idx)}
                                                     className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border border-rose-200"
                                                 >
-                                                    ✕ Remove
+                                                    Γ£ò Remove
                                                 </button>
                                             </div>
                                         </div>
@@ -1058,7 +851,7 @@ const AssignmentGenerator = () => {
                 </div>
             )}
 
-            {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
+            {/* ΓöÇΓöÇ MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
             {showAnswerKeyModal && (
                 <A4AnswerKey
                     paper={{ title: title || `${subject} Assignment`, subject, classes: [selectedClass] }}
@@ -1069,7 +862,7 @@ const AssignmentGenerator = () => {
                 />
             )}
 
-            {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
+            {/* ΓöÇΓöÇ MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
             {showSolutionsModal && (
                 <A4SolutionKey
                     paper={{ title: title || `${subject} Assignment`, subject, classes: [selectedClass] }}
@@ -1080,7 +873,7 @@ const AssignmentGenerator = () => {
                 />
             )}
 
-            {/* ── MODAL: ANALYSIS ── */}
+            {/* ΓöÇΓöÇ MODAL: ANALYSIS ΓöÇΓöÇ */}
             <PaperAnalysisModal
                 isOpen={showAnalysisModal}
                 onClose={() => setShowAnalysisModal(false)}

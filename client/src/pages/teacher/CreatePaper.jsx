@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CreatePaper.jsx
  *
  * Ultra-Fast & High-Quality Assessment & Assignment Generation Suite
@@ -62,7 +62,7 @@ const QuestionCardOptions = ({ q, options = [], answer = '', showAnswer = true }
                             <MathRenderer inline text={optText} />
                         </div>
                         {isCorrect && (
-                            <span className="text-emerald-600 font-black ml-1 text-sm">✓</span>
+                            <span className="text-emerald-600 font-black ml-1 text-sm">Γ£ô</span>
                         )}
                     </div>
                 );
@@ -81,9 +81,9 @@ export default function CreatePaper() {
     const paperId = searchParams.get('paperId');
     const initialCategory = searchParams.get('category') === 'assignment' ? 'assignment' : 'test';
 
-    // Wizard Step: 1 (Setup) -> 2 (Chapter Blueprint) -> 3 (Method) -> 4 (Questions) -> 5 (Preview)
-    // If editing existing paper, default directly to Step 4 (Questions)
-    const [currentStep, setCurrentStep] = useState(paperId ? 4 : 1);
+    // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions) -> 4 (Preview) -> 5 (Alignment)
+    // If editing existing paper, default directly to Step 3 (Questions)
+    const [currentStep, setCurrentStep] = useState(paperId ? 3 : 1);
 
     // Step 1: Mode & Academic Metadata
     const [paperCategory, setPaperCategory] = useState(initialCategory);
@@ -94,9 +94,6 @@ export default function CreatePaper() {
     const [duration, setDuration] = useState('180 Minutes');
     const [targetCount, setTargetCount] = useState(60);
 
-    // Multi-Database Sources Selection ('REGULAR' = Bank, 'PYQ' = Previous Year, 'GT' = Grand Tests)
-    const [selectedSources, setSelectedSources] = useState(['REGULAR', 'PYQ', 'GT']);
-
     // Assignment custom question numbering
     const [startQNo, setStartQNo] = useState(1);
     const [endQNo, setEndQNo] = useState(null);
@@ -105,8 +102,11 @@ export default function CreatePaper() {
     const [selectedChapters, setSelectedChapters] = useState([]);
     const [selectedConcepts, setSelectedConcepts] = useState([]);
 
-    // Chapter-wise Question Allocation (how many questions required per chapter)
-    const [chapterAllocations, setChapterAllocations] = useState({});
+    // Chapter-wise Question Quotas (e.g. { "Electric Charges and Fields": 20, "Current Electricity": 20 })
+    const [chapterQuotas, setChapterQuotas] = useState({});
+
+    // Question Source Repositories (Subject Database vs PYQ/Grand Tests qbp-control)
+    const [selectedSources, setSelectedSources] = useState(['subject', 'qbp_control']);
 
     // Fast Meta state (loaded in < 50ms)
     const [metaData, setMetaData] = useState({ total: 0, chapters: [], concepts: [] });
@@ -121,7 +121,7 @@ export default function CreatePaper() {
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [activeTemplate, setActiveTemplate] = useState(null);
 
-    // In-memory Questions Cache by subject + chapter + sources
+    // In-memory Questions Cache by subject + chapter
     const questionsCache = useRef({});
 
     // Question Swap Mode State
@@ -132,7 +132,6 @@ export default function CreatePaper() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
-    const [filterSource, setFilterSource] = useState('');
     const [singleFilterChapter, setSingleFilterChapter] = useState('');
     const [singleFilterConcept, setSingleFilterConcept] = useState('');
     const [pageNumber, setPageNumber] = useState(1);
@@ -171,18 +170,6 @@ export default function CreatePaper() {
         return [selectedClass, `Class ${selectedClass}`, `${selectedClass}th`, `PUC ${selectedClass}`];
     }, [selectedClass]);
 
-    // Toggle a database source
-    const toggleSource = (src) => {
-        setSelectedSources(prev => {
-            if (prev.includes(src)) {
-                if (prev.length === 1) return prev; // Keep at least one source selected
-                return prev.filter(s => s !== src);
-            } else {
-                return [...prev, src];
-            }
-        });
-    };
-
     // Auto default title
     useEffect(() => {
         if (!title || title.includes('Assessment') || title.includes('Assignment') || title.includes('Paper')) {
@@ -194,7 +181,7 @@ export default function CreatePaper() {
         }
     }, [paperCategory, subject]);
 
-    // ── 1. FAST METADATA FETCH (Instant Step 1 Rendering in 30ms) ──
+    // ΓöÇΓöÇ 1. FAST METADATA FETCH (Instant Step 1 Rendering in 30ms) ΓöÇΓöÇ
     useEffect(() => {
         const fetchMeta = async () => {
             if (!subject) return;
@@ -283,7 +270,7 @@ export default function CreatePaper() {
                         setSelectedQuestions(p.questions);
                         setTargetCount(p.questions.length);
                         setAutoQty(p.questions.length);
-                        setCurrentStep(4); // Jump straight to Questions step
+                        setCurrentStep(3); // Jump straight to Questions step
                     }
                 }
             } catch (err) {
@@ -293,13 +280,13 @@ export default function CreatePaper() {
         fetchPaperDetails();
     }, [paperId]);
 
-    // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH MULTI-SOURCE SUPPORT & CACHE ──
+    // ΓöÇΓöÇ 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ΓöÇΓöÇ
     const fetchQuestionsPool = async (forceSubject = subject, forceClass = selectedClass, forceSources = selectedSources) => {
         if (!forceSubject) return;
 
         const cleanClass = forceClass === 'Both' ? '' : forceClass;
-        const srcStr = (forceSources || ['REGULAR', 'PYQ', 'GT']).sort().join(',');
-        const cacheKey = `${forceSubject.trim().toLowerCase()}_${cleanClass || 'all'}_${srcStr}`;
+        const sourceKey = (forceSources || ['subject', 'qbp_control']).sort().join('_');
+        const cacheKey = `${forceSubject.trim().toLowerCase()}_${cleanClass || 'all'}_${sourceKey}`;
         if (questionsCache.current[cacheKey] && questionsCache.current[cacheKey].length > 0) {
             setAvailableQuestions(questionsCache.current[cacheKey]);
             return;
@@ -307,9 +294,12 @@ export default function CreatePaper() {
 
         setLoadingQuestions(true);
         try {
-            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&sources=${encodeURIComponent(srcStr)}&limit=20000`;
+            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=20000`;
             if (cleanClass) {
                 url += `&classes=${encodeURIComponent(cleanClass)}`;
+            }
+            if (forceSources && forceSources.length > 0) {
+                url += `&source=${encodeURIComponent(forceSources.join(','))}`;
             }
             const res = await api.get(url);
             const rawQs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
@@ -330,348 +320,115 @@ export default function CreatePaper() {
         }
     };
 
-    // Fetch questions pool immediately when subject, selectedClass, or selectedSources change
+    // Fetch questions pool immediately when subject, selectedClass, or selectedSources changes
     useEffect(() => {
         if (subject) {
             fetchQuestionsPool(subject, selectedClass, selectedSources);
         }
     }, [subject, selectedClass, selectedSources]);
 
-    // ── OFFICIAL NCERT BIOLOGY SYLLABUS HIERARCHY (Class 11 & Class 12) ──
-    const NCERT_BIOLOGY_SYLLABUS = useMemo(() => ({
-        'Class 11': {
-            'The Living World': [
-                'Diversity in the Living World',
-                'Taxonomic Categories'
-            ],
-            'Biological Classification': [
-                'Kingdom Monera',
-                'Kingdom Protista',
-                'Kingdom Fungi',
-                'Kingdom Plantae',
-                'Kingdom Animalia',
-                'Viruses, Viroids, Prions and Lichens'
-            ],
-            'Plant Kingdom': [
-                'Algae',
-                'Bryophytes',
-                'Pteridophytes',
-                'Gymnosperms',
-                'Angiosperms'
-            ],
-            'Animal Kingdom': [
-                'Basis of Classification',
-                'Classification of Animals'
-            ],
-            'Morphology of Flowering Plants': [
-                'The Root',
-                'The Stem',
-                'The Leaf',
-                'The Inflorescence',
-                'The Flower',
-                'The Fruit',
-                'The Seed',
-                'Semi-technical Description of a Typical Flowering Plant',
-                'Description of Some Important Families'
-            ],
-            'Anatomy of Flowering Plants': [
-                'The Tissue System',
-                'Anatomy of Dicotyledonous and Monocotyledonous Plants'
-            ],
-            'Structural Organisation in Animals': [
-                'Organ and Organ System',
-                'Frogs'
-            ],
-            'Cell: The Unit of Life': [
-                'What is a Cell?',
-                'Cell Theory',
-                'An Overview of Cell',
-                'Prokaryotic Cells',
-                'Eukaryotic Cells'
-            ],
-            'Biomolecules': [
-                'How to Analyse Chemical Composition?',
-                'Primary and Secondary Metabolites',
-                'Biomacromolecules',
-                'Proteins',
-                'Polysaccharides',
-                'Nucleic Acids',
-                'Structure of Proteins',
-                'Enzymes'
-            ],
-            'Cell Cycle and Cell Division': [
-                'Cell Cycle',
-                'M Phase',
-                'Significance of Mitosis',
-                'Meiosis',
-                'Significance of Meiosis'
-            ],
-            'Photosynthesis in Higher Plants': [
-                'What do we Know?',
-                'Early Experiments',
-                'Where does Photosynthesis take place?',
-                'How many Pigments are involved in Photosynthesis?',
-                'What is Light Reaction?',
-                'The Electron Transport',
-                'Where are the ATP and NADPH Used?',
-                'The C4 Pathway',
-                'Photorespiration',
-                'Factors affecting Photosynthesis'
-            ],
-            'Respiration in Plants': [
-                'Do Plants Breathe?',
-                'Glycolysis',
-                'Fermentation',
-                'Aerobic Respiration',
-                'The Respiratory Balance Sheet',
-                'Amphibolic Pathway',
-                'Respiratory Quotient'
-            ],
-            'Plant Growth and Development': [
-                'Growth',
-                'Differentiation, Dedifferentiation and Redifferentiation',
-                'Development',
-                'Plant Growth Regulators'
-            ],
-            'Breathing and Exchange of Gases': [
-                'Respiratory Organs',
-                'Mechanism of Breathing',
-                'Exchange of Gases',
-                'Transport of Gases',
-                'Regulation of Respiration',
-                'Disorders of Respiratory System'
-            ],
-            'Body Fluids and Circulation': [
-                'Blood',
-                'Lymph (Tissue Fluid)',
-                'Circulatory Pathways',
-                'Double Circulation',
-                'Regulation of Cardiac Activity',
-                'Disorders of Circulatory System'
-            ],
-            'Excretory Products and Their Elimination': [
-                'Human Excretory System',
-                'Urine Formation',
-                'Function of the Tubules',
-                'Mechanism of Concentration of the Filtrate',
-                'Regulation of Kidney Function',
-                'Micturition',
-                'Role of Other Organs in Excretion',
-                'Disorders of the Excretory System'
-            ],
-            'Locomotion and Movement': [
-                'Types of Movement',
-                'Muscle',
-                'Skeletal System',
-                'Joints',
-                'Disorders of Muscular and Skeletal System'
-            ],
-            'Neural Control and Coordination': [
-                'Neural System',
-                'Human Neural System',
-                'Neuron as Structural and Functional Unit of Neural System',
-                'Central Neural System'
-            ],
-            'Chemical Coordination and Integration': [
-                'Endocrine Glands and Hormones',
-                'Human Endocrine System',
-                'Hormones of Heart, Kidney and Gastrointestinal Tract',
-                'Mechanism of Hormone Action'
-            ]
-        },
-        'Class 12': {
-            'Sexual Reproduction in Flowering Plants': [
-                'Flower – A Fascinating Organ of Angiosperms',
-                'Pre-fertilisation: Structures and Events',
-                'Double Fertilisation',
-                'Post-fertilisation: Structures and Events',
-                'Apomixis and Polyembryony'
-            ],
-            'Human Reproduction': [
-                'The Male Reproductive System',
-                'The Female Reproductive System',
-                'Gametogenesis',
-                'Menstrual Cycle',
-                'Fertilisation and Implantation',
-                'Pregnancy and Embryonic Development',
-                'Parturition and Lactation'
-            ],
-            'Reproductive Health': [
-                'Reproductive Health – Problems and Strategies',
-                'Population Explosion and Birth Control',
-                'Medical Termination of Pregnancy (MTP)',
-                'Sexually Transmitted Infections (STIs)',
-                'Infertility'
-            ],
-            'Principles of Inheritance and Variation': [
-                "Mendel's Laws of Inheritance",
-                'Inheritance of One Gene',
-                'Inheritance of Two Genes',
-                'Polygenic Inheritance',
-                'Pleiotropy',
-                'Sex Determination',
-                'Mutation',
-                'Genetic Disorders'
-            ],
-            'Molecular Basis of Inheritance': [
-                'The DNA',
-                'The Search for Genetic Material',
-                'RNA World',
-                'Replication',
-                'Transcription',
-                'Genetic Code',
-                'Translation',
-                'Regulation of Gene Expression',
-                'Human Genome Project',
-                'DNA Fingerprinting'
-            ],
-            'Evolution': [
-                'Origin of Life',
-                'Evolution of Life Forms – A Theory',
-                'What are the Evidences for Evolution?',
-                'What is Adaptive Radiation?',
-                'Biological Evolution',
-                'Mechanism of Evolution',
-                'Hardy-Weinberg Principle',
-                'A Brief Account of Evolution',
-                'Origin and Evolution of Man'
-            ],
-            'Human Health and Disease': [
-                'Common Diseases in Humans',
-                'Immunity',
-                'AIDS',
-                'Cancer',
-                'Drugs and Alcohol Abuse'
-            ],
-            'Microbes in Human Welfare': [
-                'Microbes in Household Products',
-                'Microbes in Industrial Products',
-                'Microbes in Sewage Treatment',
-                'Microbes in Production of Biogas',
-                'Microbes as Biocontrol Agents',
-                'Microbes as Biofertilisers'
-            ],
-            'Biotechnology: Principles and Processes': [
-                'Principles of Biotechnology',
-                'Tools of Recombinant DNA Technology',
-                'Processes of Recombinant DNA Technology'
-            ],
-            'Biotechnology and Its Applications': [
-                'Biotechnological Applications in Agriculture',
-                'Biotechnological Applications in Medicine',
-                'Transgenic Animals',
-                'Ethical Issues'
-            ],
-            'Organisms and Populations': [
-                'Populations'
-            ],
-            'Ecosystem': [
-                'Ecosystem – Structure and Function',
-                'Productivity',
-                'Decomposition',
-                'Energy Flow',
-                'Ecological Pyramids'
-            ],
-            'Biodiversity and Conservation': [
-                'Biodiversity',
-                'Biodiversity Conservation'
-            ]
+    // ΓöÇΓöÇ Chapter Quotas Auto-Sync & Helpers ΓöÇΓöÇ
+    useEffect(() => {
+        if (selectedChapters.length === 0) {
+            setChapterQuotas({});
+            return;
         }
-    }), []);
+        setChapterQuotas(prev => {
+            const next = {};
+            selectedChapters.forEach(ch => {
+                if (prev[ch] !== undefined && prev[ch] !== null) {
+                    next[ch] = prev[ch];
+                }
+            });
 
-    // Subject discipline mapping for NEET/KCET Botany vs Zoology breakdown
-    const BOTANY_CHAPTERS = useMemo(() => new Set([
-        // Class 11 Botany
-        'The Living World',
-        'Biological Classification',
-        'Plant Kingdom',
-        'Morphology of Flowering Plants',
-        'Anatomy of Flowering Plants',
-        'Cell: The Unit of Life',
-        'Cell Cycle and Cell Division',
-        'Photosynthesis in Higher Plants',
-        'Respiration in Plants',
-        'Plant Growth and Development',
-        // Class 12 Botany
-        'Sexual Reproduction in Flowering Plants',
-        'Principles of Inheritance and Variation',
-        'Molecular Basis of Inheritance',
-        'Microbes in Human Welfare',
-        'Biotechnology: Principles and Processes',
-        'Biotechnology and Its Applications',
-        'Organisms and Populations',
-        'Ecosystem',
-        'Biodiversity and Conservation'
-    ]), []);
+            const missing = selectedChapters.filter(ch => next[ch] === undefined || next[ch] === null);
+            if (missing.length > 0) {
+                const currentAllocated = Object.values(next).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                const remaining = Math.max(0, targetLimit - currentAllocated);
+                const base = Math.floor(remaining / missing.length);
+                const rem = remaining % missing.length;
+                missing.forEach((ch, idx) => {
+                    next[ch] = base + (idx < rem ? 1 : 0);
+                });
+            }
+            return next;
+        });
+    }, [selectedChapters, targetLimit]);
 
-    const ZOOLOGY_CHAPTERS = useMemo(() => new Set([
-        // Class 11 Zoology
-        'Animal Kingdom',
-        'Structural Organisation in Animals',
-        'Biomolecules',
-        'Cell: The Unit of Life',
-        'Cell Cycle and Cell Division',
-        'Breathing and Exchange of Gases',
-        'Body Fluids and Circulation',
-        'Excretory Products and Their Elimination',
-        'Locomotion and Movement',
-        'Neural Control and Coordination',
-        'Chemical Coordination and Integration',
-        // Class 12 Zoology
-        'Human Reproduction',
-        'Reproductive Health',
-        'Principles of Inheritance and Variation',
-        'Molecular Basis of Inheritance',
-        'Evolution',
-        'Human Health and Disease',
-        'Biotechnology: Principles and Processes',
-        'Biotechnology and Its Applications'
-    ]), []);
+    const totalAllocatedQuota = useMemo(() => {
+        return Object.values(chapterQuotas).reduce((sum, v) => sum + (parseInt(v, 10) || 0), 0);
+    }, [chapterQuotas]);
 
-    // Canonicalize biology & assessment chapter names (eliminates duplicate capitalization/punctuation variants)
+    const handleDistributeEvenly = () => {
+        if (selectedChapters.length === 0) return;
+        const base = Math.floor(targetLimit / selectedChapters.length);
+        const rem = targetLimit % selectedChapters.length;
+        const next = {};
+        selectedChapters.forEach((ch, idx) => {
+            next[ch] = base + (idx < rem ? 1 : 0);
+        });
+        setChapterQuotas(next);
+    };
+
+    const handleQuotaChange = (chapter, val) => {
+        const num = Math.max(0, parseInt(val, 10) || 0);
+        setChapterQuotas(prev => ({
+            ...prev,
+            [chapter]: num
+        }));
+    };
+
+    const toggleSource = (sourceKey) => {
+        setSelectedSources(prev => {
+            if (prev.includes(sourceKey)) {
+                if (prev.length === 1) return prev; // Keep at least one source
+                return prev.filter(s => s !== sourceKey);
+            } else {
+                return [...prev, sourceKey];
+            }
+        });
+    };
+
+    // Canonicalize biology & assessment chapter names
     const canonicalizeChapterName = (name) => {
         if (!name || typeof name !== 'string') return '';
         const clean = name.trim();
         const lower = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
-        
-        const ALL_CANONICAL = [
-            // Class 11
+        const CANONICAL_LIST = [
             'The Living World',
             'Biological Classification',
             'Plant Kingdom',
-            'Animal Kingdom',
             'Morphology of Flowering Plants',
             'Anatomy of Flowering Plants',
-            'Structural Organisation in Animals',
             'Cell: The Unit of Life',
-            'Biomolecules',
             'Cell Cycle and Cell Division',
             'Photosynthesis in Higher Plants',
             'Respiration in Plants',
             'Plant Growth and Development',
+            'Animal Kingdom',
+            'Structural Organisation in Animals',
+            'Biomolecules',
             'Breathing and Exchange of Gases',
             'Body Fluids and Circulation',
             'Excretory Products and Their Elimination',
             'Locomotion and Movement',
             'Neural Control and Coordination',
             'Chemical Coordination and Integration',
-            // Class 12
             'Sexual Reproduction in Flowering Plants',
-            'Human Reproduction',
-            'Reproductive Health',
             'Principles of Inheritance and Variation',
             'Molecular Basis of Inheritance',
-            'Evolution',
-            'Human Health and Disease',
             'Microbes in Human Welfare',
             'Biotechnology: Principles and Processes',
             'Biotechnology and Its Applications',
             'Organisms and Populations',
             'Ecosystem',
-            'Biodiversity and Conservation'
+            'Biodiversity and Conservation',
+            'Human Reproduction',
+            'Reproductive Health',
+            'Evolution',
+            'Human Health and Disease'
         ];
-
-        for (const c of ALL_CANONICAL) {
+        for (const c of CANONICAL_LIST) {
             if (c.toLowerCase().replace(/[^a-z0-9]/g, '') === lower) {
                 return c;
             }
@@ -679,137 +436,71 @@ export default function CreatePaper() {
         return clean;
     };
 
-    // Distinct chapters and concepts map (Scoped strictly to selected subject and class)
+    // Count of selected questions per canonical chapter
+    const selectedChapterCounts = useMemo(() => {
+        const counts = {};
+        selectedQuestions.forEach(q => {
+            const ch = canonicalizeChapterName(q.chapter || 'General');
+            counts[ch] = (counts[ch] || 0) + 1;
+        });
+        return counts;
+    }, [selectedQuestions]);
+
+    // Distinct chapters and concepts map (Scoped strictly to selected class)
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
-        const subLower = (subject || '').toLowerCase();
-        const isBotany = subLower.includes('botan');
-        const isZoology = subLower.includes('zool');
-        const isBio = subLower.includes('bio') || isBotany || isZoology;
-
-        const cleanClass = selectedClass === 'Both' ? '' : String(selectedClass || '').replace(/^(class|grade|puc)\s*/i, '').trim();
-
-        const chaptersSet = new Set();
+        const canonicalMetaChapters = (metaData.chapters || []).map(canonicalizeChapterName).filter(Boolean);
+        const chaptersSet = new Set(canonicalMetaChapters);
         const map = {};
 
-        // 1. Seed with standard NCERT syllabus for Biology/Botany/Zoology
-        if (isBio) {
-            const classesToSeed = cleanClass === '11' ? ['Class 11'] : (cleanClass === '12' ? ['Class 12'] : ['Class 11', 'Class 12']);
-            classesToSeed.forEach(cls => {
-                const syl = NCERT_BIOLOGY_SYLLABUS[cls] || {};
-                Object.keys(syl).forEach(ch => {
-                    if (isBotany && !BOTANY_CHAPTERS.has(ch)) return;
-                    if (isZoology && !ZOOLOGY_CHAPTERS.has(ch)) return;
-
-                    chaptersSet.add(ch);
-                    if (!map[ch]) map[ch] = new Set();
-                    syl[ch].forEach(cpt => map[ch].add(cpt));
-                });
-            });
-        }
-
-        // 2. Add metadata chapters from API
-        (metaData.chapters || []).forEach(rawCh => {
-            const canonCh = canonicalizeChapterName(rawCh);
-            if (!canonCh || canonCh === 'General') return;
-            if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
-            if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
-
-            chaptersSet.add(canonCh);
-            if (!map[canonCh]) map[canonCh] = new Set();
+        // Pre-populate map keys for metadata chapters
+        canonicalMetaChapters.forEach(ch => {
+            if (!map[ch]) map[ch] = new Set();
         });
 
-        // 3. Add concepts from API metadata
+        // Add meta concepts first
         (metaData.concepts || []).forEach(c => {
-            if (c && typeof c === 'object' && c.chapter && (c.name || c.concept)) {
+            if (c && typeof c === 'object' && c.chapter && c.name) {
                 const canonCh = canonicalizeChapterName(c.chapter);
-                const cptName = (c.name || c.concept).trim();
-                if (canonCh && cptName) {
-                    if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
-                    if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
-
-                    chaptersSet.add(canonCh);
-                    if (!map[canonCh]) map[canonCh] = new Set();
-                    map[canonCh].add(cptName);
-                }
+                chaptersSet.add(canonCh);
+                if (!map[canonCh]) map[canonCh] = new Set();
+                map[canonCh].add(c.name.trim());
             }
         });
 
-        // 4. Also scan available questions for any additional chapters/topics
+        // Also add from available questions matching this class
         availableQuestions.forEach(q => {
-            const rawCh = q.chapter;
-            if (!rawCh || rawCh === 'General') return;
-            const canonCh = canonicalizeChapterName(rawCh);
+            if (selectedClass && selectedClass !== 'Both' && q.classes && q.classes.length > 0) {
+                const cleanTarget = String(selectedClass).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                const matches = q.classes.some(c => {
+                    const cleanC = String(c).replace(/^(class|grade|puc)\s*/i, '').trim().toLowerCase();
+                    return cleanC === cleanTarget || (cleanTarget === '12' && (cleanC === 'ii' || cleanC === '2')) || (cleanTarget === '11' && (cleanC === 'i' || cleanC === '1'));
+                });
+                if (!matches) return;
+            }
 
-            if (isBotany && !BOTANY_CHAPTERS.has(canonCh) && isBio) return;
-            if (isZoology && !ZOOLOGY_CHAPTERS.has(canonCh) && isBio) return;
+            const rawCh = q.chapter || 'General';
+            const ch = canonicalizeChapterName(rawCh);
+            // Only include chapters in current class syllabus if metadata exists
+            if (canonicalMetaChapters.length > 0 && !canonicalMetaChapters.includes(ch) && ch !== 'General') {
+                return;
+            }
 
-            chaptersSet.add(canonCh);
-            if (!map[canonCh]) map[canonCh] = new Set();
+            chaptersSet.add(ch);
+            if (!map[ch]) map[ch] = new Set();
             const cpt = q.concept || q.topic;
-            if (cpt && cpt !== 'General' && cpt !== canonCh) {
-                map[canonCh].add(cpt.trim());
+            if (cpt && cpt !== 'General' && cpt !== ch) {
+                map[ch].add(cpt.trim());
             }
         });
 
-        const sortedChapters = Array.from(chaptersSet).filter(Boolean).sort();
+        const sorted = Array.from(chaptersSet).filter(Boolean).sort();
         const cleanMap = {};
-        sortedChapters.forEach(ch => {
+        sorted.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();
         });
 
-        return { distinctChapters: sortedChapters, chapterConceptsMap: cleanMap };
-    }, [metaData, availableQuestions, selectedClass, subject, NCERT_BIOLOGY_SYLLABUS, BOTANY_CHAPTERS, ZOOLOGY_CHAPTERS]);
-
-    // Effective list of chapters to allocate: selected chapters if explicitly checked, otherwise all distinct chapters in scope
-    const effectiveChapters = useMemo(() => {
-        if (selectedChapters.length > 0) return selectedChapters;
-        return distinctChapters;
-    }, [selectedChapters, distinctChapters]);
-
-    // Helper: calculate equal split of questions across chapters
-    const calculateEqualChapterSplit = (chapters, total) => {
-        const chs = (chapters && chapters.length > 0) ? chapters : effectiveChapters;
-        if (!chs || chs.length === 0) return {};
-        const n = chs.length;
-        const base = Math.floor(total / n);
-        const rem = total % n;
-        const split = {};
-        chs.forEach((ch, idx) => {
-            split[ch] = base + (idx < rem ? 1 : 0);
-        });
-        return split;
-    };
-
-    // Total allocated questions across chapters
-    const totalAllocatedQuestions = useMemo(() => {
-        const chList = effectiveChapters;
-        if (chList.length === 0) return targetLimit;
-        return chList.reduce((sum, ch) => sum + (parseInt(chapterAllocations[ch]) || 0), 0);
-    }, [effectiveChapters, chapterAllocations, targetLimit]);
-
-    // Keep chapter allocations balanced when effective chapters or targetCount change
-    useEffect(() => {
-        const chList = effectiveChapters;
-        if (chList.length === 0) {
-            setChapterAllocations({});
-            return;
-        }
-        setChapterAllocations(prev => {
-            const next = {};
-            let hasNewChapter = false;
-            chList.forEach(ch => {
-                if (prev[ch] !== undefined) {
-                    next[ch] = prev[ch];
-                } else {
-                    hasNewChapter = true;
-                }
-            });
-            if (hasNewChapter || Object.keys(next).length === 0) {
-                return calculateEqualChapterSplit(chList, targetLimit);
-            }
-            return next;
-        });
-    }, [effectiveChapters, targetLimit]);
+        return { distinctChapters: sorted, chapterConceptsMap: cleanMap };
+    }, [metaData, availableQuestions, selectedClass]);
 
     // Available concepts for checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
@@ -826,7 +517,7 @@ export default function CreatePaper() {
         return list;
     }, [selectedChapters, chapterConceptsMap]);
 
-    // ── Checkbox Toggle Handlers ──
+    // ΓöÇΓöÇ Checkbox Toggle Handlers ΓöÇΓöÇ
     const toggleChapter = (ch) => {
         setSelectedChapters(prev => {
             if (prev.includes(ch)) {
@@ -889,8 +580,7 @@ export default function CreatePaper() {
 
             // Chapter check
             if (selectedChapters.length > 0) {
-                const canonQ = canonicalizeChapterName(q.chapter);
-                if (!selectedChapters.includes(canonQ) && !selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
+                if (!selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
             }
 
             // Concept check
@@ -909,26 +599,16 @@ export default function CreatePaper() {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.sourcePaperName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.sourceExam || '').toLowerCase().includes(searchTerm.toLowerCase());
+                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const canonQ = canonicalizeChapterName(q.chapter);
-            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter || canonQ === singleFilterChapter;
+            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter;
             const matchesSingleConcept = !singleFilterConcept || (q.concept === singleFilterConcept || q.topic === singleFilterConcept);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
-            const qSource = (q.sourceType || 'REGULAR').toUpperCase();
-            const matchesSource = !filterSource || (
-                filterSource === 'REGULAR' ? (qSource === 'REGULAR' || !q.sourceType) :
-                filterSource === 'PYQ' ? qSource === 'PYQ' :
-                filterSource === 'GT' ? qSource === 'GT' : true
-            );
-
-            return matchesSearch && matchesSingleChapter && matchesSingleConcept && matchesDifficulty && matchesType && matchesSource;
+            return matchesSearch && matchesSingleChapter && matchesSingleConcept && matchesDifficulty && matchesType;
         });
-    }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType, filterSource]);
+    }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType]);
 
     // Paginated subset for fast browser DOM rendering
     const paginatedQuestions = useMemo(() => {
@@ -999,32 +679,7 @@ export default function CreatePaper() {
         setSelectedQuestions(prev => prev.filter(q => !matchingIds.has(q._id || q.id)));
     };
 
-    // Quick auto-fill questions for a specific chapter
-    const handleAutoFillChapter = (ch, countNeeded) => {
-        if (countNeeded <= 0) return;
-        const chPool = scopedQuestionPool.filter(q => {
-            const canonQ = canonicalizeChapterName(q.chapter);
-            const isThisCh = canonQ === ch || q.chapter === ch;
-            const alreadySelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
-            return isThisCh && !alreadySelected;
-        });
-
-        if (chPool.length === 0) {
-            return alert(`No more unselected questions available in pool for "${ch}".`);
-        }
-
-        const toAdd = [...chPool].sort(() => Math.random() - 0.5).slice(0, countNeeded);
-        setSelectedQuestions(prev => {
-            const availableSlots = Math.max(0, targetLimit - prev.length);
-            const actualAdd = toAdd.slice(0, availableSlots);
-            if (actualAdd.length < toAdd.length) {
-                setShowLimitReachedModal(true);
-            }
-            return [...prev, ...actualAdd];
-        });
-    };
-
-    // ── In-Place Question Text & Options Editor ──
+    // ΓöÇΓöÇ In-Place Question Text & Options Editor ΓöÇΓöÇ
     const handleOpenEditQuestion = (question, index) => {
         const idx = index !== undefined ? index : selectedQuestions.findIndex(q => (q._id || q.id) === (question._id || question.id));
         
@@ -1098,38 +753,23 @@ export default function CreatePaper() {
         setEditingQuestionModal(null);
     };
 
-    // Auto Fetch Generator with Chapter-Wise Allocations & Difficulty Balance
+    // Auto Fetch Generator
     const handleGenerateAuto = () => {
-        if (scopedQuestionPool.length === 0) {
-            return alert('No questions found matching the selected syllabus chapters & concepts.');
-        }
+        // If specific chapter quotas are configured, generate strictly adhering to per-chapter allocations
+        if (selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0) {
+            const combined = [];
+            const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
 
-        const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
-        let pickedAll = [];
-        const usedIds = new Set();
+            for (const chName of selectedChapters) {
+                const qty = parseInt(chapterQuotas[chName], 10) || 0;
+                if (qty <= 0) continue;
 
-        const chaptersToUse = effectiveChapters.length > 0 ? effectiveChapters : [];
+                const chPool = scopedQuestionPool.filter(q => q.chapter === chName);
+                if (chPool.length === 0) continue;
 
-        if (chaptersToUse.length > 0) {
-            // Pick chapter-by-chapter strictly based on chapterAllocations
-            chaptersToUse.forEach(ch => {
-                const chTarget = chapterAllocations[ch] !== undefined
-                    ? chapterAllocations[ch]
-                    : Math.max(1, Math.floor(targetLimit / chaptersToUse.length));
-
-                if (chTarget <= 0) return;
-
-                const chPool = scopedQuestionPool.filter(q => {
-                    const canonQ = canonicalizeChapterName(q.chapter);
-                    return (canonQ === ch || q.chapter === ch) && !usedIds.has(q._id || q.id);
-                });
-
-                if (chPool.length === 0) return;
-
-                // Difficulty distribution per chapter
-                const easyTarget = Math.round(chTarget * (autoDist.easy / 100));
-                const medTarget = Math.round(chTarget * (autoDist.medium / 100));
-                const hardTarget = Math.max(0, chTarget - easyTarget - medTarget);
+                const easyTarget = Math.round(qty * (autoDist.easy / 100));
+                const medTarget = Math.round(qty * (autoDist.medium / 100));
+                const hardTarget = Math.max(0, qty - easyTarget - medTarget);
 
                 const easyPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
                 const medPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
@@ -1139,50 +779,56 @@ export default function CreatePaper() {
                 const pickedMed = shuffle(medPool).slice(0, medTarget);
                 const pickedHard = shuffle(hardPool).slice(0, hardTarget);
 
-                let chPicked = [...pickedEasy, ...pickedMed, ...pickedHard];
-                chPicked.forEach(q => usedIds.add(q._id || q.id));
+                let chCombined = [...pickedEasy, ...pickedMed, ...pickedHard];
+                const usedIds = new Set(chCombined.map(q => q._id || q.id));
 
-                // Backfill if not enough from exact difficulty split
-                if (chPicked.length < chTarget) {
-                    const remCh = chPool.filter(q => !usedIds.has(q._id || q.id));
-                    const extra = shuffle(remCh).slice(0, chTarget - chPicked.length);
-                    extra.forEach(q => usedIds.add(q._id || q.id));
-                    chPicked.push(...extra);
+                if (chCombined.length < qty) {
+                    const remainder = chPool.filter(q => !usedIds.has(q._id || q.id));
+                    chCombined.push(...shuffle(remainder).slice(0, qty - chCombined.length));
                 }
-
-                pickedAll.push(...chPicked);
-            });
-        } else {
-            // General pool fallback
-            const count = Math.min(targetLimit, scopedQuestionPool.length);
-            const easyTarget = Math.round(count * (autoDist.easy / 100));
-            const medTarget = Math.round(count * (autoDist.medium / 100));
-            const hardTarget = count - easyTarget - medTarget;
-
-            const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-            const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-            const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
-
-            const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
-            const pickedMed = shuffle(medPool).slice(0, medTarget);
-            const pickedHard = shuffle(hardPool).slice(0, hardTarget);
-
-            pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
-            pickedAll.forEach(q => usedIds.add(q._id || q.id));
-
-            if (pickedAll.length < count) {
-                const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
-                pickedAll.push(...shuffle(remainder).slice(0, count - pickedAll.length));
+                combined.push(...chCombined);
             }
+
+            if (combined.length === 0) {
+                return alert('No questions found matching the selected syllabus chapters.');
+            }
+
+            setSelectedQuestions(combined);
+            setMethod('manual'); // automatically set method to manual so review shows questions
+            setCurrentStep(4); // Move to Preview
+            return;
         }
 
-        if (pickedAll.length === 0) {
-            return alert('Could not find enough questions for the selected chapters and sources.');
+        if (scopedQuestionPool.length === 0) {
+            return alert('No questions found matching the selected syllabus chapters & concepts.');
         }
 
-        setSelectedQuestions(pickedAll);
-        setMethod('manual');
-        setCurrentStep(5);
+        const count = Math.min(targetLimit, scopedQuestionPool.length);
+        const easyTarget = Math.round(count * (autoDist.easy / 100));
+        const medTarget = Math.round(count * (autoDist.medium / 100));
+        const hardTarget = Math.max(0, count - easyTarget - medTarget);
+
+        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+
+        const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
+        const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
+        const pickedMed = shuffle(medPool).slice(0, medTarget);
+        const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+
+        let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
+        const usedIds = new Set(combined.map(q => q._id || q.id));
+
+        if (combined.length < count) {
+            const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
+            combined.push(...shuffle(remainder).slice(0, count - combined.length));
+        }
+
+        setSelectedQuestions(combined);
+        setMethod('manual'); // Crucial: automatically set method to manual so editing shows questions!
+        setCurrentStep(4); // Move to Preview
     };
 
     // Pre-finalize check
@@ -1193,7 +839,7 @@ export default function CreatePaper() {
         }
         const validation = validatePaperQuestions(selectedQuestions);
         setValidationResult(validation);
-        setCurrentStep(5); // Move to Preview (Step 5)
+        setCurrentStep(4); // Move to Preview
     };
 
     // Finalize and Save Paper
@@ -1224,7 +870,7 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
-            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
+            alert(`Γ£ô ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
             } else {
@@ -1279,14 +925,14 @@ export default function CreatePaper() {
     return (
         <div className="min-h-screen bg-background flex flex-col font-sans">
             
-            {/* ── TOP HEADER / STEP WIZARD BAR ── */}
+            {/* ΓöÇΓöÇ TOP HEADER / STEP WIZARD BAR ΓöÇΓöÇ */}
             <header className="bg-navy p-4 text-white flex justify-between items-center shadow-xl border-b-4 border-gold sticky top-0 z-30">
                 <div className="flex items-center gap-4 ml-4">
                     <button
                         onClick={() => navigate('/teacher/dashboard')}
                         className="bg-white/10 hover:bg-white/20 text-gold px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
                     >
-                        ← Exit Wizard
+                        ΓåÉ Exit Wizard
                     </button>
                     <div>
                         <h1 className="text-base font-black uppercase tracking-tight leading-none text-white">
@@ -1302,10 +948,10 @@ export default function CreatePaper() {
                 <div className="hidden md:flex items-center gap-2 mr-4">
                     {[
                         { num: 1, label: 'Scope & Setup' },
-                        { num: 2, label: 'Chapter Blueprint' },
-                        { num: 3, label: 'Method' },
-                        { num: 4, label: 'Questions' },
-                        { num: 5, label: 'Preview' },
+                        { num: 2, label: 'Method' },
+                        { num: 3, label: 'Questions' },
+                        { num: 4, label: 'Preview' },
+                        { num: 5, label: 'Alignment' },
                     ].map((st) => (
                         <button
                             key={st.num}
@@ -1317,19 +963,19 @@ export default function CreatePaper() {
                                     : 'bg-white/10 hover:bg-white/20 text-white/90'
                             }`}
                         >
-                            <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
+                            <span>{currentStep > st.num ? 'Γ£ô' : `${st.num}.`}</span>
                             <span>{st.label}</span>
                         </button>
                     ))}
                 </div>
             </header>
 
-            {/* ── STEP CONTENT CONTAINER ── */}
+            {/* ΓöÇΓöÇ STEP CONTENT CONTAINER ΓöÇΓöÇ */}
             <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
                 
-                {/* ══════════════════════════════════════════════════════════════
+                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
                     STEP 1: SCOPE, MODE & MULTI-SELECT CHAPTERS / CONCEPTS
-                ══════════════════════════════════════════════════════════════ */}
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
                 {currentStep === 1 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
@@ -1340,7 +986,7 @@ export default function CreatePaper() {
                             </p>
                         </div>
 
-                        {/* ── MODE SELECTION: TEST VS ASSIGNMENT ── */}
+                        {/* ΓöÇΓöÇ MODE SELECTION: TEST VS ASSIGNMENT ΓöÇΓöÇ */}
                         <div>
                             <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Paper Type</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1353,7 +999,7 @@ export default function CreatePaper() {
                                     }`}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-navy text-gold flex items-center justify-center text-xl font-bold">
-                                        🎓
+                                        ≡ƒÄô
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-black text-navy uppercase">Standard Assessment / Test</h4>
@@ -1372,7 +1018,7 @@ export default function CreatePaper() {
                                     }`}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-gold text-navy flex items-center justify-center text-xl font-bold">
-                                        📝
+                                        ≡ƒô¥
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-black text-navy uppercase">Practice Assignment / Homework</h4>
@@ -1384,81 +1030,66 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* ── QUESTION SOURCES / REPOSITORIES SELECTION ── */}
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
+                        {/* ΓöÇΓöÇ QUESTION REPOSITORIES & SOURCES SELECTION ΓöÇΓöÇ */}
+                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between">
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider">
-                                    Question Database Repositories ({selectedSources.length} of 3 Active)
+                                    <span>≡ƒùä∩╕Å</span> Question Repositories & Database Sources
                                 </label>
-                                <span className="text-[10px] text-gray-500 font-bold">
-                                    Select which question banks & archives to retrieve questions from
-                                </span>
+                                <span className="text-[10px] text-gray-500 font-bold">Select databases to draw questions from</span>
                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <div
+                                    onClick={() => toggleSource('subject')}
+                                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                        selectedSources.includes('subject')
+                                            ? 'border-navy bg-white shadow-xs ring-1 ring-navy/10'
+                                            : 'border-gray-200 bg-white/60 hover:border-gray-300 opacity-60'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSources.includes('subject')}
+                                        onChange={() => {}}
+                                        className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <span className="text-xs font-black text-navy block">
+                                            ≡ƒÅó Standard Question Bank
+                                        </span>
+                                        <span className="text-[10px] text-gray-500 font-medium block">
+                                            Core subject repository ({metaData.total || availableQuestions.length} Questions)
+                                        </span>
+                                    </div>
+                                </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                {[
-                                    {
-                                        key: 'REGULAR',
-                                        title: 'Question Bank',
-                                        badge: 'Standard Bank',
-                                        icon: '🏛️',
-                                        desc: 'Standard subject question repository & verified item bank.'
-                                    },
-                                    {
-                                        key: 'PYQ',
-                                        title: 'Previous Year (PYQ)',
-                                        badge: 'Official Archives',
-                                        icon: '📜',
-                                        desc: 'Real previous year exams (JEE, NEET, CET, Board papers).'
-                                    },
-                                    {
-                                        key: 'GT',
-                                        title: 'Grand Test Papers',
-                                        badge: 'Mock Tests',
-                                        icon: '🏆',
-                                        desc: 'Institutional Grand Test papers & full syllabus test series.'
-                                    }
-                                ].map(src => {
-                                    const isSelected = selectedSources.includes(src.key);
-                                    return (
-                                        <div
-                                            key={src.key}
-                                            onClick={() => toggleSource(src.key)}
-                                            className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
-                                                isSelected
-                                                    ? 'border-navy bg-blue-50/70 shadow-xs ring-1 ring-navy/20'
-                                                    : 'border-gray-200 bg-gray-50/40 hover:border-gray-300 opacity-60'
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onChange={() => {}}
-                                                className="w-4 h-4 text-navy rounded border-gray-300 mt-0.5 cursor-pointer"
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center justify-between gap-1">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="text-base">{src.icon}</span>
-                                                        <span className="text-xs font-black text-navy leading-tight">{src.title}</span>
-                                                    </div>
-                                                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                                                        isSelected ? 'bg-navy/10 text-navy' : 'bg-gray-200 text-gray-500'
-                                                    }`}>
-                                                        {src.badge}
-                                                    </span>
-                                                </div>
-                                                <p className="text-[10px] text-gray-500 font-medium mt-1 leading-snug">
-                                                    {src.desc}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                <div
+                                    onClick={() => toggleSource('qbp_control')}
+                                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                        selectedSources.includes('qbp_control')
+                                            ? 'border-gold bg-amber-50/50 shadow-xs ring-1 ring-gold/20'
+                                            : 'border-gray-200 bg-white/60 hover:border-gray-300 opacity-60'
+                                    }`}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedSources.includes('qbp_control')}
+                                        onChange={() => {}}
+                                        className="w-4 h-4 text-gold rounded border-gray-300 cursor-pointer"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <span className="text-xs font-black text-navy block">
+                                            ≡ƒôæ PYQ & Grand Test Papers (qbp-control)
+                                        </span>
+                                        <span className="text-[10px] text-gray-500 font-medium block">
+                                            Previous year entrance exams & full mock grand tests
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        {/* ── METADATA INPUTS ── */}
+                        {/* ΓöÇΓöÇ METADATA INPUTS ΓöÇΓöÇ */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             {/* Title */}
                             <div className="md:col-span-2">
@@ -1489,9 +1120,14 @@ export default function CreatePaper() {
                                         <option value="BOARD">PUC Board Standard</option>
                                     </select>
                                 </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Target Questions Count</label>
+                            ) : null}
+
+                            {/* Target Question Count */}
+                            <div>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    Target Questions Count
+                                </label>
+                                <div className="flex items-center gap-2">
                                     <input
                                         type="number"
                                         min={1}
@@ -1503,8 +1139,23 @@ export default function CreatePaper() {
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
                                     />
+                                    {[30, 45, 60, 90].map(cnt => (
+                                        <button
+                                            key={cnt}
+                                            type="button"
+                                            onClick={() => {
+                                                setTargetCount(cnt);
+                                                setAutoQty(cnt);
+                                            }}
+                                            className={`px-2.5 py-3 rounded-xl text-xs font-black transition cursor-pointer ${
+                                                targetCount === cnt ? 'bg-navy text-gold' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
+                                            }`}
+                                        >
+                                            {cnt}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                            </div>
 
                             {/* Class */}
                             <div>
@@ -1606,12 +1257,12 @@ export default function CreatePaper() {
                             )}
                         </div>
 
-                        {/* ── MULTI-SELECT CHAPTERS (CHECKBOX BOX GRID) ── */}
+                        {/* ΓöÇΓöÇ MULTI-SELECT CHAPTERS (CHECKBOX BOX GRID) ΓöÇΓöÇ */}
                         <div className="space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                 <div>
                                     <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                        <span>📚</span> Select Chapters ({selectedChapters.length} of {distinctChapters.length} Selected)
+                                        <span>≡ƒôÜ</span> Select Chapters ({selectedChapters.length} of {distinctChapters.length} Selected)
                                     </h3>
                                     <p className="text-[11px] text-gray-500 font-medium">
                                         Check one or multiple chapters to include in the question pool.
@@ -1673,13 +1324,112 @@ export default function CreatePaper() {
                             )}
                         </div>
 
-                        {/* ── MULTI-SELECT CONCEPTS ── */}
+                        {/* ΓöÇΓöÇ CHAPTER QUESTION DISTRIBUTION QUOTAS ΓöÇΓöÇ */}
+                        {selectedChapters.length > 0 && (
+                            <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 space-y-4 animate-fade-in">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                                    <div>
+                                        <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                            <span>≡ƒôè</span> Chapter-wise Question Distribution Quotas
+                                        </h3>
+                                        <p className="text-[11px] text-gray-500 font-medium">
+                                            Specify how many questions to retrieve from each selected chapter (Total Target: {targetLimit} Questions).
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleDistributeEvenly}
+                                            className="text-[11px] font-black text-navy bg-gold/30 hover:bg-gold px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
+                                        >
+                                            <span>ΓÜí</span> Distribute Evenly
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Quotas grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {selectedChapters.map((ch) => {
+                                        const quota = chapterQuotas[ch] !== undefined ? chapterQuotas[ch] : 0;
+                                        const availableForCh = availableQuestions.filter(q => q.chapter === ch).length;
+                                        return (
+                                            <div
+                                                key={ch}
+                                                className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs flex flex-col justify-between gap-2"
+                                            >
+                                                <div className="min-w-0">
+                                                    <span className="text-xs font-bold text-navy block truncate" title={ch}>
+                                                        {ch}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-400 font-medium">
+                                                        {availableForCh} in pool
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Questions:</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleQuotaChange(ch, Math.max(0, quota - 1))}
+                                                            className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
+                                                        >
+                                                            -
+                                                        </button>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={quota}
+                                                            onChange={e => handleQuotaChange(ch, e.target.value)}
+                                                            className="w-12 text-center font-black text-xs text-navy border border-gray-300 rounded-lg py-1 outline-none focus:border-navy"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleQuotaChange(ch, quota + 1)}
+                                                            className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Quota sum status */}
+                                <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold ${
+                                    totalAllocatedQuota === targetLimit
+                                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                                        : totalAllocatedQuota > targetLimit
+                                            ? 'bg-rose-50 border-rose-300 text-rose-900'
+                                            : 'bg-amber-50 border-amber-300 text-amber-900'
+                                }`}>
+                                    <div className="flex items-center gap-2">
+                                        <span>{totalAllocatedQuota === targetLimit ? 'Γ£ô' : 'ΓÜá∩╕Å'}</span>
+                                        <span>
+                                            Allocated: <strong>{totalAllocatedQuota}</strong> of <strong>{targetLimit}</strong> Questions Needed
+                                        </span>
+                                    </div>
+                                    {totalAllocatedQuota !== targetLimit && (
+                                        <button
+                                            type="button"
+                                            onClick={handleDistributeEvenly}
+                                            className="text-[10px] font-black underline hover:no-underline cursor-pointer"
+                                        >
+                                            Auto-balance to {targetLimit} Qs
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ΓöÇΓöÇ MULTI-SELECT CONCEPTS ΓöÇΓöÇ */}
                         {selectedChapters.length > 0 ? (
                             <div className="space-y-3 animate-fade-in">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                     <div>
                                         <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                            <span>💡</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
+                                            <span>≡ƒÆí</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
                                         </h3>
                                         <p className="text-[11px] text-gray-500 font-medium">
                                             Available concepts under the {selectedChapters.length} selected chapter(s).
@@ -1732,7 +1482,7 @@ export default function CreatePaper() {
                                                             {cpt}
                                                         </span>
                                                         <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
-                                                            📖 {ch}
+                                                            ≡ƒôû {ch}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1743,207 +1493,40 @@ export default function CreatePaper() {
                             </div>
                         ) : (
                             <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 flex items-center gap-3">
-                                <span className="text-lg">💡</span>
+                                <span className="text-lg">≡ƒÆí</span>
                                 <span className="text-xs font-bold text-navy">
                                     Select one or more chapters above to view and filter specific concepts & topics.
                                 </span>
                             </div>
                         )}
 
-                        {/* ── SCOPE SUMMARY BAR ── */}
+                        {/* ΓöÇΓöÇ SCOPE SUMMARY BAR ΓöÇΓöÇ */}
                         <div className="bg-navy text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
                                 <span className="text-[10px] text-gold font-bold uppercase tracking-widest">Active Scope</span>
                                 <div className="text-sm font-black mt-0.5">
-                                    {selectedChapters.length > 0 ? `${selectedChapters.length} Chapters Selected` : 'All Chapters in Subject Included'}
-                                    {selectedConcepts.length > 0 ? ` • ${selectedConcepts.length} Concepts` : ''}
-                                    {` • Repositories: ${selectedSources.map(s => s === 'REGULAR' ? 'Bank' : s).join(' + ')}`}
+                                    {selectedChapters.length > 0 ? `${selectedChapters.length} Chapters Selected` : 'All Chapters Included'}
+                                    {selectedConcepts.length > 0 ? ` ΓÇó ${selectedConcepts.length} Concepts Selected` : ''}
                                 </div>
                             </div>
                             <button
                                 onClick={() => setCurrentStep(2)}
                                 className="bg-gold text-navy hover:scale-105 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                <span>Proceed to Chapter Allocation (Step 2)</span>
-                                <span>→</span>
+                                <span>Proceed to Method</span>
+                                <span>ΓåÆ</span>
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* ══════════════════════════════════════════════════════════════
-                    STEP 2: CHAPTER-WISE QUESTION ALLOCATION (DEDICATED BLUEPRINT WINDOW)
-                ══════════════════════════════════════════════════════════════ */}
+                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                    STEP 2: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
                 {currentStep === 2 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
-                        <div className="border-b border-gray-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div>
-                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 2 of 5</span>
-                                <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Chapter-Wise Question Allocation</h2>
-                                <p className="text-xs text-gray-500 font-medium mt-1">
-                                    Specify exactly how many questions to pick from each chapter (Total Target: {targetLimit} Questions).
-                                </p>
-                            </div>
-                            
-                            {/* Live Balance Pill */}
-                            <div className="flex items-center gap-3">
-                                <div className={`px-4 py-2 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 ${
-                                    totalAllocatedQuestions === targetLimit
-                                        ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-400/40'
-                                        : totalAllocatedQuestions < targetLimit
-                                        ? 'bg-amber-400 text-slate-950'
-                                        : 'bg-rose-500 text-white'
-                                }`}>
-                                    <span className="text-base">{totalAllocatedQuestions === targetLimit ? '✓' : '⚠️'}</span>
-                                    <span>{totalAllocatedQuestions} / {targetLimit} Qs Allocated</span>
-                                    <span className="text-[10px] opacity-80">
-                                        {totalAllocatedQuestions === targetLimit ? '(Balanced)' : totalAllocatedQuestions < targetLimit ? `(${targetLimit - totalAllocatedQuestions} remaining)` : `(${totalAllocatedQuestions - targetLimit} excess)`}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Action Toolbar */}
-                        <div className="bg-navy/5 p-4 rounded-2xl border border-navy/10 flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs font-black text-navy uppercase tracking-wider">🎯 Total Target:</span>
-                                <span className="text-sm font-black text-navy bg-white px-3 py-1 rounded-xl border border-navy/20">{targetLimit} Questions</span>
-                                <span className="text-[11px] text-gray-500 font-medium">({effectiveChapters.length} Chapters in scope)</span>
-                            </div>
-
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <button
-                                    type="button"
-                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, targetLimit))}
-                                    className="bg-gold hover:bg-gold/90 text-navy px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
-                                >
-                                    <span>⚡ Auto Split Evenly</span>
-                                </button>
-                                {totalAllocatedQuestions !== targetLimit && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setTargetCount(totalAllocatedQuestions);
-                                            setAutoQty(totalAllocatedQuestions);
-                                        }}
-                                        className="bg-navy hover:bg-navy/90 text-gold px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
-                                        title="Set Target Total to match current allocation sum"
-                                    >
-                                        Sync Total ({totalAllocatedQuestions})
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        const empty = {};
-                                        effectiveChapters.forEach(ch => { empty[ch] = 0; });
-                                        setChapterAllocations(empty);
-                                    }}
-                                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
-                                >
-                                    Reset All
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Chapter Grid with Steppers and Pool Counts */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[55vh] overflow-y-auto pr-1">
-                            {effectiveChapters.map((ch, idx) => {
-                                const count = chapterAllocations[ch] !== undefined ? chapterAllocations[ch] : 0;
-                                const poolForCh = scopedQuestionPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
-                                const pct = targetLimit > 0 ? Math.round((count / targetLimit) * 100) : 0;
-
-                                return (
-                                    <div
-                                        key={ch}
-                                        className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between gap-3 ${
-                                            count > 0 ? 'border-navy bg-navy/5 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
-                                        }`}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-1.5 mb-1">
-                                                    <span className="text-[10px] font-black text-gold bg-navy px-2 py-0.5 rounded">
-                                                        Chapter {idx + 1}
-                                                    </span>
-                                                    {count > 0 && (
-                                                        <span className="text-[10px] font-black text-navy bg-navy/10 px-1.5 py-0.5 rounded">
-                                                            {pct}% of paper
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <h4 className="text-xs font-bold text-navy leading-snug line-clamp-2" title={ch}>
-                                                    {ch}
-                                                </h4>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex items-center justify-between pt-2 border-t border-gray-200/60">
-                                            <span className="text-[10px] text-gray-500 font-semibold">
-                                                {poolForCh.length} in repository
-                                            </span>
-
-                                            <div className="flex items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, (prev[ch] || 0) - 1) }))}
-                                                    className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-navy font-black text-sm flex items-center justify-center transition cursor-pointer"
-                                                >
-                                                    -
-                                                </button>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    max={targetLimit}
-                                                    value={count}
-                                                    onChange={e => {
-                                                        const val = parseInt(e.target.value) || 0;
-                                                        setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, val) }));
-                                                    }}
-                                                    className="w-14 bg-white text-navy font-black text-center text-sm py-1.5 rounded-xl border-2 border-navy focus:border-gold outline-none shadow-inner"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: (prev[ch] || 0) + 1 }))}
-                                                    className="w-8 h-8 rounded-xl bg-navy hover:bg-navy/90 text-gold font-black text-sm flex items-center justify-center transition cursor-pointer shadow-xs"
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Step 2 Bottom Navigation */}
-                        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                            <button
-                                type="button"
-                                onClick={() => setCurrentStep(1)}
-                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                            >
-                                ← Back to Scope Setup
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setCurrentStep(3)}
-                                className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
-                            >
-                                <span>Proceed to Method Selection (Step 3)</span>
-                                <span>→</span>
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════
-                    STEP 3: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
-                ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 3 && (
-                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
-                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 3 of 5</span>
+                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 2 of 5</span>
                             <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Choose Acquisition Method</h2>
                             <p className="text-xs text-gray-500 font-medium mt-1">
                                 Pick questions individually from your selected topics or auto-generate a balanced set.
@@ -1955,13 +1538,13 @@ export default function CreatePaper() {
                             <div
                                 onClick={() => {
                                     setMethod('manual');
-                                    setCurrentStep(4);
+                                    setCurrentStep(3);
                                 }}
                                 className="border-3 border-gray-200 hover:border-navy hover:shadow-2xl rounded-3xl p-8 cursor-pointer transition-all duration-300 flex flex-col justify-between group bg-surface"
                             >
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-navy text-gold flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                                        ✍️
+                                        Γ£ì∩╕Å
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Manual Question Pick</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
@@ -1970,7 +1553,7 @@ export default function CreatePaper() {
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
                                     <span>Browse Questions Repository</span>
-                                    <span>→</span>
+                                    <span>ΓåÆ</span>
                                 </div>
                             </div>
 
@@ -1978,43 +1561,43 @@ export default function CreatePaper() {
                             <div
                                 onClick={() => {
                                     setMethod('auto');
-                                    setCurrentStep(4);
+                                    setCurrentStep(3);
                                 }}
                                 className="border-3 border-gray-200 hover:border-gold hover:shadow-2xl rounded-3xl p-8 cursor-pointer transition-all duration-300 flex flex-col justify-between group bg-surface"
                             >
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-gold text-navy flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                                        ⚡
+                                        ΓÜí
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Auto Fetch Generator</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                        Automatically assemble questions across all your allocated chapters with customized difficulty distribution.
+                                        Automatically assemble questions across all your checked chapters and concepts with customized difficulty distribution.
                                     </p>
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
                                     <span>Configure & Auto-Generate</span>
-                                    <span>→</span>
+                                    <span>ΓåÆ</span>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex justify-start pt-4 border-t border-gray-100">
                             <button
-                                onClick={() => setCurrentStep(2)}
+                                onClick={() => setCurrentStep(1)}
                                 className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                             >
-                                ← Back to Chapter Allocation
+                                ΓåÉ Back to Scope Setup
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* ══════════════════════════════════════════════════════════════
-                    STEP 4: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
-                ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 4 && (
+                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                    STEP 3: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                {currentStep === 3 && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* ── STEP 4 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ── */}
+                        {/* ΓöÇΓöÇ STEP 3 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ΓöÇΓöÇ */}
                         <div className="flex items-center gap-2 bg-gray-200/70 p-1.5 rounded-2xl w-fit">
                             <button
                                 type="button"
@@ -2025,7 +1608,7 @@ export default function CreatePaper() {
                                         : 'text-gray-600 hover:text-navy hover:bg-gray-100'
                                 }`}
                             >
-                                <span>✍️ Review & Edit Selected Questions</span>
+                                <span>Γ£ì∩╕Å Review & Edit Selected Questions</span>
                                 <span className="bg-gold/20 text-gold px-2 py-0.5 rounded-full text-[10px]">
                                     {selectedQuestions.length}
                                 </span>
@@ -2039,18 +1622,18 @@ export default function CreatePaper() {
                                         : 'text-gray-600 hover:text-navy hover:bg-gray-100'
                                 }`}
                             >
-                                <span>⚡ Auto Generator Engine</span>
+                                <span>ΓÜí Auto Generator Engine</span>
                             </button>
                         </div>
 
                         {method === 'auto' ? (
-                            /* ── AUTO FETCH CONFIGURATION SCREEN ── */
+                            /* ΓöÇΓöÇ AUTO FETCH CONFIGURATION SCREEN ΓöÇΓöÇ */
                             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 space-y-6 max-w-3xl mx-auto">
                                 <div className="border-b border-gray-100 pb-4">
-                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 4: Auto Engine</span>
-                                    <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Difficulty Split & Generate</h2>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Auto Engine</span>
+                                    <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Auto Fetch Configuration</h2>
                                     <p className="text-xs text-gray-500 font-medium mt-1">
-                                        Assembling from {scopedQuestionPool.length} available questions across {effectiveChapters.length} chapters.
+                                        Assembling from {scopedQuestionPool.length} available questions across {selectedChapters.length || 'All'} chapters and {selectedConcepts.length || 'All'} concepts.
                                     </p>
                                 </div>
 
@@ -2104,7 +1687,7 @@ export default function CreatePaper() {
 
                                         <div className="grid grid-cols-3 gap-4">
                                             <div className="bg-white p-3 rounded-xl border border-emerald-200 text-center">
-                                                <span className="text-[10px] font-black text-emerald-700 uppercase">🟢 Easy</span>
+                                                <span className="text-[10px] font-black text-emerald-700 uppercase">≡ƒƒó Easy</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.easy}
@@ -2113,7 +1696,7 @@ export default function CreatePaper() {
                                                 />
                                             </div>
                                             <div className="bg-white p-3 rounded-xl border border-amber-200 text-center">
-                                                <span className="text-[10px] font-black text-amber-700 uppercase">🟡 Medium</span>
+                                                <span className="text-[10px] font-black text-amber-700 uppercase">≡ƒƒí Medium</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.medium}
@@ -2122,7 +1705,7 @@ export default function CreatePaper() {
                                                 />
                                             </div>
                                             <div className="bg-white p-3 rounded-xl border border-rose-200 text-center">
-                                                <span className="text-[10px] font-black text-rose-700 uppercase">🔴 Hard</span>
+                                                <span className="text-[10px] font-black text-rose-700 uppercase">≡ƒö┤ Hard</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.hard}
@@ -2133,203 +1716,142 @@ export default function CreatePaper() {
                                         </div>
                                     </div>
 
-                                    {/* ── CHAPTER-WISE QUESTION ALLOCATION (BLUEPRINT) ── */}
-                                    <div className="bg-gradient-to-br from-slate-900 to-navy text-white p-6 rounded-3xl border-2 border-gold/40 shadow-xl space-y-4">
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/15 pb-3">
-                                            <div>
-                                                <div className="flex items-center gap-2.5 flex-wrap">
-                                                    <span className="text-gold font-black text-sm uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>🎯</span> Set Questions Needed Per Chapter
-                                                    </span>
-                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black shadow-xs ${
-                                                        totalAllocatedQuestions === autoQty
-                                                            ? 'bg-emerald-400 text-slate-950'
-                                                            : totalAllocatedQuestions < autoQty
-                                                            ? 'bg-amber-400 text-slate-950'
-                                                            : 'bg-rose-500 text-white'
-                                                    }`}>
-                                                        {totalAllocatedQuestions} / {autoQty} Qs Allocated
-                                                        {totalAllocatedQuestions === autoQty ? ' ✓ Balanced' : totalAllocatedQuestions < autoQty ? ` (${autoQty - totalAllocatedQuestions} left)` : ` (${totalAllocatedQuestions - autoQty} over)`}
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-300 font-medium mt-1">
-                                                    Specify exact question count to pull from each chapter (e.g. 20 from Chapter 1, 20 from Chapter 2, 20 from Chapter 3).
-                                                </p>
+                                    {/* Chapter Quota Auto-Distribution Preview */}
+                                    {selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0 && (
+                                        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                                    <span>≡ƒôï</span> Chapter Quota Breakdown ({selectedChapters.length} Chapters)
+                                                </h3>
+                                                <span className="text-[11px] font-bold text-slate-500">
+                                                    Total Allocated: {totalAllocatedQuota} / {targetLimit} Qs
+                                                </span>
                                             </div>
-
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, autoQty))}
-                                                    className="bg-gold hover:bg-gold/90 text-navy px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
-                                                >
-                                                    <span>⚡ Auto Split Evenly</span>
-                                                </button>
-                                                {totalAllocatedQuestions !== autoQty && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setAutoQty(totalAllocatedQuestions);
-                                                            setTargetCount(totalAllocatedQuestions);
-                                                        }}
-                                                        className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                                                        title="Set Total Quantity to match current allocation sum"
-                                                    >
-                                                        Sync Total ({totalAllocatedQuestions})
-                                                    </button>
-                                                )}
+                                            <div className="overflow-x-auto rounded-xl border border-slate-200">
+                                                <table className="w-full text-left text-xs border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-bold">
+                                                            <th className="py-2.5 px-3">Chapter</th>
+                                                            <th className="py-2.5 px-3 text-center">Quota</th>
+                                                            <th className="py-2.5 px-3 text-center text-emerald-700">Easy (~{autoDist.easy}%)</th>
+                                                            <th className="py-2.5 px-3 text-center text-amber-700">Medium (~{autoDist.medium}%)</th>
+                                                            <th className="py-2.5 px-3 text-center text-rose-700">Hard (~{autoDist.hard}%)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100 bg-white">
+                                                        {selectedChapters.map(ch => {
+                                                            const qty = parseInt(chapterQuotas[ch], 10) || 0;
+                                                            const easy = Math.round(qty * (autoDist.easy / 100));
+                                                            const med = Math.round(qty * (autoDist.medium / 100));
+                                                            const hard = Math.max(0, qty - easy - med);
+                                                            return (
+                                                                <tr key={ch} className="hover:bg-slate-50/70 font-medium text-slate-800">
+                                                                    <td className="py-2 px-3 font-bold text-navy truncate max-w-xs" title={ch}>{ch}</td>
+                                                                    <td className="py-2 px-3 text-center font-black text-navy">{qty}</td>
+                                                                    <td className="py-2 px-3 text-center text-emerald-700 font-bold">{easy}</td>
+                                                                    <td className="py-2 px-3 text-center text-amber-700 font-bold">{med}</td>
+                                                                    <td className="py-2 px-3 text-center text-rose-700 font-bold">{hard}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
-                                            {effectiveChapters.map((ch, idx) => {
-                                                const count = chapterAllocations[ch] ?? 0;
-                                                const poolForCh = scopedQuestionPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
-                                                return (
-                                                    <div key={ch} className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/15 flex items-center justify-between gap-3 hover:border-gold/50 transition">
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-[10px] font-black text-gold bg-white/10 px-1.5 py-0.5 rounded">
-                                                                    Ch {idx + 1}
-                                                                </span>
-                                                                <p className="text-xs font-bold text-white truncate" title={ch}>{ch}</p>
-                                                            </div>
-                                                            <p className="text-[10px] text-slate-300 font-semibold mt-0.5">
-                                                                {poolForCh.length} Qs available in bank
-                                                            </p>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, (prev[ch] || 0) - 1) }))}
-                                                                className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/30 text-white font-black text-sm flex items-center justify-center transition cursor-pointer"
-                                                            >
-                                                                -
-                                                            </button>
-                                                            <input
-                                                                type="number"
-                                                                min="0"
-                                                                max="200"
-                                                                value={count}
-                                                                onChange={e => {
-                                                                    const val = Math.max(0, parseInt(e.target.value) || 0);
-                                                                    setChapterAllocations(prev => ({ ...prev, [ch]: val }));
-                                                                }}
-                                                                className="w-12 bg-white text-navy font-black text-center text-xs py-1.5 rounded-lg outline-none border border-gold/40 shadow-inner"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: (prev[ch] || 0) + 1 }))}
-                                                                className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/30 text-white font-black text-sm flex items-center justify-center transition cursor-pointer"
-                                                            >
-                                                                +
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {totalAllocatedQuestions !== autoQty && (
-                                            <p className="text-xs font-bold text-amber-200 bg-amber-950/60 border border-amber-500/40 px-3.5 py-2 rounded-xl flex items-center gap-2">
-                                                <span>⚠️</span>
-                                                <span>Allocated sum ({totalAllocatedQuestions} Qs) differs from target question count ({autoQty} Qs). Click <strong>⚡ Auto Split Evenly</strong> or <strong>Sync Total</strong> to match.</span>
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                    <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                                        <button
-                                            onClick={() => setCurrentStep(3)}
-                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                                        >
-                                            ← Back to Method
-                                        </button>
-                                        <button
-                                            onClick={handleGenerateAuto}
-                                            className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
-                                        >
-                                            <span>⚡ Generate & Proceed to Preview</span>
-                                            <span>→</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            ) : (
-                                /* ── MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ── */
-                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
-                                    
-                                    {/* Active Swap Mode Banner */}
-                                    {swappingQuestionIndex !== null && (
-                                        <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-2xl">🔄</span>
-                                                <div>
-                                                    <h4 className="font-black text-xs uppercase tracking-wider text-navy">
-                                                        Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
-                                                    </h4>
-                                                    <p className="text-[11px] font-bold text-navy/80">
-                                                        Click any question below in the repository to replace this question.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => setSwappingQuestionIndex(null)}
-                                                className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
-                                            >
-                                                ✕ Cancel Swap
-                                            </button>
                                         </div>
                                     )}
+                                </div>
 
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                                    {paperId ? 'Edit Mode' : 'Question Quality View'}
-                                                </span>
-                                                {paperId && (
-                                                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                                                        Saved Paper #{paperId.slice(-6)}
-                                                    </span>
-                                                )}
+                                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={() => setCurrentStep(2)}
+                                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                    >
+                                        ΓåÉ Back
+                                    </button>
+                                    <button
+                                        onClick={handleGenerateAuto}
+                                        className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
+                                    >
+                                        <span>ΓÜí Generate & Proceed to Preview</span>
+                                        <span>ΓåÆ</span>
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* ΓöÇΓöÇ MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ΓöÇΓöÇ */
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
+                                
+                                {/* Active Swap Mode Banner */}
+                                {swappingQuestionIndex !== null && (
+                                    <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-2xl">≡ƒöä</span>
+                                            <div>
+                                                <h4 className="font-black text-xs uppercase tracking-wider text-navy">
+                                                    Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
+                                                </h4>
+                                                <p className="text-[11px] font-bold text-navy/80">
+                                                    Click any question below in the repository to replace this question.
+                                                </p>
                                             </div>
-                                            <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                                {paperId ? `Editing: ${title || 'Saved Paper'}` : 'Select & Quality Check Questions'} ({filteredQuestions.length} in Pool)
-                                            </h2>
-                                            <p className="text-xs text-gray-500 font-bold">
-                                                {selectedQuestions.length} of {targetLimit} Questions Selected
-                                            </p>
                                         </div>
+                                        <button
+                                            onClick={() => setSwappingQuestionIndex(null)}
+                                            className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
+                                        >
+                                            Γ£ò Cancel Swap
+                                        </button>
+                                    </div>
+                                )}
 
-                                        {/* Action Bar with clear Back and Forward buttons */}
-                                        <div className="flex items-center gap-2.5 flex-wrap">
-                                            <button
-                                                type="button"
-                                                onClick={() => setCurrentStep(3)}
-                                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
-                                            >
-                                                <span>←</span> Method (Step 3)
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowReviewSelectedModal(true)}
-                                                className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
-                                            >
-                                                <span>👁 Review Basket</span>
-                                                <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
-                                                    {selectedQuestions.length}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                                {paperId ? 'Edit Mode' : 'Question Quality View'}
+                                            </span>
+                                            {paperId && (
+                                                <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                                                    Saved Paper #{paperId.slice(-6)}
                                                 </span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handlePreFinalizeCheck}
-                                                disabled={selectedQuestions.length === 0}
-                                                className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
-                                            >
-                                                <span>Preview Paper (Step 5)</span>
-                                                <span>→</span>
-                                            </button>
+                                            )}
+                                        </div>
+                                        <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                            {paperId ? `Editing: ${title || 'Saved Paper'}` : 'Select & Quality Check Questions'} ({filteredQuestions.length} in Pool)
+                                        </h2>
+                                        <p className="text-xs text-gray-500 font-bold">
+                                            {selectedQuestions.length} of {targetLimit} Questions Selected
+                                        </p>
+                                    </div>
+
+                                    {/* Action Bar with clear Back and Forward buttons */}
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        <button
+                                            type="button"
+                                            onClick={() => setCurrentStep(1)}
+                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
+                                        >
+                                            <span>ΓåÉ</span> Setup (Step 1)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowReviewSelectedModal(true)}
+                                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
+                                        >
+                                            <span>≡ƒæü Review Basket</span>
+                                            <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
+                                                {selectedQuestions.length}
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handlePreFinalizeCheck}
+                                            disabled={selectedQuestions.length === 0}
+                                            className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span>Preview Paper (Step 4)</span>
+                                            <span>ΓåÆ</span>
+                                        </button>
                                         {paperId && (
                                             <button
                                                 type="button"
@@ -2337,87 +1859,64 @@ export default function CreatePaper() {
                                                 disabled={saving || selectedQuestions.length === 0}
                                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
                                             >
-                                                <span>💾</span> {saving ? 'Saving...' : 'Save Changes'}
+                                                <span>≡ƒÆ╛</span> {saving ? 'Saving...' : 'Save Changes'}
                                             </button>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Chapter Quota Progress Tracker Bar */}
-                                {effectiveChapters.length > 0 && (
+                                {/* Live Chapter Quota Tracker Bar */}
+                                {selectedChapters.length > 0 && (
                                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <span className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
-                                                <span>🎯 Chapter Quotas Tracker</span>
-                                                <span className="text-[10px] bg-navy text-gold px-2 py-0.5 rounded-full">
-                                                    {selectedQuestions.length} / {targetLimit} Selected
-                                                </span>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
+                                                <span>≡ƒÄ»</span> Chapter Quota Progress
                                             </span>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, targetLimit))}
-                                                    className="text-[10px] font-bold text-slate-600 hover:text-navy px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-2xs hover:bg-slate-100 transition cursor-pointer"
-                                                >
-                                                    ⚡ Equalize Quotas
-                                                </button>
-                                            </div>
+                                            <span className="text-[11px] font-bold text-gray-500">
+                                                Click any chapter to filter questions
+                                            </span>
                                         </div>
-
-                                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5">
-                                            {effectiveChapters.map(ch => {
-                                                const canonCh = canonicalizeChapterName(ch);
-                                                const selectedForCh = selectedQuestions.filter(q => canonicalizeChapterName(q.chapter || '') === canonCh).length;
-                                                const quota = chapterAllocations[ch] ?? (Math.round(targetLimit / effectiveChapters.length) || 0);
-                                                const isComplete = selectedForCh >= quota && quota > 0;
-                                                const isActiveFilter = singleFilterChapter === ch;
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedChapters.map(ch => {
+                                                const targetQ = chapterQuotas[ch] !== undefined ? chapterQuotas[ch] : 0;
+                                                const currentQ = selectedChapterCounts[ch] || 0;
+                                                const isFulfilled = targetQ > 0 && currentQ === targetQ;
+                                                const isOver = currentQ > targetQ;
+                                                const isActive = singleFilterChapter === ch;
 
                                                 return (
-                                                    <div
+                                                    <button
                                                         key={ch}
-                                                        className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all shadow-2xs ${
-                                                            isActiveFilter
-                                                                ? 'bg-navy text-white border-navy ring-2 ring-gold/40'
-                                                                : isComplete
-                                                                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                                                                : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSingleFilterChapter(isActive ? '' : ch);
+                                                            setPageNumber(1);
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                                                            isActive
+                                                                ? 'ring-2 ring-navy shadow-xs'
+                                                                : ''
+                                                        } ${
+                                                            isFulfilled
+                                                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                                                : isOver
+                                                                ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                                                                : currentQ > 0
+                                                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                                : 'bg-white text-slate-700 border border-gray-200 hover:border-gray-300'
                                                         }`}
                                                     >
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setSingleFilterChapter(isActiveFilter ? '' : ch);
-                                                                setPageNumber(1);
-                                                            }}
-                                                            className="text-left font-bold truncate max-w-[140px] hover:underline cursor-pointer"
-                                                            title={`Filter pool by ${ch}`}
-                                                        >
-                                                            {ch}
-                                                        </button>
-                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
-                                                            isActiveFilter
-                                                                ? 'bg-gold text-navy'
-                                                                : isComplete
+                                                        <span className="truncate max-w-[160px] sm:max-w-[200px]" title={ch}>{ch}</span>
+                                                        <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                                                            isFulfilled
                                                                 ? 'bg-emerald-600 text-white'
-                                                                : 'bg-slate-100 text-slate-700'
+                                                                : isOver
+                                                                ? 'bg-rose-600 text-white'
+                                                                : 'bg-slate-200 text-slate-800'
                                                         }`}>
-                                                            {selectedForCh}/{quota} {isComplete ? '✓' : ''}
+                                                            {currentQ} / {targetQ} {isFulfilled ? 'Γ£ô' : ''}
                                                         </span>
-                                                        {!isComplete && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleAutoFillChapter(ch, Math.max(1, quota - selectedForCh))}
-                                                                title={`Auto-fill remaining ${Math.max(0, quota - selectedForCh)} questions for ${ch}`}
-                                                                className={`text-[10px] font-black px-1.5 py-0.5 rounded-md hover:scale-105 transition cursor-pointer ${
-                                                                    isActiveFilter
-                                                                        ? 'bg-white/20 text-gold hover:bg-white/30'
-                                                                        : 'bg-navy text-gold hover:bg-navy/80'
-                                                                }`}
-                                                            >
-                                                                +Fill
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
@@ -2425,10 +1924,10 @@ export default function CreatePaper() {
                                 )}
 
                                 {/* Quick Filters & Search */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                                     <input
                                         type="text"
-                                        placeholder="🔍 Search in pool..."
+                                        placeholder="≡ƒöì Search in pool..."
                                         value={searchTerm}
                                         onChange={e => { setSearchTerm(e.target.value); setPageNumber(1); }}
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
@@ -2438,20 +1937,10 @@ export default function CreatePaper() {
                                         onChange={e => { setSingleFilterChapter(e.target.value); setPageNumber(1); }}
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
                                     >
-                                        <option value="">All Chapters ({selectedChapters.length || distinctChapters.length})</option>
+                                        <option value="">All Scoped Chapters ({selectedChapters.length || distinctChapters.length})</option>
                                         {(selectedChapters.length > 0 ? selectedChapters : distinctChapters).map(ch => (
                                             <option key={ch} value={ch}>{ch}</option>
                                         ))}
-                                    </select>
-                                    <select
-                                        value={filterSource}
-                                        onChange={e => { setFilterSource(e.target.value); setPageNumber(1); }}
-                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
-                                    >
-                                        <option value="">All Active Sources</option>
-                                        {selectedSources.includes('REGULAR') && <option value="REGULAR">🏛️ Question Bank</option>}
-                                        {selectedSources.includes('PYQ') && <option value="PYQ">📜 Previous Years (PYQ)</option>}
-                                        {selectedSources.includes('GT') && <option value="GT">🏆 Grand Tests (GT)</option>}
                                     </select>
                                     <select
                                         value={filterDifficulty}
@@ -2459,9 +1948,9 @@ export default function CreatePaper() {
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
                                     >
                                         <option value="">All Difficulties</option>
-                                        <option value="easy">🟢 Easy</option>
-                                        <option value="medium">🟡 Medium</option>
-                                        <option value="hard">🔴 Hard</option>
+                                        <option value="easy">≡ƒƒó Easy</option>
+                                        <option value="medium">≡ƒƒí Medium</option>
+                                        <option value="hard">≡ƒö┤ Hard</option>
                                     </select>
                                     <select
                                         value={filterType}
@@ -2516,34 +2005,17 @@ export default function CreatePaper() {
                                                             : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md shadow-xs'
                                                     }`}
                                                 >
-                                                    {/* ── Top Breadcrumbs & Selection Bar ── */}
+                                                    {/* ΓöÇΓöÇ Top Breadcrumbs & Selection Bar ΓöÇΓöÇ */}
                                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                                         <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap font-medium">
-                                                            {/* Source Badge */}
-                                                            {q.sourceType === 'PYQ' ? (
-                                                                <span className="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
-                                                                    <span>📜 PYQ</span>
-                                                                    {q.sourceExam && <span>: {q.sourceExam} {q.sourceYear ? `'${String(q.sourceYear).slice(-2)}` : ''}</span>}
-                                                                </span>
-                                                            ) : q.sourceType === 'GT' ? (
-                                                                <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
-                                                                    <span>🏆 GT</span>
-                                                                    {q.sourcePaperName && <span className="truncate max-w-[120px]">: {q.sourcePaperName}</span>}
-                                                                </span>
-                                                            ) : (
-                                                                <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
-                                                                    🏛️ Bank
-                                                                </span>
-                                                            )}
-                                                            <span>•</span>
                                                             <span className="text-navy font-bold uppercase tracking-wider">{q.subject || subject}</span>
-                                                            <span>•</span>
+                                                            <span>ΓÇó</span>
                                                             <span>Class {q.classes?.[0] || selectedClass}</span>
-                                                            <span>•</span>
+                                                            <span>ΓÇó</span>
                                                             <span>{q.chapter || 'General'}</span>
-                                                            <span>•</span>
+                                                            <span>ΓÇó</span>
                                                             <span>{q.type || 'MCQ'}</span>
-                                                            <span>•</span>
+                                                            <span>ΓÇó</span>
                                                             <span className={
                                                                 (q.level || 'medium').toLowerCase() === 'easy' ? 'text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-bold' :
                                                                 (q.level || 'medium').toLowerCase() === 'hard' ? 'text-rose-700 bg-rose-100 px-2 py-0.5 rounded font-bold' :
@@ -2563,7 +2035,7 @@ export default function CreatePaper() {
                                                                         : 'bg-white hover:bg-navy hover:text-gold text-navy border-2 border-navy/20 hover:border-navy'
                                                                 }`}
                                                             >
-                                                                {isSelected ? '✓ Added' : '+ Add to Paper'}
+                                                                {isSelected ? 'Γ£ô Added' : '+ Add to Paper'}
                                                             </button>
                                                         </div>
                                                     </div>
@@ -2653,7 +2125,7 @@ export default function CreatePaper() {
                                                                     }}
                                                                     className="text-xs font-black text-navy hover:text-gold bg-navy/5 hover:bg-navy border border-navy/20 px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5"
                                                                 >
-                                                                    <span>{isSolutionOpen ? '💡 Hide Solution' : '👁️ View Detailed Answer'}</span>
+                                                                    <span>{isSolutionOpen ? '≡ƒÆí Hide Solution' : '≡ƒæü∩╕Å View Detailed Answer'}</span>
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2700,7 +2172,7 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: REVIEW & EDIT SELECTED BASKET ── */}
+                {/* ΓöÇΓöÇ MODAL: REVIEW & EDIT SELECTED BASKET ΓöÇΓöÇ */}
                 {showReviewSelectedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -2720,7 +2192,7 @@ export default function CreatePaper() {
                                     onClick={() => setShowReviewSelectedModal(false)}
                                     className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
                                 >
-                                    ✕
+                                    Γ£ò
                                 </button>
                             </div>
 
@@ -2741,11 +2213,11 @@ export default function CreatePaper() {
                                                             Q.{startQNo + idx}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
-                                                            📖 {q.chapter || 'General'}
+                                                            ≡ƒôû {q.chapter || 'General'}
                                                         </span>
                                                         {(q.concept || q.topic) && (
                                                             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                                                                💡 {q.concept || q.topic}
+                                                                ≡ƒÆí {q.concept || q.topic}
                                                             </span>
                                                         )}
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -2799,7 +2271,7 @@ export default function CreatePaper() {
                                                         className="bg-blue-50 text-navy hover:bg-blue-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 border border-blue-200"
                                                         title="Edit text, options, or solution of this question"
                                                     >
-                                                        <span>✏️</span> Edit
+                                                        <span>Γ£Å∩╕Å</span> Edit
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2810,7 +2282,7 @@ export default function CreatePaper() {
                                                         className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-xs"
                                                         title="Swap this question with another"
                                                     >
-                                                        <span>🔄</span> Swap
+                                                        <span>≡ƒöä</span> Swap
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2818,7 +2290,7 @@ export default function CreatePaper() {
                                                         className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border border-rose-200"
                                                         title="Remove this question"
                                                     >
-                                                        ✕ Remove
+                                                        Γ£ò Remove
                                                     </button>
                                                 </div>
                                             </div>
@@ -2842,12 +2314,12 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: MAX QUESTIONS REACHED POPUP ── */}
+                {/* ΓöÇΓöÇ MODAL: MAX QUESTIONS REACHED POPUP ΓöÇΓöÇ */}
                 {showLimitReachedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-xs p-4 animate-fade-in">
                         <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-gray-100 text-center space-y-4 animate-scale-up">
                             <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto font-black shadow-inner">
-                                ⚠️
+                                ΓÜá∩╕Å
                             </div>
                             <h3 className="text-xl font-black text-navy uppercase tracking-tight">
                                 Maximum Questions Reached!
@@ -2856,7 +2328,7 @@ export default function CreatePaper() {
                                 You have reached the maximum quota of <strong>{targetLimit} questions</strong> for this {paperCategory === 'assignment' ? 'assignment' : 'question paper'}. Extra questions cannot be added.
                             </p>
                             <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-left">
-                                💡 <strong>Tip:</strong> If you want to change or swap questions, click <strong>"Review Selected"</strong> and use the <strong>Swap</strong> or <strong>Remove</strong> option.
+                                ≡ƒÆí <strong>Tip:</strong> If you want to change or swap questions, click <strong>"Review Selected"</strong> and use the <strong>Swap</strong> or <strong>Remove</strong> option.
                             </p>
                             <button
                                 type="button"
@@ -2869,15 +2341,15 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ══════════════════════════════════════════════════════════════
-                    STEP 5: TRUE A4 PAGE-BY-PAGE PREVIEW + ALIGNMENT + SAVE
-                ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 5 && (
+                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                    STEP 4: TRUE A4 PAGE-BY-PAGE PREVIEW + TOOLS
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                {currentStep === 4 && (
                     <div className="space-y-6 animate-fade-in">
                         {validationResult && validationResult.issues.length > 0 && (
                             <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-xs font-bold text-amber-900 no-print flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span>⚠️</span>
+                                    <span>ΓÜá∩╕Å</span>
                                     <span>{validationResult.issues.length} validation advisory note(s) found in selected questions.</span>
                                 </div>
                                 <span className="text-[10px] uppercase tracking-wider text-amber-700">Validated</span>
@@ -2890,11 +2362,11 @@ export default function CreatePaper() {
                                 type="button"
                                 onClick={() => {
                                     setMethod('manual');
-                                    setCurrentStep(4);
+                                    setCurrentStep(3);
                                 }}
                                 className="bg-navy text-gold hover:scale-105 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md cursor-pointer flex items-center gap-2"
                             >
-                                <span>←</span> ✏️ Edit / Change Questions (Step 4)
+                                <span>ΓåÉ</span> Γ£Å∩╕Å Edit / Change Questions
                             </button>
 
                             <div className="flex items-center gap-2.5 flex-wrap">
@@ -2902,31 +2374,104 @@ export default function CreatePaper() {
                                     onClick={() => setShowAnalysisModal(true)}
                                     className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>📊</span> View Analysis
+                                    <span>≡ƒôè</span> View Analysis
                                 </button>
                                 <button
                                     onClick={() => setShowAnswerKeyModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>🔑</span> Answer Key
+                                    <span>≡ƒöæ</span> Answer Key
                                 </button>
                                 <button
                                     onClick={() => setShowSolutionsModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>💡</span> Solutions Guide
+                                    <span>≡ƒÆí</span> Solutions Guide
+                                </button>
+                                <button
+                                    onClick={() => setCurrentStep(5)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>ΓÜÖ∩╕Å</span> Alignment Controls ΓåÆ
                                 </button>
                                 <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>💾</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                    <span>Γ£ô</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
                             </div>
                         </div>
 
                         {/* A4 Paper Renderer */}
+                        <div className="w-full flex justify-center">
+                            <PaperRenderer
+                                paper={currentPaperObject}
+                                isAssignment={paperCategory === 'assignment'}
+                                activeTemplate={activeTemplate}
+                                settings={{ ...settings, startQNo, endQNo }}
+                                setSettings={setSettings}
+                                showSettingsPanel={false}
+                                onProceedToAlignment={() => setCurrentStep(5)}
+                                onProceedToFinalize={handleFinalizeAndSave}
+                                onDiagramResize={handleDiagramResize}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                    STEP 5: ALIGNMENT & FINE-TUNING
+                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                {currentStep === 5 && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm gap-3 no-print">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setCurrentStep(4)}
+                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                >
+                                    ΓåÉ Back to Preview
+                                </button>
+                                <button
+                                    onClick={() => setCurrentStep(3)}
+                                    className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                                >
+                                    Γ£Å∩╕Å Edit Questions
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                    onClick={() => setShowAnalysisModal(true)}
+                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>≡ƒôè</span> View Analysis
+                                </button>
+                                <button
+                                    onClick={() => setShowAnswerKeyModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>≡ƒöæ</span> Answer Key
+                                </button>
+                                <button
+                                    onClick={() => setShowSolutionsModal(true)}
+                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>≡ƒÆí</span> Solutions Guide
+                                </button>
+                                <button
+                                    onClick={handleFinalizeAndSave}
+                                    disabled={saving}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
+                                >
+                                    <span>Γ£ô</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Renderer with Alignment panel open */}
                         <div className="w-full flex justify-center">
                             <PaperRenderer
                                 paper={currentPaperObject}
@@ -2942,7 +2487,7 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
+                {/* ΓöÇΓöÇ MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
                 {showAnswerKeyModal && (
                     <A4AnswerKey
                         paper={{ title, subject, classes: [selectedClass, examType], _id: paperId }}
@@ -2955,7 +2500,7 @@ export default function CreatePaper() {
                     />
                 )}
 
-                {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
+                {/* ΓöÇΓöÇ MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
                 {showSolutionsModal && (
                     <A4SolutionKey
                         paper={{ title, subject, classes: [selectedClass, examType] }}
@@ -2965,7 +2510,7 @@ export default function CreatePaper() {
                     />
                 )}
 
-                {/* ── MODAL: IN-PLACE QUESTION & OPTIONS EDITOR ── */}
+                {/* ΓöÇΓöÇ MODAL: IN-PLACE QUESTION & OPTIONS EDITOR ΓöÇΓöÇ */}
                 {editingQuestionModal && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -2986,7 +2531,7 @@ export default function CreatePaper() {
                                     onClick={() => setEditingQuestionModal(null)}
                                     className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition cursor-pointer"
                                 >
-                                    ✕
+                                    Γ£ò
                                 </button>
                             </div>
 
@@ -3112,14 +2657,14 @@ export default function CreatePaper() {
                                     onClick={handleSaveQuestionEdit}
                                     className="bg-navy hover:bg-navy/90 text-gold px-7 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>💾</span> Save Changes
+                                    <span>≡ƒÆ╛</span> Save Changes
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* ── MODAL: ANALYSIS DASHBOARD ── */}
+                {/* ΓöÇΓöÇ MODAL: ANALYSIS DASHBOARD ΓöÇΓöÇ */}
                 <PaperAnalysisModal
                     isOpen={showAnalysisModal}
                     onClose={() => setShowAnalysisModal(false)}
