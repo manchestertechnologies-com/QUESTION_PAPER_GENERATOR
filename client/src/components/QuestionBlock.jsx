@@ -200,7 +200,7 @@ const Q = {
         fontStyle: 'normal',
     },
     num: {
-        fontWeight: 400,
+        fontWeight: 700,
         fontStyle: 'normal',
         fontFamily: 'inherit',
         whiteSpace: 'nowrap',
@@ -216,7 +216,7 @@ const Q = {
         fontStyle: 'normal',
     },
     qTextBold: {
-        fontWeight: 400,
+        fontWeight: 700,
         fontStyle: 'normal',
         fontFamily: 'inherit',
         color: '#000',
@@ -343,23 +343,7 @@ const Q = {
  * Decides whether diagram should be rendered side-by-side on the right, or inline/full-width
  */
 function shouldRenderSideBySide(q, isTwoCol = false, resolvedImageUrl = null) {
-    const img = resolvedImageUrl || q.imageUrl || q.image_url;
-    if (!img) return false;
-    // In 2-column paper mode, column width is narrower, so inline/balanced is cleaner
-    if (isTwoCol) return false;
-
-    // Check options: if 2 to 4 options and options don't have images themselves
-    const options = Array.isArray(q.options) ? q.options : [];
-    if (options.length >= 2 && options.length <= 4) {
-        const hasOptImg = options.some(opt => {
-            const str = String(typeof opt === 'object' ? (opt.text || opt.option || '') : (opt || ''));
-            return /\{\{IMG::|!\[|\[DIAGRAM:|<img|https?:\/\/.*?\.(png|jpg|jpeg|webp|svg|gif)|data:image\//i.test(str);
-        });
-        if (hasOptImg) return false; // Options with diagrams use horizontal grid
-
-        const totalOptLength = options.reduce((sum, opt) => sum + String(typeof opt === 'object' ? (opt.text || opt.option || '') : (opt || '')).length, 0);
-        return totalOptLength < 280; // Side-by-side works cleanly when options fit neatly on the left
-    }
+    // Standard assessment formatting: options strictly render below diagram
     return false;
 }
 
