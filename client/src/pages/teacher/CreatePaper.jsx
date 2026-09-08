@@ -62,7 +62,7 @@ const QuestionCardOptions = ({ q, options = [], answer = '', showAnswer = true }
                             <MathRenderer inline text={optText} />
                         </div>
                         {isCorrect && (
-                            <span className="text-emerald-600 font-black ml-1 text-sm">Γ£ô</span>
+                            <span className="text-emerald-600 font-black ml-1 text-sm">✓</span>
                         )}
                     </div>
                 );
@@ -181,7 +181,7 @@ export default function CreatePaper() {
         }
     }, [paperCategory, subject]);
 
-    // ΓöÇΓöÇ 1. FAST METADATA FETCH (Instant Step 1 Rendering in 30ms) ΓöÇΓöÇ
+    // ── 1. FAST METADATA FETCH (Instant Step 1 Rendering in 30ms) ──
     useEffect(() => {
         const fetchMeta = async () => {
             if (!subject) return;
@@ -280,7 +280,7 @@ export default function CreatePaper() {
         fetchPaperDetails();
     }, [paperId]);
 
-    // ΓöÇΓöÇ 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ΓöÇΓöÇ
+    // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ──
     const fetchQuestionsPool = async (forceSubject = subject, forceClass = selectedClass, forceSources = selectedSources) => {
         if (!forceSubject) return;
 
@@ -327,7 +327,7 @@ export default function CreatePaper() {
         }
     }, [subject, selectedClass, selectedSources]);
 
-    // ΓöÇΓöÇ Chapter Quotas Auto-Sync & Helpers ΓöÇΓöÇ
+    // ── Chapter Quotas Auto-Sync & Helpers ──
     useEffect(() => {
         if (selectedChapters.length === 0) {
             setChapterQuotas({});
@@ -517,7 +517,7 @@ export default function CreatePaper() {
         return list;
     }, [selectedChapters, chapterConceptsMap]);
 
-    // ΓöÇΓöÇ Checkbox Toggle Handlers ΓöÇΓöÇ
+    // ── Checkbox Toggle Handlers ──
     const toggleChapter = (ch) => {
         setSelectedChapters(prev => {
             if (prev.includes(ch)) {
@@ -679,7 +679,7 @@ export default function CreatePaper() {
         setSelectedQuestions(prev => prev.filter(q => !matchingIds.has(q._id || q.id)));
     };
 
-    // ΓöÇΓöÇ In-Place Question Text & Options Editor ΓöÇΓöÇ
+    // ── In-Place Question Text & Options Editor ──
     const handleOpenEditQuestion = (question, index) => {
         const idx = index !== undefined ? index : selectedQuestions.findIndex(q => (q._id || q.id) === (question._id || question.id));
         
@@ -870,7 +870,7 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
-            alert(`Γ£ô ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
+            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
             } else {
@@ -925,14 +925,14 @@ export default function CreatePaper() {
     return (
         <div className="min-h-screen bg-background flex flex-col font-sans">
             
-            {/* ΓöÇΓöÇ TOP HEADER / STEP WIZARD BAR ΓöÇΓöÇ */}
+            {/* ── TOP HEADER / STEP WIZARD BAR ── */}
             <header className="bg-navy p-4 text-white flex justify-between items-center shadow-xl border-b-4 border-gold sticky top-0 z-30">
                 <div className="flex items-center gap-4 ml-4">
                     <button
                         onClick={() => navigate('/teacher/dashboard')}
                         className="bg-white/10 hover:bg-white/20 text-gold px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
                     >
-                        ΓåÉ Exit Wizard
+                        ← Exit Wizard
                     </button>
                     <div>
                         <h1 className="text-base font-black uppercase tracking-tight leading-none text-white">
@@ -963,19 +963,19 @@ export default function CreatePaper() {
                                     : 'bg-white/10 hover:bg-white/20 text-white/90'
                             }`}
                         >
-                            <span>{currentStep > st.num ? 'Γ£ô' : `${st.num}.`}</span>
+                            <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
                             <span>{st.label}</span>
                         </button>
                     ))}
                 </div>
             </header>
 
-            {/* ΓöÇΓöÇ STEP CONTENT CONTAINER ΓöÇΓöÇ */}
+            {/* ── STEP CONTENT CONTAINER ── */}
             <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
                 
-                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                {/* ══════════════════════════════════════════════════════════════
                     STEP 1: SCOPE, MODE & MULTI-SELECT CHAPTERS / CONCEPTS
-                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 1 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
@@ -986,7 +986,7 @@ export default function CreatePaper() {
                             </p>
                         </div>
 
-                        {/* ΓöÇΓöÇ MODE SELECTION: TEST VS ASSIGNMENT ΓöÇΓöÇ */}
+                        {/* ── MODE SELECTION: TEST VS ASSIGNMENT ── */}
                         <div>
                             <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Paper Type</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -999,7 +999,7 @@ export default function CreatePaper() {
                                     }`}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-navy text-gold flex items-center justify-center text-xl font-bold">
-                                        ≡ƒÄô
+                                        🎓
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-black text-navy uppercase">Standard Assessment / Test</h4>
@@ -1018,7 +1018,7 @@ export default function CreatePaper() {
                                     }`}
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-gold text-navy flex items-center justify-center text-xl font-bold">
-                                        ≡ƒô¥
+                                        📝
                                     </div>
                                     <div>
                                         <h4 className="text-sm font-black text-navy uppercase">Practice Assignment / Homework</h4>
@@ -1030,11 +1030,11 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* ΓöÇΓöÇ QUESTION REPOSITORIES & SOURCES SELECTION ΓöÇΓöÇ */}
+                        {/* ── QUESTION REPOSITORIES & SOURCES SELECTION ── */}
                         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-2">
                             <div className="flex items-center justify-between">
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider">
-                                    <span>≡ƒùä∩╕Å</span> Question Repositories & Database Sources
+                                    <span>🗄️</span> Question Repositories & Database Sources
                                 </label>
                                 <span className="text-[10px] text-gray-500 font-bold">Select databases to draw questions from</span>
                             </div>
@@ -1055,7 +1055,7 @@ export default function CreatePaper() {
                                     />
                                     <div className="flex-1 min-w-0">
                                         <span className="text-xs font-black text-navy block">
-                                            ≡ƒÅó Standard Question Bank
+                                            🏛️ Standard Question Bank
                                         </span>
                                         <span className="text-[10px] text-gray-500 font-medium block">
                                             Core subject repository ({metaData.total || availableQuestions.length} Questions)
@@ -1079,7 +1079,7 @@ export default function CreatePaper() {
                                     />
                                     <div className="flex-1 min-w-0">
                                         <span className="text-xs font-black text-navy block">
-                                            ≡ƒôæ PYQ & Grand Test Papers (qbp-control)
+                                            📜 PYQ & Grand Test Papers (qbp-control)
                                         </span>
                                         <span className="text-[10px] text-gray-500 font-medium block">
                                             Previous year entrance exams & full mock grand tests
@@ -1089,7 +1089,7 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* ΓöÇΓöÇ METADATA INPUTS ΓöÇΓöÇ */}
+                        {/* ── METADATA INPUTS ── */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-200">
                             {/* Title */}
                             <div className="md:col-span-2">
@@ -1257,12 +1257,12 @@ export default function CreatePaper() {
                             )}
                         </div>
 
-                        {/* ΓöÇΓöÇ MULTI-SELECT CHAPTERS (CHECKBOX BOX GRID) ΓöÇΓöÇ */}
+                        {/* ── MULTI-SELECT CHAPTERS (CHECKBOX BOX GRID) ── */}
                         <div className="space-y-3">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                 <div>
                                     <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                        <span>≡ƒôÜ</span> Select Chapters ({selectedChapters.length} of {distinctChapters.length} Selected)
+                                        <span>📚</span> Select Chapters ({selectedChapters.length} of {distinctChapters.length} Selected)
                                     </h3>
                                     <p className="text-[11px] text-gray-500 font-medium">
                                         Check one or multiple chapters to include in the question pool.
@@ -1324,13 +1324,13 @@ export default function CreatePaper() {
                             )}
                         </div>
 
-                        {/* ΓöÇΓöÇ CHAPTER QUESTION DISTRIBUTION QUOTAS ΓöÇΓöÇ */}
+                        {/* ── CHAPTER QUESTION DISTRIBUTION QUOTAS ── */}
                         {selectedChapters.length > 0 && (
                             <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 space-y-4 animate-fade-in">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
                                     <div>
                                         <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                            <span>≡ƒôè</span> Chapter-wise Question Distribution Quotas
+                                            <span>📊</span> Chapter-wise Question Distribution Quotas
                                         </h3>
                                         <p className="text-[11px] text-gray-500 font-medium">
                                             Specify how many questions to retrieve from each selected chapter (Total Target: {targetLimit} Questions).
@@ -1342,7 +1342,7 @@ export default function CreatePaper() {
                                             onClick={handleDistributeEvenly}
                                             className="text-[11px] font-black text-navy bg-gold/30 hover:bg-gold px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 shadow-xs"
                                         >
-                                            <span>ΓÜí</span> Distribute Evenly
+                                            <span>⚡</span> Distribute Evenly
                                         </button>
                                     </div>
                                 </div>
@@ -1405,7 +1405,7 @@ export default function CreatePaper() {
                                             : 'bg-amber-50 border-amber-300 text-amber-900'
                                 }`}>
                                     <div className="flex items-center gap-2">
-                                        <span>{totalAllocatedQuota === targetLimit ? 'Γ£ô' : 'ΓÜá∩╕Å'}</span>
+                                        <span>{totalAllocatedQuota === targetLimit ? '✓' : '⚠️'}</span>
                                         <span>
                                             Allocated: <strong>{totalAllocatedQuota}</strong> of <strong>{targetLimit}</strong> Questions Needed
                                         </span>
@@ -1423,13 +1423,13 @@ export default function CreatePaper() {
                             </div>
                         )}
 
-                        {/* ΓöÇΓöÇ MULTI-SELECT CONCEPTS ΓöÇΓöÇ */}
+                        {/* ── MULTI-SELECT CONCEPTS ── */}
                         {selectedChapters.length > 0 ? (
                             <div className="space-y-3 animate-fade-in">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
                                     <div>
                                         <h3 className="text-sm font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                            <span>≡ƒÆí</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
+                                            <span>💡</span> Select Concepts & Topics ({selectedConcepts.length} of {availableConceptsForSelectedChapters.length} Selected)
                                         </h3>
                                         <p className="text-[11px] text-gray-500 font-medium">
                                             Available concepts under the {selectedChapters.length} selected chapter(s).
@@ -1482,7 +1482,7 @@ export default function CreatePaper() {
                                                             {cpt}
                                                         </span>
                                                         <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
-                                                            ≡ƒôû {ch}
+                                                            📖 {ch}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1493,20 +1493,20 @@ export default function CreatePaper() {
                             </div>
                         ) : (
                             <div className="p-4 rounded-2xl bg-blue-50/50 border border-blue-100 flex items-center gap-3">
-                                <span className="text-lg">≡ƒÆí</span>
+                                <span className="text-lg">💡</span>
                                 <span className="text-xs font-bold text-navy">
                                     Select one or more chapters above to view and filter specific concepts & topics.
                                 </span>
                             </div>
                         )}
 
-                        {/* ΓöÇΓöÇ SCOPE SUMMARY BAR ΓöÇΓöÇ */}
+                        {/* ── SCOPE SUMMARY BAR ── */}
                         <div className="bg-navy text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
                                 <span className="text-[10px] text-gold font-bold uppercase tracking-widest">Active Scope</span>
                                 <div className="text-sm font-black mt-0.5">
                                     {selectedChapters.length > 0 ? `${selectedChapters.length} Chapters Selected` : 'All Chapters Included'}
-                                    {selectedConcepts.length > 0 ? ` ΓÇó ${selectedConcepts.length} Concepts Selected` : ''}
+                                    {selectedConcepts.length > 0 ? ` • ${selectedConcepts.length} Concepts Selected` : ''}
                                 </div>
                             </div>
                             <button
@@ -1514,15 +1514,15 @@ export default function CreatePaper() {
                                 className="bg-gold text-navy hover:scale-105 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <span>Proceed to Method</span>
-                                <span>ΓåÆ</span>
+                                <span>→</span>
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                {/* ══════════════════════════════════════════════════════════════
                     STEP 2: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
-                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 2 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
@@ -1544,7 +1544,7 @@ export default function CreatePaper() {
                             >
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-navy text-gold flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                                        Γ£ì∩╕Å
+                                        ✍️
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Manual Question Pick</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
@@ -1553,7 +1553,7 @@ export default function CreatePaper() {
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
                                     <span>Browse Questions Repository</span>
-                                    <span>ΓåÆ</span>
+                                    <span>→</span>
                                 </div>
                             </div>
 
@@ -1567,7 +1567,7 @@ export default function CreatePaper() {
                             >
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-gold text-navy flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform">
-                                        ΓÜí
+                                        ⚡
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Auto Fetch Generator</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
@@ -1576,7 +1576,7 @@ export default function CreatePaper() {
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
                                     <span>Configure & Auto-Generate</span>
-                                    <span>ΓåÆ</span>
+                                    <span>→</span>
                                 </div>
                             </div>
                         </div>
@@ -1586,18 +1586,18 @@ export default function CreatePaper() {
                                 onClick={() => setCurrentStep(1)}
                                 className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                             >
-                                ΓåÉ Back to Scope Setup
+                                ← Back to Scope Setup
                             </button>
                         </div>
                     </div>
                 )}
 
-                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                {/* ══════════════════════════════════════════════════════════════
                     STEP 3: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
-                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 3 && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* ΓöÇΓöÇ STEP 3 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ΓöÇΓöÇ */}
+                        {/* ── STEP 3 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ── */}
                         <div className="flex items-center gap-2 bg-gray-200/70 p-1.5 rounded-2xl w-fit">
                             <button
                                 type="button"
@@ -1608,7 +1608,7 @@ export default function CreatePaper() {
                                         : 'text-gray-600 hover:text-navy hover:bg-gray-100'
                                 }`}
                             >
-                                <span>Γ£ì∩╕Å Review & Edit Selected Questions</span>
+                                <span>✍️ Review & Edit Selected Questions</span>
                                 <span className="bg-gold/20 text-gold px-2 py-0.5 rounded-full text-[10px]">
                                     {selectedQuestions.length}
                                 </span>
@@ -1622,12 +1622,12 @@ export default function CreatePaper() {
                                         : 'text-gray-600 hover:text-navy hover:bg-gray-100'
                                 }`}
                             >
-                                <span>ΓÜí Auto Generator Engine</span>
+                                <span>⚡ Auto Generator Engine</span>
                             </button>
                         </div>
 
                         {method === 'auto' ? (
-                            /* ΓöÇΓöÇ AUTO FETCH CONFIGURATION SCREEN ΓöÇΓöÇ */
+                            /* ── AUTO FETCH CONFIGURATION SCREEN ── */
                             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 space-y-6 max-w-3xl mx-auto">
                                 <div className="border-b border-gray-100 pb-4">
                                     <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Auto Engine</span>
@@ -1687,7 +1687,7 @@ export default function CreatePaper() {
 
                                         <div className="grid grid-cols-3 gap-4">
                                             <div className="bg-white p-3 rounded-xl border border-emerald-200 text-center">
-                                                <span className="text-[10px] font-black text-emerald-700 uppercase">≡ƒƒó Easy</span>
+                                                <span className="text-[10px] font-black text-emerald-700 uppercase">🟢 Easy</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.easy}
@@ -1696,7 +1696,7 @@ export default function CreatePaper() {
                                                 />
                                             </div>
                                             <div className="bg-white p-3 rounded-xl border border-amber-200 text-center">
-                                                <span className="text-[10px] font-black text-amber-700 uppercase">≡ƒƒí Medium</span>
+                                                <span className="text-[10px] font-black text-amber-700 uppercase">🟡 Medium</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.medium}
@@ -1705,7 +1705,7 @@ export default function CreatePaper() {
                                                 />
                                             </div>
                                             <div className="bg-white p-3 rounded-xl border border-rose-200 text-center">
-                                                <span className="text-[10px] font-black text-rose-700 uppercase">≡ƒö┤ Hard</span>
+                                                <span className="text-[10px] font-black text-rose-700 uppercase">🔴 Hard</span>
                                                 <input
                                                     type="number"
                                                     value={autoDist.hard}
@@ -1721,7 +1721,7 @@ export default function CreatePaper() {
                                         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <h3 className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
-                                                    <span>≡ƒôï</span> Chapter Quota Breakdown ({selectedChapters.length} Chapters)
+                                                    <span>📋</span> Chapter Quota Breakdown ({selectedChapters.length} Chapters)
                                                 </h3>
                                                 <span className="text-[11px] font-bold text-slate-500">
                                                     Total Allocated: {totalAllocatedQuota} / {targetLimit} Qs
@@ -1766,26 +1766,26 @@ export default function CreatePaper() {
                                         onClick={() => setCurrentStep(2)}
                                         className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                                     >
-                                        ΓåÉ Back
+                                        ← Back
                                     </button>
                                     <button
                                         onClick={handleGenerateAuto}
                                         className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
                                     >
-                                        <span>ΓÜí Generate & Proceed to Preview</span>
-                                        <span>ΓåÆ</span>
+                                        <span>⚡ Generate & Proceed to Preview</span>
+                                        <span>→</span>
                                     </button>
                                 </div>
                             </div>
                         ) : (
-                            /* ΓöÇΓöÇ MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ΓöÇΓöÇ */
+                            /* ── MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ── */
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
                                 
                                 {/* Active Swap Mode Banner */}
                                 {swappingQuestionIndex !== null && (
                                     <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
                                         <div className="flex items-center gap-3">
-                                            <span className="text-2xl">≡ƒöä</span>
+                                            <span className="text-2xl">🔄</span>
                                             <div>
                                                 <h4 className="font-black text-xs uppercase tracking-wider text-navy">
                                                     Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
@@ -1799,7 +1799,7 @@ export default function CreatePaper() {
                                             onClick={() => setSwappingQuestionIndex(null)}
                                             className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
                                         >
-                                            Γ£ò Cancel Swap
+                                            ✕ Cancel Swap
                                         </button>
                                     </div>
                                 )}
@@ -1831,14 +1831,14 @@ export default function CreatePaper() {
                                             onClick={() => setCurrentStep(1)}
                                             className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                                         >
-                                            <span>ΓåÉ</span> Setup (Step 1)
+                                            <span>←</span> Setup (Step 1)
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setShowReviewSelectedModal(true)}
                                             className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
                                         >
-                                            <span>≡ƒæü Review Basket</span>
+                                            <span>👁️ Review Basket</span>
                                             <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
                                                 {selectedQuestions.length}
                                             </span>
@@ -1850,7 +1850,7 @@ export default function CreatePaper() {
                                             className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
                                         >
                                             <span>Preview Paper (Step 4)</span>
-                                            <span>ΓåÆ</span>
+                                            <span>→</span>
                                         </button>
                                         {paperId && (
                                             <button
@@ -1859,7 +1859,7 @@ export default function CreatePaper() {
                                                 disabled={saving || selectedQuestions.length === 0}
                                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
                                             >
-                                                <span>≡ƒÆ╛</span> {saving ? 'Saving...' : 'Save Changes'}
+                                                <span>💾</span> {saving ? 'Saving...' : 'Save Changes'}
                                             </button>
                                         )}
                                     </div>
@@ -1870,7 +1870,7 @@ export default function CreatePaper() {
                                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
                                         <div className="flex items-center justify-between">
                                             <span className="text-[11px] font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
-                                                <span>≡ƒÄ»</span> Chapter Quota Progress
+                                                <span>🎯</span> Chapter Quota Progress
                                             </span>
                                             <span className="text-[11px] font-bold text-gray-500">
                                                 Click any chapter to filter questions
@@ -1914,7 +1914,7 @@ export default function CreatePaper() {
                                                                 ? 'bg-rose-600 text-white'
                                                                 : 'bg-slate-200 text-slate-800'
                                                         }`}>
-                                                            {currentQ} / {targetQ} {isFulfilled ? 'Γ£ô' : ''}
+                                                            {currentQ} / {targetQ} {isFulfilled ? '✓' : ''}
                                                         </span>
                                                     </button>
                                                 );
@@ -1927,7 +1927,7 @@ export default function CreatePaper() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                                     <input
                                         type="text"
-                                        placeholder="≡ƒöì Search in pool..."
+                                        placeholder="🔍 Search in pool..."
                                         value={searchTerm}
                                         onChange={e => { setSearchTerm(e.target.value); setPageNumber(1); }}
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
@@ -1948,9 +1948,9 @@ export default function CreatePaper() {
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
                                     >
                                         <option value="">All Difficulties</option>
-                                        <option value="easy">≡ƒƒó Easy</option>
-                                        <option value="medium">≡ƒƒí Medium</option>
-                                        <option value="hard">≡ƒö┤ Hard</option>
+                                        <option value="easy">🟢 Easy</option>
+                                        <option value="medium">🟡 Medium</option>
+                                        <option value="hard">🔴 Hard</option>
                                     </select>
                                     <select
                                         value={filterType}
@@ -2005,17 +2005,17 @@ export default function CreatePaper() {
                                                             : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md shadow-xs'
                                                     }`}
                                                 >
-                                                    {/* ΓöÇΓöÇ Top Breadcrumbs & Selection Bar ΓöÇΓöÇ */}
+                                                    {/* ── Top Breadcrumbs & Selection Bar ── */}
                                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                                         <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap font-medium">
                                                             <span className="text-navy font-bold uppercase tracking-wider">{q.subject || subject}</span>
-                                                            <span>ΓÇó</span>
+                                                            <span>•</span>
                                                             <span>Class {q.classes?.[0] || selectedClass}</span>
-                                                            <span>ΓÇó</span>
+                                                            <span>•</span>
                                                             <span>{q.chapter || 'General'}</span>
-                                                            <span>ΓÇó</span>
+                                                            <span>•</span>
                                                             <span>{q.type || 'MCQ'}</span>
-                                                            <span>ΓÇó</span>
+                                                            <span>•</span>
                                                             <span className={
                                                                 (q.level || 'medium').toLowerCase() === 'easy' ? 'text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-bold' :
                                                                 (q.level || 'medium').toLowerCase() === 'hard' ? 'text-rose-700 bg-rose-100 px-2 py-0.5 rounded font-bold' :
@@ -2035,7 +2035,7 @@ export default function CreatePaper() {
                                                                         : 'bg-white hover:bg-navy hover:text-gold text-navy border-2 border-navy/20 hover:border-navy'
                                                                 }`}
                                                             >
-                                                                {isSelected ? 'Γ£ô Added' : '+ Add to Paper'}
+                                                                {isSelected ? '✓ Added' : '+ Add to Paper'}
                                                             </button>
                                                         </div>
                                                     </div>
@@ -2125,7 +2125,7 @@ export default function CreatePaper() {
                                                                     }}
                                                                     className="text-xs font-black text-navy hover:text-gold bg-navy/5 hover:bg-navy border border-navy/20 px-3.5 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5"
                                                                 >
-                                                                    <span>{isSolutionOpen ? '≡ƒÆí Hide Solution' : '≡ƒæü∩╕Å View Detailed Answer'}</span>
+                                                                    <span>{isSolutionOpen ? '💡 Hide Solution' : '👁️ View Detailed Answer'}</span>
                                                                 </button>
                                                             )}
                                                         </div>
@@ -2172,7 +2172,7 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: REVIEW & EDIT SELECTED BASKET ΓöÇΓöÇ */}
+                {/* ── MODAL: REVIEW & EDIT SELECTED BASKET ── */}
                 {showReviewSelectedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -2192,7 +2192,7 @@ export default function CreatePaper() {
                                     onClick={() => setShowReviewSelectedModal(false)}
                                     className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition"
                                 >
-                                    Γ£ò
+                                    ✕
                                 </button>
                             </div>
 
@@ -2213,11 +2213,11 @@ export default function CreatePaper() {
                                                             Q.{startQNo + idx}
                                                         </span>
                                                         <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded">
-                                                            ≡ƒôû {q.chapter || 'General'}
+                                                            📖 {q.chapter || 'General'}
                                                         </span>
                                                         {(q.concept || q.topic) && (
                                                             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-                                                                ≡ƒÆí {q.concept || q.topic}
+                                                                💡 {q.concept || q.topic}
                                                             </span>
                                                         )}
                                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
@@ -2271,7 +2271,7 @@ export default function CreatePaper() {
                                                         className="bg-blue-50 text-navy hover:bg-blue-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 border border-blue-200"
                                                         title="Edit text, options, or solution of this question"
                                                     >
-                                                        <span>Γ£Å∩╕Å</span> Edit
+                                                        <span>✏️</span> Edit
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2282,7 +2282,7 @@ export default function CreatePaper() {
                                                         className="bg-amber-100 text-amber-900 hover:bg-amber-200 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1 shadow-xs"
                                                         title="Swap this question with another"
                                                     >
-                                                        <span>≡ƒöä</span> Swap
+                                                        <span>🔄</span> Swap
                                                     </button>
                                                     <button
                                                         type="button"
@@ -2290,7 +2290,7 @@ export default function CreatePaper() {
                                                         className="bg-rose-50 text-rose-600 hover:bg-rose-100 px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border border-rose-200"
                                                         title="Remove this question"
                                                     >
-                                                        Γ£ò Remove
+                                                        ✕ Remove
                                                     </button>
                                                 </div>
                                             </div>
@@ -2314,12 +2314,12 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: MAX QUESTIONS REACHED POPUP ΓöÇΓöÇ */}
+                {/* ── MODAL: MAX QUESTIONS REACHED POPUP ── */}
                 {showLimitReachedModal && (
                     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-xs p-4 animate-fade-in">
                         <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl border border-gray-100 text-center space-y-4 animate-scale-up">
                             <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto font-black shadow-inner">
-                                ΓÜá∩╕Å
+                                ⚠️
                             </div>
                             <h3 className="text-xl font-black text-navy uppercase tracking-tight">
                                 Maximum Questions Reached!
@@ -2328,7 +2328,7 @@ export default function CreatePaper() {
                                 You have reached the maximum quota of <strong>{targetLimit} questions</strong> for this {paperCategory === 'assignment' ? 'assignment' : 'question paper'}. Extra questions cannot be added.
                             </p>
                             <p className="text-[11px] text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-left">
-                                ≡ƒÆí <strong>Tip:</strong> If you want to change or swap questions, click <strong>"Review Selected"</strong> and use the <strong>Swap</strong> or <strong>Remove</strong> option.
+                                💡 <strong>Tip:</strong> If you want to change or swap questions, click <strong>"Review Selected"</strong> and use the <strong>Swap</strong> or <strong>Remove</strong> option.
                             </p>
                             <button
                                 type="button"
@@ -2341,15 +2341,15 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                {/* ══════════════════════════════════════════════════════════════
                     STEP 4: TRUE A4 PAGE-BY-PAGE PREVIEW + TOOLS
-                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 4 && (
                     <div className="space-y-6 animate-fade-in">
                         {validationResult && validationResult.issues.length > 0 && (
                             <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-xs font-bold text-amber-900 no-print flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    <span>ΓÜá∩╕Å</span>
+                                    <span>⚠️</span>
                                     <span>{validationResult.issues.length} validation advisory note(s) found in selected questions.</span>
                                 </div>
                                 <span className="text-[10px] uppercase tracking-wider text-amber-700">Validated</span>
@@ -2366,7 +2366,7 @@ export default function CreatePaper() {
                                 }}
                                 className="bg-navy text-gold hover:scale-105 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md cursor-pointer flex items-center gap-2"
                             >
-                                <span>ΓåÉ</span> Γ£Å∩╕Å Edit / Change Questions
+                                <span>←</span> ✏️ Edit / Change Questions
                             </button>
 
                             <div className="flex items-center gap-2.5 flex-wrap">
@@ -2374,32 +2374,32 @@ export default function CreatePaper() {
                                     onClick={() => setShowAnalysisModal(true)}
                                     className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒôè</span> View Analysis
+                                    <span>📊</span> View Analysis
                                 </button>
                                 <button
                                     onClick={() => setShowAnswerKeyModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒöæ</span> Answer Key
+                                    <span>🔑</span> Answer Key
                                 </button>
                                 <button
                                     onClick={() => setShowSolutionsModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒÆí</span> Solutions Guide
+                                    <span>💡</span> Solutions Guide
                                 </button>
                                 <button
                                     onClick={() => setCurrentStep(5)}
                                     className="bg-slate-100 hover:bg-slate-200 text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>ΓÜÖ∩╕Å</span> Alignment Controls ΓåÆ
+                                    <span>⚙️</span> Alignment Controls →
                                 </button>
                                 <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>Γ£ô</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                    <span>✓</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
                             </div>
                         </div>
@@ -2421,9 +2421,9 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+                {/* ══════════════════════════════════════════════════════════════
                     STEP 5: ALIGNMENT & FINE-TUNING
-                ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ */}
+                ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 5 && (
                     <div className="space-y-6 animate-fade-in">
                         <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm gap-3 no-print">
@@ -2432,13 +2432,13 @@ export default function CreatePaper() {
                                     onClick={() => setCurrentStep(4)}
                                     className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                                 >
-                                    ΓåÉ Back to Preview
+                                    ← Back to Preview
                                 </button>
                                 <button
                                     onClick={() => setCurrentStep(3)}
                                     className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                                 >
-                                    Γ£Å∩╕Å Edit Questions
+                                    ✏️ Edit Questions
                                 </button>
                             </div>
 
@@ -2447,26 +2447,26 @@ export default function CreatePaper() {
                                     onClick={() => setShowAnalysisModal(true)}
                                     className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒôè</span> View Analysis
+                                    <span>📊</span> View Analysis
                                 </button>
                                 <button
                                     onClick={() => setShowAnswerKeyModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒöæ</span> Answer Key
+                                    <span>🔑</span> Answer Key
                                 </button>
                                 <button
                                     onClick={() => setShowSolutionsModal(true)}
                                     className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>≡ƒÆí</span> Solutions Guide
+                                    <span>💡</span> Solutions Guide
                                 </button>
                                 <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
                                 >
-                                    <span>Γ£ô</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                    <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
                             </div>
                         </div>
@@ -2487,7 +2487,7 @@ export default function CreatePaper() {
                     </div>
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
+                {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
                 {showAnswerKeyModal && (
                     <A4AnswerKey
                         paper={{ title, subject, classes: [selectedClass, examType], _id: paperId }}
@@ -2500,7 +2500,7 @@ export default function CreatePaper() {
                     />
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ΓöÇΓöÇ */}
+                {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
                 {showSolutionsModal && (
                     <A4SolutionKey
                         paper={{ title, subject, classes: [selectedClass, examType] }}
@@ -2510,7 +2510,7 @@ export default function CreatePaper() {
                     />
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: IN-PLACE QUESTION & OPTIONS EDITOR ΓöÇΓöÇ */}
+                {/* ── MODAL: IN-PLACE QUESTION & OPTIONS EDITOR ── */}
                 {editingQuestionModal && (
                     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
                         <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col border-b-8 border-gold animate-fade-in-up overflow-hidden my-auto">
@@ -2531,7 +2531,7 @@ export default function CreatePaper() {
                                     onClick={() => setEditingQuestionModal(null)}
                                     className="text-slate/30 hover:text-red-500 bg-white rounded-full w-8 h-8 flex items-center justify-center text-lg font-bold border shadow transition cursor-pointer"
                                 >
-                                    Γ£ò
+                                    ✕
                                 </button>
                             </div>
 
@@ -2657,14 +2657,14 @@ export default function CreatePaper() {
                                     onClick={handleSaveQuestionEdit}
                                     className="bg-navy hover:bg-navy/90 text-gold px-7 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>≡ƒÆ╛</span> Save Changes
+                                    <span>💾</span> Save Changes
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* ΓöÇΓöÇ MODAL: ANALYSIS DASHBOARD ΓöÇΓöÇ */}
+                {/* ── MODAL: ANALYSIS DASHBOARD ── */}
                 <PaperAnalysisModal
                     isOpen={showAnalysisModal}
                     onClose={() => setShowAnalysisModal(false)}
