@@ -59,6 +59,10 @@ const AssignmentGenerator = () => {
     const [startQNo, setStartQNo] = useState(1);
     const [endQNo, setEndQNo] = useState(null);
 
+    // Multi-Source Question Repositories
+    const [selectedSources, setSelectedSources] = useState(['REGULAR', 'PYQ', 'GT']);
+    const [chapterAllocations, setChapterAllocations] = useState({});
+
     // Questions Pool & Selection
     const [questionsPool, setQuestionsPool] = useState([]);
     const [selectedQuestions, setSelectedQuestions] = useState([]);
@@ -72,6 +76,7 @@ const AssignmentGenerator = () => {
 
     // Filters
     const [filterChapter, setFilterChapter] = useState('');
+    const [filterSource, setFilterSource] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -97,11 +102,53 @@ const AssignmentGenerator = () => {
         }
     }, [subject]);
 
-    // Fetch Questions
+    const toggleSource = (src) => {
+        setSelectedSources(prev => {
+            if (prev.includes(src)) {
+                if (prev.length === 1) return prev; // Keep at least one
+                return prev.filter(s => s !== src);
+            } else {
+                return [...prev, src];
+            }
+        });
+    };
+
+    // Calculate Equal Split across selected chapters
+    const calculateEqualChapterSplit = () => {
+        if (selectedChapters.length === 0) return;
+        const total = targetCount || 25;
+        const perChapter = Math.floor(total / selectedChapters.length);
+        const remainder = total % selectedChapters.length;
+
+        const newAlloc = {};
+        selectedChapters.forEach((ch, idx) => {
+            newAlloc[ch] = perChapter + (idx < remainder ? 1 : 0);
+        });
+        setChapterAllocations(newAlloc);
+    };
+
+    // Auto-update chapter allocations when selectedChapters or targetCount changes
+    useEffect(() => {
+        if (selectedChapters.length > 0) {
+            setChapterAllocations(prev => {
+                const total = targetCount || 25;
+                const perChapter = Math.floor(total / selectedChapters.length);
+                const remainder = total % selectedChapters.length;
+                const updated = {};
+                selectedChapters.forEach((ch, idx) => {
+                    updated[ch] = prev[ch] !== undefined ? prev[ch] : (perChapter + (idx < remainder ? 1 : 0));
+                });
+                return updated;
+            });
+        }
+    }, [selectedChapters, targetCount]);
+
+    // Fetch Questions across selected sources
     const fetchQuestions = async () => {
         setLoading(true);
         try {
-            const res = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&limit=20000`);
+            const sourcesParam = selectedSources.length > 0 ? selectedSources.join(',') : 'ALL';
+            const res = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&sources=${encodeURIComponent(sourcesParam)}&limit=20000`);
             const qs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             setQuestionsPool(qs);
         } catch (err) {
@@ -113,7 +160,7 @@ const AssignmentGenerator = () => {
 
     useEffect(() => {
         if (subject) fetchQuestions();
-    }, [subject]);
+    }, [subject, selectedSources]);
 
     // Chapters and concepts extraction
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
@@ -176,7 +223,7 @@ const AssignmentGenerator = () => {
     // Scoped pool based on checked chapters & concepts
     const scopedPool = useMemo(() => {
         return questionsPool.filter(q => {
-            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) return false;
+            if (selectedChapters.length > 0 && !selectedChapters.some(ch => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase())) return false;
             if (selectedConcepts.length > 0) {
                 const cpt = q.concept || q.topic;
                 if (!selectedConcepts.includes(cpt)) return false;
@@ -191,15 +238,18 @@ const AssignmentGenerator = () => {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
+                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (q.sourceExam || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (q.sourcePaperName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = !filterChapter || q.chapter === filterChapter;
+            const matchesChapter = !filterChapter || (q.chapter || '').trim().toLowerCase() === filterChapter.trim().toLowerCase();
+            const matchesSource = !filterSource || (q.sourceType || 'REGULAR') === filterSource;
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
-            return matchesSearch && matchesChapter && matchesDifficulty && matchesType;
+            return matchesSearch && matchesChapter && matchesSource && matchesDifficulty && matchesType;
         });
-    }, [scopedPool, searchTerm, filterChapter, filterDifficulty, filterType]);
+    }, [scopedPool, searchTerm, filterChapter, filterSource, filterDifficulty, filterType]);
 
     // Handle Question Click or Swap
     const handleQuestionClick = (q) => {
@@ -234,12 +284,37 @@ const AssignmentGenerator = () => {
         setSelectedQuestions(prev => prev.filter((_, i) => i !== idx));
     };
 
-    // Auto Pick Questions
+    // Auto Pick Questions strictly according to chapter allocations
     const handleAutoPick = () => {
         if (scopedPool.length === 0) return alert('No questions match the selected chapters/concepts.');
-        const count = Math.min(targetCount, scopedPool.length);
-        const shuffled = [...scopedPool].sort(() => 0.5 - Math.random());
-        setSelectedQuestions(shuffled.slice(0, count));
+        
+        if (selectedChapters.length > 0) {
+            let picked = [];
+            const pickedIds = new Set();
+
+            selectedChapters.forEach(ch => {
+                const quota = chapterAllocations[ch] ?? Math.round(targetCount / selectedChapters.length);
+                if (quota <= 0) return;
+                const poolForCh = scopedPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
+                const shuffled = [...poolForCh].sort(() => 0.5 - Math.random());
+                const selectedForCh = shuffled.slice(0, quota);
+                selectedForCh.forEach(q => {
+                    picked.push(q);
+                    pickedIds.add(q._id || q.id);
+                });
+            });
+
+            // If shortfall, fill from remaining pool
+            if (picked.length < targetCount) {
+                const remaining = scopedPool.filter(q => !pickedIds.has(q._id || q.id)).sort(() => 0.5 - Math.random());
+                picked.push(...remaining.slice(0, targetCount - picked.length));
+            }
+            setSelectedQuestions(picked.slice(0, targetCount));
+        } else {
+            const count = Math.min(targetCount, scopedPool.length);
+            const shuffled = [...scopedPool].sort(() => 0.5 - Math.random());
+            setSelectedQuestions(shuffled.slice(0, count));
+        }
     };
 
     // Effective visible questions
@@ -465,6 +540,60 @@ const AssignmentGenerator = () => {
                             </div>
                         </div>
 
+                        {/* Question Database Repositories */}
+                        <div className="space-y-3 pt-4 border-t border-gray-100">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-2">
+                                    <span>🗄️</span> Question Database Repositories
+                                    <span className="text-[10px] text-gray-500 font-semibold">(Select databases to pool questions from)</span>
+                                </label>
+                                <span className="text-[10px] font-bold text-navy bg-navy/10 px-2 py-0.5 rounded-full">
+                                    {selectedSources.length} Selected
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {[
+                                    { id: 'REGULAR', title: '🏛️ Question Bank', desc: 'Standard Chapterwise Database', badge: 'Standard' },
+                                    { id: 'PYQ', title: '📜 Previous Years (PYQs)', desc: 'NEET, JEE & Board Exams Database', badge: 'PYQ' },
+                                    { id: 'GT', title: '🏆 Grand Test Papers', desc: 'Full Mock Papers Database', badge: 'Grand Test' },
+                                ].map(src => {
+                                    const isSelected = selectedSources.includes(src.id);
+                                    return (
+                                        <div
+                                            key={src.id}
+                                            onClick={() => toggleSource(src.id)}
+                                            className={`p-3.5 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 select-none ${
+                                                isSelected
+                                                    ? 'border-navy bg-navy/5 shadow-xs'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300 opacity-60'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                                className="w-4 h-4 text-navy rounded border-gray-300 mt-0.5 cursor-pointer flex-shrink-0"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <p className="font-black text-xs text-navy truncate">{src.title}</p>
+                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${
+                                                        src.id === 'PYQ' ? 'bg-indigo-100 text-indigo-800' :
+                                                        src.id === 'GT' ? 'bg-amber-100 text-amber-800' :
+                                                        'bg-slate-100 text-slate-700'
+                                                    }`}>
+                                                        {src.badge}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">{src.desc}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                         {/* Chapter Multi-Select */}
                         <div className="space-y-3 pt-4 border-t border-gray-100">
                             <div className="flex justify-between items-center">
@@ -511,6 +640,58 @@ const AssignmentGenerator = () => {
                                 })}
                             </div>
                         </div>
+
+                        {/* Chapter Blueprint Question Allocation */}
+                        {selectedChapters.length > 0 && (
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <label className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
+                                            <span>🎯</span> Chapter Blueprint Allocations
+                                        </label>
+                                        <p className="text-[11px] text-gray-500 font-medium">
+                                            Specify exact questions required per chapter for auto-pick.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={calculateEqualChapterSplit}
+                                        className="text-[11px] font-black text-navy hover:text-gold hover:bg-navy px-3 py-1 rounded-lg border border-navy/20 transition cursor-pointer"
+                                    >
+                                        ⚡ Auto Split Evenly ({targetCount} Qs)
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-44 overflow-y-auto pr-1">
+                                    {selectedChapters.map(ch => {
+                                        const count = chapterAllocations[ch] ?? 0;
+                                        const poolForCh = scopedPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
+                                        return (
+                                            <div key={ch} className="bg-white p-2.5 rounded-xl border border-gray-200 flex items-center justify-between gap-2 shadow-2xs">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-xs font-bold text-navy truncate" title={ch}>{ch}</p>
+                                                    <p className="text-[10px] text-gray-400 font-semibold">{poolForCh.length} in pool</p>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="200"
+                                                        value={count}
+                                                        onChange={e => {
+                                                            const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                            setChapterAllocations(prev => ({ ...prev, [ch]: val }));
+                                                        }}
+                                                        className="w-14 text-center font-black text-xs py-1 px-1 bg-slate-50 border border-slate-300 rounded-lg text-navy focus:bg-white focus:border-navy outline-none"
+                                                    />
+                                                    <span className="text-[10px] font-black text-slate-500">Qs</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Concepts Multi-Select */}
                         {availableConceptsForSelectedChapters.length > 0 && (
@@ -602,7 +783,7 @@ const AssignmentGenerator = () => {
                         </div>
 
                         {/* Search & Sub-Filters */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                             <input
                                 type="text"
                                 placeholder="🔍 Search questions..."
@@ -619,6 +800,16 @@ const AssignmentGenerator = () => {
                                 {(selectedChapters.length > 0 ? selectedChapters : distinctChapters).map(ch => (
                                     <option key={ch} value={ch}>{ch}</option>
                                 ))}
+                            </select>
+                            <select
+                                value={filterSource}
+                                onChange={e => setFilterSource(e.target.value)}
+                                className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                            >
+                                <option value="">All Active Sources</option>
+                                {selectedSources.includes('REGULAR') && <option value="REGULAR">🏛️ Question Bank</option>}
+                                {selectedSources.includes('PYQ') && <option value="PYQ">📜 Previous Years (PYQ)</option>}
+                                {selectedSources.includes('GT') && <option value="GT">🏆 Grand Tests (GT)</option>}
                             </select>
                             <select
                                 value={filterDifficulty}
@@ -677,6 +868,22 @@ const AssignmentGenerator = () => {
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                    {/* Source Badge */}
+                                                    {q.sourceType === 'PYQ' ? (
+                                                        <span className="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
+                                                            <span>📜 PYQ</span>
+                                                            {q.sourceExam && <span>: {q.sourceExam} {q.sourceYear ? `'${String(q.sourceYear).slice(-2)}` : ''}</span>}
+                                                        </span>
+                                                    ) : q.sourceType === 'GT' ? (
+                                                        <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
+                                                            <span>🏆 GT</span>
+                                                            {q.sourcePaperName && <span className="truncate max-w-[120px]">: {q.sourcePaperName}</span>}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                                                            🏛️ Bank
+                                                        </span>
+                                                    )}
                                                     <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
                                                         {q.type || 'MCQ'}
                                                     </span>

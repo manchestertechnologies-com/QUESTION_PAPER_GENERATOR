@@ -74,18 +74,18 @@ function getDynamicOptGrid(options = [], isTwoColMode = false) {
             return {
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '3px 6px',
+                gap: '4px 8px',
                 marginTop: '3px',
-                alignItems: 'start',
+                alignItems: 'center',
             };
         }
         // In 1-column mode: All 4 options laid out horizontally side-by-side!
         return {
             display: 'grid',
             gridTemplateColumns: `repeat(${Math.min(4, options.length)}, minmax(0, 1fr))`,
-            gap: '3px 10px',
+            gap: '4px 12px',
             marginTop: '3px',
-            alignItems: 'start',
+            alignItems: 'center',
         };
     }
 
@@ -502,10 +502,10 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                             key={i}
                             style={{
                                 ...Q.optRow,
-                                flexDirection: hasAnyOptionImage && !forceSingle ? 'column' : 'row',
-                                alignItems: hasAnyOptionImage && !forceSingle ? 'center' : 'flex-start',
-                                textAlign: hasAnyOptionImage && !forceSingle ? 'center' : 'left',
-                                gap: '2px',
+                                flexDirection: 'row',
+                                alignItems: hasAnyOptionImage ? 'center' : 'baseline',
+                                textAlign: 'left',
+                                gap: '4px',
                             }}
                         >
                             <span style={Q.optLbl}>({labels[i] || optionLabel(i, classes)})</span>

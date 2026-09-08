@@ -7,6 +7,7 @@ const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const { sanitizeHtml, sanitizeArray } = require('../utils/sanitize');
 const supabaseQuestions = require('../services/supabaseQuestions');
+const supabaseGtPyqQuestions = require('../services/supabaseGtPyqQuestions');
 
 const { storage } = require('../config/cloudinary');
 
@@ -90,11 +91,11 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
 });
 
 // @route   GET /api/questions
-// @desc    Get questions filtered by subject, chapter, type, class from Supabase
+// @desc    Get questions filtered by subject, chapter, type, class, and source types from Supabase & MongoDB
 // @access  Teacher / Admin
 router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { classes, chapter, concept, type, subject, search, level, usage } = req.query;
+        const { classes, chapter, concept, type, subject, search, level, usage, sourceType, sources } = req.query;
         let filters = {};
 
         // Subject-level access control — allow Biology/Botany/Zoology faculty to query between Botany/Zoology/Biology
@@ -121,29 +122,171 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         if (level) filters.level = level;
         if (usage) filters.usage = usage;
 
+        // Parse requested sources (REGULAR/BANK, PYQ, GT)
+        const rawSources = (sources || sourceType || 'ALL').toUpperCase();
+        const includeBank = rawSources === 'ALL' || rawSources.includes('REGULAR') || rawSources.includes('BANK');
+        const includePYQ = rawSources === 'ALL' || rawSources.includes('PYQ');
+        const includeGT = rawSources === 'ALL' || rawSources.includes('GT');
+
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
 
-        const result = await supabaseQuestions.getQuestions(filters, page, limit);
+        let combinedQuestions = [];
+        let totalCount = 0;
 
-        res.setHeader('X-Total-Count', result.pagination.total);
-        res.setHeader('X-Total-Pages', result.pagination.pages);
-
-        if (req.query.paginated === 'true') {
-            return res.json(result);
+        // 1. Fetch from Supabase (Standard Question Bank) if enabled
+        if (includeBank) {
+            try {
+                const result = await supabaseQuestions.getQuestions(filters, page, limit);
+                if (result && Array.isArray(result.questions)) {
+                    combinedQuestions.push(...result.questions);
+                    totalCount += result.pagination?.total || result.questions.length;
+                }
+            } catch (supaErr) {
+                console.warn('[QUESTIONS GET] Supabase fetch warning:', supaErr.message);
+            }
         }
 
-        // Return array by default for backward compatibility with frontend components expecting res.data array
-        return res.json(result.questions);
+        // 2. Fetch from GT & PYQ Supabase database (hjjgjcvpqgcebuokjque) if enabled
+        if (includePYQ || includeGT) {
+            try {
+                const gtPyqResult = await supabaseGtPyqQuestions.getQuestions(filters, page, limit);
+                if (gtPyqResult && Array.isArray(gtPyqResult.questions)) {
+                    const existingIds = new Set(combinedQuestions.map(q => (q._id || q.id || '').toString()));
+                    gtPyqResult.questions.forEach(gq => {
+                        const isGT = gq.sourceType === 'GT';
+                        const isPYQ = gq.sourceType === 'PYQ';
+                        if ((isGT && includeGT) || (isPYQ && includePYQ) || (!isGT && !isPYQ)) {
+                            if (!existingIds.has(gq.id)) {
+                                combinedQuestions.push(gq);
+                                existingIds.add(gq.id);
+                                totalCount++;
+                            }
+                        }
+                    });
+                }
+            } catch (gtPyqErr) {
+                console.warn('[QUESTIONS GET] GT/PYQ Supabase fetch warning:', gtPyqErr.message);
+            }
+        }
+
+        // 3. Fetch from MongoDB Question model (PYQ, GT, and custom regular) if enabled
+        if (includePYQ || includeGT || (!includeBank && (includePYQ || includeGT))) {
+            try {
+                const mongoQuery = {};
+                if (filters.subject) {
+                    const subLower = filters.subject.toLowerCase();
+                    if (subLower.includes('botan') || subLower.includes('zool') || subLower.includes('bio')) {
+                        mongoQuery.subject = new RegExp('botany|zoology|biology', 'i');
+                    } else {
+                        mongoQuery.subject = new RegExp(`^${filters.subject}$`, 'i');
+                    }
+                }
+
+                // Source Type filtering in MongoDB
+                const sourceTypesToQuery = [];
+                if (includeBank && rawSources.includes('REGULAR')) sourceTypesToQuery.push('REGULAR');
+                if (includePYQ) sourceTypesToQuery.push('PYQ');
+                if (includeGT) sourceTypesToQuery.push('GT');
+
+                if (sourceTypesToQuery.length > 0 && rawSources !== 'ALL') {
+                    mongoQuery.sourceType = { $in: sourceTypesToQuery };
+                }
+
+                if (filters.chapter) {
+                    const chs = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+                    if (chs.length > 0) {
+                        mongoQuery.chapter = { $in: chs.map(c => new RegExp(`^${c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i')) };
+                    }
+                }
+
+                if (filters.level) {
+                    mongoQuery.level = filters.level.toLowerCase();
+                }
+
+                if (filters.search && filters.search.trim()) {
+                    const sRegex = new RegExp(filters.search.trim(), 'i');
+                    mongoQuery.$or = [{ questionText: sRegex }, { chapter: sRegex }, { concept: sRegex }];
+                }
+
+                const mongoDocs = await Question.find(mongoQuery).sort({ createdAt: -1 }).limit(limit).lean();
+                
+                const mappedMongo = (mongoDocs || []).map(q => {
+                    const typeStr = (q.type || 'MCQ').toUpperCase();
+                    let optArr = Array.isArray(q.options) ? q.options : [];
+                    return {
+                        _id: q._id.toString(),
+                        id: q._id.toString(),
+                        questionId: q.questionId || q._id.toString(),
+                        subject: q.subject,
+                        classes: Array.isArray(q.classes) ? q.classes : [q.classes || '12'],
+                        chapter: q.chapter || 'General',
+                        concept: q.concept || q.chapter || 'General',
+                        subConcept: q.subConcept || '',
+                        level: q.level || 'medium',
+                        type: typeStr,
+                        q_type: typeStr.toLowerCase(),
+                        questionText: q.questionText,
+                        imageUrl: q.imageUrl || null,
+                        solutionImageUrl: q.solutionImageUrl || null,
+                        options: optArr,
+                        matchPairs: Array.isArray(q.matchPairs) ? q.matchPairs : [],
+                        answer: q.answer || '',
+                        solutionText: q.solutionText || '',
+                        assertion: q.assertion || '',
+                        reason: q.reason || '',
+                        statements: Array.isArray(q.statements) ? q.statements : [],
+                        numericalTolerance: q.numericalTolerance || 0,
+                        sourceType: q.sourceType || (q.sourceModel === 'GrandTestPaper' ? 'GT' : (q.sourceModel === 'PreviousYearPaper' ? 'PYQ' : 'REGULAR')),
+                        sourceExam: q.sourceExam || '',
+                        sourceYear: q.sourceYear || null,
+                        sourcePaperName: q.sourcePaperName || '',
+                        sourceDisplayCode: q.sourceDisplayCode || '',
+                        academicYearLevel: q.academicYearLevel || '',
+                        createdBy: q.createdBy,
+                        createdAt: q.createdAt || new Date().toISOString()
+                    };
+                });
+
+                // Deduplicate with existing
+                const existingIds = new Set(combinedQuestions.map(q => (q._id || q.id || '').toString()));
+                mappedMongo.forEach(mq => {
+                    if (!existingIds.has(mq.id)) {
+                        combinedQuestions.push(mq);
+                        totalCount++;
+                    }
+                });
+            } catch (mongoErr) {
+                console.warn('[QUESTIONS GET] Mongo fetch warning:', mongoErr.message);
+            }
+        }
+
+        res.setHeader('X-Total-Count', totalCount || combinedQuestions.length);
+        res.setHeader('X-Total-Pages', Math.ceil((totalCount || combinedQuestions.length) / limit) || 1);
+
+        if (req.query.paginated === 'true') {
+            return res.json({
+                questions: combinedQuestions,
+                pagination: {
+                    total: totalCount || combinedQuestions.length,
+                    page,
+                    limit,
+                    pages: Math.ceil((totalCount || combinedQuestions.length) / limit) || 1
+                }
+            });
+        }
+
+        // Return array by default for backward compatibility
+        return res.json(combinedQuestions);
     } catch (err) {
         console.error('[QUESTIONS GET] error:', err.message);
-        res.status(500).json({ msg: 'Server error fetching questions from Supabase.' });
+        res.status(500).json({ msg: 'Server error fetching questions.' });
     }
 });
 
 // @route   GET /api/questions/meta
-// @desc    Get metadata (total count, distinct chapters, distinct topics) for subject
+// @desc    Get metadata (total count, distinct chapters, distinct topics) across Supabase & MongoDB
 // @access  Teacher / Admin
 router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
@@ -159,7 +302,67 @@ router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) =>
         }
 
         const klass = req.query.class || req.query.klass || '';
-        const meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
+        let meta = { total: 0, chapters: [], concepts: [] };
+        
+        try {
+            meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
+        } catch (supaErr) {
+            console.warn('[QUESTIONS META] Supabase meta error:', supaErr.message);
+        }
+
+        // Also merge chapters and concepts from GT/PYQ Supabase database
+        try {
+            const gtPyqMeta = await supabaseGtPyqQuestions.getMetadata(subject);
+            if (gtPyqMeta && Array.isArray(gtPyqMeta.chapters)) {
+                const chaptersSet = new Set(meta.chapters || []);
+                gtPyqMeta.chapters.forEach(ch => {
+                    if (ch && ch !== 'General' && ch !== 'Full Syllabus') chaptersSet.add(ch);
+                });
+                meta.chapters = Array.from(chaptersSet);
+            }
+        } catch (gtPyqMetaErr) {
+            console.warn('[QUESTIONS META] GT/PYQ meta error:', gtPyqMetaErr.message);
+        }
+
+        // Also merge chapters and concepts from MongoDB Question collection (including PYQ and GT)
+        try {
+            const mongoQuery = {};
+            if (subject) {
+                const subLower = subject.toLowerCase();
+                if (subLower.includes('botan') || subLower.includes('zool') || subLower.includes('bio')) {
+                    mongoQuery.subject = new RegExp('botany|zoology|biology', 'i');
+                } else {
+                    mongoQuery.subject = new RegExp(`^${subject}$`, 'i');
+                }
+            }
+
+            const mongoQuestions = await Question.find(mongoQuery, 'chapter concept topic sourceType').lean();
+            const chaptersSet = new Set(meta.chapters || []);
+            const conceptsMap = new Map();
+            (meta.concepts || []).forEach(c => {
+                if (c && c.name && c.chapter) conceptsMap.set(`${c.chapter}___${c.name}`, c);
+            });
+
+            mongoQuestions.forEach(q => {
+                if (q.chapter && q.chapter !== 'General') {
+                    chaptersSet.add(q.chapter);
+                }
+                const cpt = q.concept || q.topic;
+                if (q.chapter && cpt && cpt !== 'General' && cpt !== q.chapter) {
+                    const key = `${q.chapter}___${cpt}`;
+                    if (!conceptsMap.has(key)) {
+                        conceptsMap.set(key, { chapter: q.chapter, name: cpt, concept: cpt });
+                    }
+                }
+            });
+
+            meta.chapters = Array.from(chaptersSet).sort();
+            meta.concepts = Array.from(conceptsMap.values());
+            meta.total = (meta.total || 0) + (mongoQuestions.length || 0);
+        } catch (mongoMetaErr) {
+            console.warn('[QUESTIONS META] Mongo meta merge warning:', mongoMetaErr.message);
+        }
+
         res.json(meta);
     } catch (err) {
         console.error('[QUESTIONS META] error:', err.message);
@@ -364,6 +567,9 @@ router.post('/:id/generate-variant', [auth, checkRole(['admin', 'teacher'])], as
             isMongo = true;
         } else {
             question = await supabaseQuestions.getQuestionById(req.params.id);
+            if (!question) {
+                question = await supabaseGtPyqQuestions.getQuestionById(req.params.id);
+            }
         }
 
         if (!question) return res.status(404).json({ msg: 'Question not found.' });

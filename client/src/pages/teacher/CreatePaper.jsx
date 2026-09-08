@@ -81,9 +81,9 @@ export default function CreatePaper() {
     const paperId = searchParams.get('paperId');
     const initialCategory = searchParams.get('category') === 'assignment' ? 'assignment' : 'test';
 
-    // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions) -> 4 (Preview) -> 5 (Alignment)
-    // If editing existing paper, default directly to Step 3 (Questions)
-    const [currentStep, setCurrentStep] = useState(paperId ? 3 : 1);
+    // Wizard Step: 1 (Setup) -> 2 (Chapter Blueprint) -> 3 (Method) -> 4 (Questions) -> 5 (Preview)
+    // If editing existing paper, default directly to Step 4 (Questions)
+    const [currentStep, setCurrentStep] = useState(paperId ? 4 : 1);
 
     // Step 1: Mode & Academic Metadata
     const [paperCategory, setPaperCategory] = useState(initialCategory);
@@ -94,6 +94,9 @@ export default function CreatePaper() {
     const [duration, setDuration] = useState('180 Minutes');
     const [targetCount, setTargetCount] = useState(60);
 
+    // Multi-Database Sources Selection ('REGULAR' = Bank, 'PYQ' = Previous Year, 'GT' = Grand Tests)
+    const [selectedSources, setSelectedSources] = useState(['REGULAR', 'PYQ', 'GT']);
+
     // Assignment custom question numbering
     const [startQNo, setStartQNo] = useState(1);
     const [endQNo, setEndQNo] = useState(null);
@@ -101,6 +104,9 @@ export default function CreatePaper() {
     // Multi-Select Checkbox States for Chapters & Concepts
     const [selectedChapters, setSelectedChapters] = useState([]);
     const [selectedConcepts, setSelectedConcepts] = useState([]);
+
+    // Chapter-wise Question Allocation (how many questions required per chapter)
+    const [chapterAllocations, setChapterAllocations] = useState({});
 
     // Fast Meta state (loaded in < 50ms)
     const [metaData, setMetaData] = useState({ total: 0, chapters: [], concepts: [] });
@@ -115,7 +121,7 @@ export default function CreatePaper() {
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [activeTemplate, setActiveTemplate] = useState(null);
 
-    // In-memory Questions Cache by subject + chapter
+    // In-memory Questions Cache by subject + chapter + sources
     const questionsCache = useRef({});
 
     // Question Swap Mode State
@@ -126,6 +132,7 @@ export default function CreatePaper() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [filterSource, setFilterSource] = useState('');
     const [singleFilterChapter, setSingleFilterChapter] = useState('');
     const [singleFilterConcept, setSingleFilterConcept] = useState('');
     const [pageNumber, setPageNumber] = useState(1);
@@ -163,6 +170,18 @@ export default function CreatePaper() {
         if (selectedClass === 'Both') return ['11', '12', 'Class 11', 'Class 12', 'I PUC', 'II PUC'];
         return [selectedClass, `Class ${selectedClass}`, `${selectedClass}th`, `PUC ${selectedClass}`];
     }, [selectedClass]);
+
+    // Toggle a database source
+    const toggleSource = (src) => {
+        setSelectedSources(prev => {
+            if (prev.includes(src)) {
+                if (prev.length === 1) return prev; // Keep at least one source selected
+                return prev.filter(s => s !== src);
+            } else {
+                return [...prev, src];
+            }
+        });
+    };
 
     // Auto default title
     useEffect(() => {
@@ -264,7 +283,7 @@ export default function CreatePaper() {
                         setSelectedQuestions(p.questions);
                         setTargetCount(p.questions.length);
                         setAutoQty(p.questions.length);
-                        setCurrentStep(3); // Jump straight to Questions step
+                        setCurrentStep(4); // Jump straight to Questions step
                     }
                 }
             } catch (err) {
@@ -274,12 +293,13 @@ export default function CreatePaper() {
         fetchPaperDetails();
     }, [paperId]);
 
-    // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ──
-    const fetchQuestionsPool = async (forceSubject = subject, forceClass = selectedClass) => {
+    // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH MULTI-SOURCE SUPPORT & CACHE ──
+    const fetchQuestionsPool = async (forceSubject = subject, forceClass = selectedClass, forceSources = selectedSources) => {
         if (!forceSubject) return;
 
         const cleanClass = forceClass === 'Both' ? '' : forceClass;
-        const cacheKey = `${forceSubject.trim().toLowerCase()}_${cleanClass || 'all'}`;
+        const srcStr = (forceSources || ['REGULAR', 'PYQ', 'GT']).sort().join(',');
+        const cacheKey = `${forceSubject.trim().toLowerCase()}_${cleanClass || 'all'}_${srcStr}`;
         if (questionsCache.current[cacheKey] && questionsCache.current[cacheKey].length > 0) {
             setAvailableQuestions(questionsCache.current[cacheKey]);
             return;
@@ -287,7 +307,7 @@ export default function CreatePaper() {
 
         setLoadingQuestions(true);
         try {
-            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=20000`;
+            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&sources=${encodeURIComponent(srcStr)}&limit=20000`;
             if (cleanClass) {
                 url += `&classes=${encodeURIComponent(cleanClass)}`;
             }
@@ -310,12 +330,12 @@ export default function CreatePaper() {
         }
     };
 
-    // Fetch questions pool immediately when subject or selectedClass changes
+    // Fetch questions pool immediately when subject, selectedClass, or selectedSources change
     useEffect(() => {
         if (subject) {
-            fetchQuestionsPool(subject, selectedClass);
+            fetchQuestionsPool(subject, selectedClass, selectedSources);
         }
-    }, [subject, selectedClass]);
+    }, [subject, selectedClass, selectedSources]);
 
     // ── OFFICIAL NCERT BIOLOGY SYLLABUS HIERARCHY (Class 11 & Class 12) ──
     const NCERT_BIOLOGY_SYLLABUS = useMemo(() => ({
@@ -740,6 +760,57 @@ export default function CreatePaper() {
         return { distinctChapters: sortedChapters, chapterConceptsMap: cleanMap };
     }, [metaData, availableQuestions, selectedClass, subject, NCERT_BIOLOGY_SYLLABUS, BOTANY_CHAPTERS, ZOOLOGY_CHAPTERS]);
 
+    // Effective list of chapters to allocate: selected chapters if explicitly checked, otherwise all distinct chapters in scope
+    const effectiveChapters = useMemo(() => {
+        if (selectedChapters.length > 0) return selectedChapters;
+        return distinctChapters;
+    }, [selectedChapters, distinctChapters]);
+
+    // Helper: calculate equal split of questions across chapters
+    const calculateEqualChapterSplit = (chapters, total) => {
+        const chs = (chapters && chapters.length > 0) ? chapters : effectiveChapters;
+        if (!chs || chs.length === 0) return {};
+        const n = chs.length;
+        const base = Math.floor(total / n);
+        const rem = total % n;
+        const split = {};
+        chs.forEach((ch, idx) => {
+            split[ch] = base + (idx < rem ? 1 : 0);
+        });
+        return split;
+    };
+
+    // Total allocated questions across chapters
+    const totalAllocatedQuestions = useMemo(() => {
+        const chList = effectiveChapters;
+        if (chList.length === 0) return targetLimit;
+        return chList.reduce((sum, ch) => sum + (parseInt(chapterAllocations[ch]) || 0), 0);
+    }, [effectiveChapters, chapterAllocations, targetLimit]);
+
+    // Keep chapter allocations balanced when effective chapters or targetCount change
+    useEffect(() => {
+        const chList = effectiveChapters;
+        if (chList.length === 0) {
+            setChapterAllocations({});
+            return;
+        }
+        setChapterAllocations(prev => {
+            const next = {};
+            let hasNewChapter = false;
+            chList.forEach(ch => {
+                if (prev[ch] !== undefined) {
+                    next[ch] = prev[ch];
+                } else {
+                    hasNewChapter = true;
+                }
+            });
+            if (hasNewChapter || Object.keys(next).length === 0) {
+                return calculateEqualChapterSplit(chList, targetLimit);
+            }
+            return next;
+        });
+    }, [effectiveChapters, targetLimit]);
+
     // Available concepts for checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
         if (selectedChapters.length === 0) return [];
@@ -838,16 +909,26 @@ export default function CreatePaper() {
             const matchesSearch = !searchTerm ||
                 (q.questionText || q.question || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
+                (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (q.sourcePaperName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (q.sourceExam || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter;
+            const canonQ = canonicalizeChapterName(q.chapter);
+            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter || canonQ === singleFilterChapter;
             const matchesSingleConcept = !singleFilterConcept || (q.concept === singleFilterConcept || q.topic === singleFilterConcept);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
-            return matchesSearch && matchesSingleChapter && matchesSingleConcept && matchesDifficulty && matchesType;
+            const qSource = (q.sourceType || 'REGULAR').toUpperCase();
+            const matchesSource = !filterSource || (
+                filterSource === 'REGULAR' ? (qSource === 'REGULAR' || !q.sourceType) :
+                filterSource === 'PYQ' ? qSource === 'PYQ' :
+                filterSource === 'GT' ? qSource === 'GT' : true
+            );
+
+            return matchesSearch && matchesSingleChapter && matchesSingleConcept && matchesDifficulty && matchesType && matchesSource;
         });
-    }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType]);
+    }, [scopedQuestionPool, searchTerm, singleFilterChapter, singleFilterConcept, filterDifficulty, filterType, filterSource]);
 
     // Paginated subset for fast browser DOM rendering
     const paginatedQuestions = useMemo(() => {
@@ -916,6 +997,31 @@ export default function CreatePaper() {
     const deselectAllMatching = () => {
         const matchingIds = new Set(filteredQuestions.map(q => q._id || q.id));
         setSelectedQuestions(prev => prev.filter(q => !matchingIds.has(q._id || q.id)));
+    };
+
+    // Quick auto-fill questions for a specific chapter
+    const handleAutoFillChapter = (ch, countNeeded) => {
+        if (countNeeded <= 0) return;
+        const chPool = scopedQuestionPool.filter(q => {
+            const canonQ = canonicalizeChapterName(q.chapter);
+            const isThisCh = canonQ === ch || q.chapter === ch;
+            const alreadySelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
+            return isThisCh && !alreadySelected;
+        });
+
+        if (chPool.length === 0) {
+            return alert(`No more unselected questions available in pool for "${ch}".`);
+        }
+
+        const toAdd = [...chPool].sort(() => Math.random() - 0.5).slice(0, countNeeded);
+        setSelectedQuestions(prev => {
+            const availableSlots = Math.max(0, targetLimit - prev.length);
+            const actualAdd = toAdd.slice(0, availableSlots);
+            if (actualAdd.length < toAdd.length) {
+                setShowLimitReachedModal(true);
+            }
+            return [...prev, ...actualAdd];
+        });
     };
 
     // ── In-Place Question Text & Options Editor ──
@@ -992,38 +1098,91 @@ export default function CreatePaper() {
         setEditingQuestionModal(null);
     };
 
-    // Auto Fetch Generator
+    // Auto Fetch Generator with Chapter-Wise Allocations & Difficulty Balance
     const handleGenerateAuto = () => {
         if (scopedQuestionPool.length === 0) {
             return alert('No questions found matching the selected syllabus chapters & concepts.');
         }
 
-        const count = Math.min(targetLimit, scopedQuestionPool.length);
-        const easyTarget = Math.round(count * (autoDist.easy / 100));
-        const medTarget = Math.round(count * (autoDist.medium / 100));
-        const hardTarget = count - easyTarget - medTarget;
-
-        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
-
         const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+        let pickedAll = [];
+        const usedIds = new Set();
 
-        const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
-        const pickedMed = shuffle(medPool).slice(0, medTarget);
-        const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+        const chaptersToUse = effectiveChapters.length > 0 ? effectiveChapters : [];
 
-        let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
-        const usedIds = new Set(combined.map(q => q._id || q.id));
+        if (chaptersToUse.length > 0) {
+            // Pick chapter-by-chapter strictly based on chapterAllocations
+            chaptersToUse.forEach(ch => {
+                const chTarget = chapterAllocations[ch] !== undefined
+                    ? chapterAllocations[ch]
+                    : Math.max(1, Math.floor(targetLimit / chaptersToUse.length));
 
-        if (combined.length < count) {
-            const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
-            combined.push(...shuffle(remainder).slice(0, count - combined.length));
+                if (chTarget <= 0) return;
+
+                const chPool = scopedQuestionPool.filter(q => {
+                    const canonQ = canonicalizeChapterName(q.chapter);
+                    return (canonQ === ch || q.chapter === ch) && !usedIds.has(q._id || q.id);
+                });
+
+                if (chPool.length === 0) return;
+
+                // Difficulty distribution per chapter
+                const easyTarget = Math.round(chTarget * (autoDist.easy / 100));
+                const medTarget = Math.round(chTarget * (autoDist.medium / 100));
+                const hardTarget = Math.max(0, chTarget - easyTarget - medTarget);
+
+                const easyPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+                const medPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+                const hardPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+
+                const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
+                const pickedMed = shuffle(medPool).slice(0, medTarget);
+                const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+
+                let chPicked = [...pickedEasy, ...pickedMed, ...pickedHard];
+                chPicked.forEach(q => usedIds.add(q._id || q.id));
+
+                // Backfill if not enough from exact difficulty split
+                if (chPicked.length < chTarget) {
+                    const remCh = chPool.filter(q => !usedIds.has(q._id || q.id));
+                    const extra = shuffle(remCh).slice(0, chTarget - chPicked.length);
+                    extra.forEach(q => usedIds.add(q._id || q.id));
+                    chPicked.push(...extra);
+                }
+
+                pickedAll.push(...chPicked);
+            });
+        } else {
+            // General pool fallback
+            const count = Math.min(targetLimit, scopedQuestionPool.length);
+            const easyTarget = Math.round(count * (autoDist.easy / 100));
+            const medTarget = Math.round(count * (autoDist.medium / 100));
+            const hardTarget = count - easyTarget - medTarget;
+
+            const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+            const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+            const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+
+            const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
+            const pickedMed = shuffle(medPool).slice(0, medTarget);
+            const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+
+            pickedAll = [...pickedEasy, ...pickedMed, ...pickedHard];
+            pickedAll.forEach(q => usedIds.add(q._id || q.id));
+
+            if (pickedAll.length < count) {
+                const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
+                pickedAll.push(...shuffle(remainder).slice(0, count - pickedAll.length));
+            }
         }
 
-        setSelectedQuestions(combined);
-        setMethod('manual'); // Crucial: automatically set method to manual so editing shows questions!
-        setCurrentStep(4); // Move to Preview
+        if (pickedAll.length === 0) {
+            return alert('Could not find enough questions for the selected chapters and sources.');
+        }
+
+        setSelectedQuestions(pickedAll);
+        setMethod('manual');
+        setCurrentStep(5);
     };
 
     // Pre-finalize check
@@ -1034,7 +1193,7 @@ export default function CreatePaper() {
         }
         const validation = validatePaperQuestions(selectedQuestions);
         setValidationResult(validation);
-        setCurrentStep(4); // Move to Preview
+        setCurrentStep(5); // Move to Preview (Step 5)
     };
 
     // Finalize and Save Paper
@@ -1143,10 +1302,10 @@ export default function CreatePaper() {
                 <div className="hidden md:flex items-center gap-2 mr-4">
                     {[
                         { num: 1, label: 'Scope & Setup' },
-                        { num: 2, label: 'Method' },
-                        { num: 3, label: 'Questions' },
-                        { num: 4, label: 'Preview' },
-                        { num: 5, label: 'Alignment' },
+                        { num: 2, label: 'Chapter Blueprint' },
+                        { num: 3, label: 'Method' },
+                        { num: 4, label: 'Questions' },
+                        { num: 5, label: 'Preview' },
                     ].map((st) => (
                         <button
                             key={st.num}
@@ -1222,6 +1381,80 @@ export default function CreatePaper() {
                                         </p>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* ── QUESTION SOURCES / REPOSITORIES SELECTION ── */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider">
+                                    Question Database Repositories ({selectedSources.length} of 3 Active)
+                                </label>
+                                <span className="text-[10px] text-gray-500 font-bold">
+                                    Select which question banks & archives to retrieve questions from
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {[
+                                    {
+                                        key: 'REGULAR',
+                                        title: 'Question Bank',
+                                        badge: 'Standard Bank',
+                                        icon: '🏛️',
+                                        desc: 'Standard subject question repository & verified item bank.'
+                                    },
+                                    {
+                                        key: 'PYQ',
+                                        title: 'Previous Year (PYQ)',
+                                        badge: 'Official Archives',
+                                        icon: '📜',
+                                        desc: 'Real previous year exams (JEE, NEET, CET, Board papers).'
+                                    },
+                                    {
+                                        key: 'GT',
+                                        title: 'Grand Test Papers',
+                                        badge: 'Mock Tests',
+                                        icon: '🏆',
+                                        desc: 'Institutional Grand Test papers & full syllabus test series.'
+                                    }
+                                ].map(src => {
+                                    const isSelected = selectedSources.includes(src.key);
+                                    return (
+                                        <div
+                                            key={src.key}
+                                            onClick={() => toggleSource(src.key)}
+                                            className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-start gap-3 ${
+                                                isSelected
+                                                    ? 'border-navy bg-blue-50/70 shadow-xs ring-1 ring-navy/20'
+                                                    : 'border-gray-200 bg-gray-50/40 hover:border-gray-300 opacity-60'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                                className="w-4 h-4 text-navy rounded border-gray-300 mt-0.5 cursor-pointer"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-base">{src.icon}</span>
+                                                        <span className="text-xs font-black text-navy leading-tight">{src.title}</span>
+                                                    </div>
+                                                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                                                        isSelected ? 'bg-navy/10 text-navy' : 'bg-gray-200 text-gray-500'
+                                                    }`}>
+                                                        {src.badge}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 font-medium mt-1 leading-snug">
+                                                    {src.desc}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -1522,15 +1755,16 @@ export default function CreatePaper() {
                             <div>
                                 <span className="text-[10px] text-gold font-bold uppercase tracking-widest">Active Scope</span>
                                 <div className="text-sm font-black mt-0.5">
-                                    {selectedChapters.length > 0 ? `${selectedChapters.length} Chapters Selected` : 'All Chapters Included'}
-                                    {selectedConcepts.length > 0 ? ` • ${selectedConcepts.length} Concepts Selected` : ''}
+                                    {selectedChapters.length > 0 ? `${selectedChapters.length} Chapters Selected` : 'All Chapters in Subject Included'}
+                                    {selectedConcepts.length > 0 ? ` • ${selectedConcepts.length} Concepts` : ''}
+                                    {` • Repositories: ${selectedSources.map(s => s === 'REGULAR' ? 'Bank' : s).join(' + ')}`}
                                 </div>
                             </div>
                             <button
                                 onClick={() => setCurrentStep(2)}
                                 className="bg-gold text-navy hover:scale-105 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                             >
-                                <span>Proceed to Method</span>
+                                <span>Proceed to Chapter Allocation (Step 2)</span>
                                 <span>→</span>
                             </button>
                         </div>
@@ -1538,12 +1772,178 @@ export default function CreatePaper() {
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 2: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
+                    STEP 2: CHAPTER-WISE QUESTION ALLOCATION (DEDICATED BLUEPRINT WINDOW)
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 2 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
+                        <div className="border-b border-gray-100 pb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 2 of 5</span>
+                                <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Chapter-Wise Question Allocation</h2>
+                                <p className="text-xs text-gray-500 font-medium mt-1">
+                                    Specify exactly how many questions to pick from each chapter (Total Target: {targetLimit} Questions).
+                                </p>
+                            </div>
+                            
+                            {/* Live Balance Pill */}
+                            <div className="flex items-center gap-3">
+                                <div className={`px-4 py-2 rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 ${
+                                    totalAllocatedQuestions === targetLimit
+                                        ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-400/40'
+                                        : totalAllocatedQuestions < targetLimit
+                                        ? 'bg-amber-400 text-slate-950'
+                                        : 'bg-rose-500 text-white'
+                                }`}>
+                                    <span className="text-base">{totalAllocatedQuestions === targetLimit ? '✓' : '⚠️'}</span>
+                                    <span>{totalAllocatedQuestions} / {targetLimit} Qs Allocated</span>
+                                    <span className="text-[10px] opacity-80">
+                                        {totalAllocatedQuestions === targetLimit ? '(Balanced)' : totalAllocatedQuestions < targetLimit ? `(${targetLimit - totalAllocatedQuestions} remaining)` : `(${totalAllocatedQuestions - targetLimit} excess)`}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Toolbar */}
+                        <div className="bg-navy/5 p-4 rounded-2xl border border-navy/10 flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-black text-navy uppercase tracking-wider">🎯 Total Target:</span>
+                                <span className="text-sm font-black text-navy bg-white px-3 py-1 rounded-xl border border-navy/20">{targetLimit} Questions</span>
+                                <span className="text-[11px] text-gray-500 font-medium">({effectiveChapters.length} Chapters in scope)</span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, targetLimit))}
+                                    className="bg-gold hover:bg-gold/90 text-navy px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                                >
+                                    <span>⚡ Auto Split Evenly</span>
+                                </button>
+                                {totalAllocatedQuestions !== targetLimit && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTargetCount(totalAllocatedQuestions);
+                                            setAutoQty(totalAllocatedQuestions);
+                                        }}
+                                        className="bg-navy hover:bg-navy/90 text-gold px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+                                        title="Set Target Total to match current allocation sum"
+                                    >
+                                        Sync Total ({totalAllocatedQuestions})
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const empty = {};
+                                        effectiveChapters.forEach(ch => { empty[ch] = 0; });
+                                        setChapterAllocations(empty);
+                                    }}
+                                    className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                                >
+                                    Reset All
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Chapter Grid with Steppers and Pool Counts */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[55vh] overflow-y-auto pr-1">
+                            {effectiveChapters.map((ch, idx) => {
+                                const count = chapterAllocations[ch] !== undefined ? chapterAllocations[ch] : 0;
+                                const poolForCh = scopedQuestionPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
+                                const pct = targetLimit > 0 ? Math.round((count / targetLimit) * 100) : 0;
+
+                                return (
+                                    <div
+                                        key={ch}
+                                        className={`p-4 rounded-2xl border-2 transition flex flex-col justify-between gap-3 ${
+                                            count > 0 ? 'border-navy bg-navy/5 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5 mb-1">
+                                                    <span className="text-[10px] font-black text-gold bg-navy px-2 py-0.5 rounded">
+                                                        Chapter {idx + 1}
+                                                    </span>
+                                                    {count > 0 && (
+                                                        <span className="text-[10px] font-black text-navy bg-navy/10 px-1.5 py-0.5 rounded">
+                                                            {pct}% of paper
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <h4 className="text-xs font-bold text-navy leading-snug line-clamp-2" title={ch}>
+                                                    {ch}
+                                                </h4>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-2 border-t border-gray-200/60">
+                                            <span className="text-[10px] text-gray-500 font-semibold">
+                                                {poolForCh.length} in repository
+                                            </span>
+
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, (prev[ch] || 0) - 1) }))}
+                                                    className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-navy font-black text-sm flex items-center justify-center transition cursor-pointer"
+                                                >
+                                                    -
+                                                </button>
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={targetLimit}
+                                                    value={count}
+                                                    onChange={e => {
+                                                        const val = parseInt(e.target.value) || 0;
+                                                        setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, val) }));
+                                                    }}
+                                                    className="w-14 bg-white text-navy font-black text-center text-sm py-1.5 rounded-xl border-2 border-navy focus:border-gold outline-none shadow-inner"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: (prev[ch] || 0) + 1 }))}
+                                                    className="w-8 h-8 rounded-xl bg-navy hover:bg-navy/90 text-gold font-black text-sm flex items-center justify-center transition cursor-pointer shadow-xs"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Step 2 Bottom Navigation */}
+                        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                            <button
+                                type="button"
+                                onClick={() => setCurrentStep(1)}
+                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
+                            >
+                                ← Back to Scope Setup
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentStep(3)}
+                                className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
+                            >
+                                <span>Proceed to Method Selection (Step 3)</span>
+                                <span>→</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════════════════
+                    STEP 3: CHOOSE METHOD (MANUAL PICK VS AUTO FETCH)
+                ══════════════════════════════════════════════════════════════ */}
+                {currentStep === 3 && (
+                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
                         <div className="border-b border-gray-100 pb-4">
-                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 2 of 5</span>
+                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 3 of 5</span>
                             <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Choose Acquisition Method</h2>
                             <p className="text-xs text-gray-500 font-medium mt-1">
                                 Pick questions individually from your selected topics or auto-generate a balanced set.
@@ -1555,7 +1955,7 @@ export default function CreatePaper() {
                             <div
                                 onClick={() => {
                                     setMethod('manual');
-                                    setCurrentStep(3);
+                                    setCurrentStep(4);
                                 }}
                                 className="border-3 border-gray-200 hover:border-navy hover:shadow-2xl rounded-3xl p-8 cursor-pointer transition-all duration-300 flex flex-col justify-between group bg-surface"
                             >
@@ -1578,7 +1978,7 @@ export default function CreatePaper() {
                             <div
                                 onClick={() => {
                                     setMethod('auto');
-                                    setCurrentStep(3);
+                                    setCurrentStep(4);
                                 }}
                                 className="border-3 border-gray-200 hover:border-gold hover:shadow-2xl rounded-3xl p-8 cursor-pointer transition-all duration-300 flex flex-col justify-between group bg-surface"
                             >
@@ -1588,7 +1988,7 @@ export default function CreatePaper() {
                                     </div>
                                     <h3 className="text-xl font-black text-navy uppercase tracking-tight mb-2">Auto Fetch Generator</h3>
                                     <p className="text-xs text-gray-600 leading-relaxed font-medium">
-                                        Automatically assemble questions across all your checked chapters and concepts with customized difficulty distribution.
+                                        Automatically assemble questions across all your allocated chapters with customized difficulty distribution.
                                     </p>
                                 </div>
                                 <div className="mt-8 pt-4 border-t border-gray-200 flex justify-between items-center text-xs font-black text-navy uppercase tracking-wider group-hover:text-gold">
@@ -1600,21 +2000,21 @@ export default function CreatePaper() {
 
                         <div className="flex justify-start pt-4 border-t border-gray-100">
                             <button
-                                onClick={() => setCurrentStep(1)}
+                                onClick={() => setCurrentStep(2)}
                                 className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                             >
-                                ← Back to Scope Setup
+                                ← Back to Chapter Allocation
                             </button>
                         </div>
                     </div>
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 3: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
+                    STEP 4: QUESTION SELECTION / AUTO GENERATION (FULL QUALITY INSPECTION)
                 ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 3 && (
+                {currentStep === 4 && (
                     <div className="space-y-6 animate-fade-in">
-                        {/* ── STEP 3 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ── */}
+                        {/* ── STEP 4 MODE TABS (Allows toggling between Questions Basket and Auto Engine anytime) ── */}
                         <div className="flex items-center gap-2 bg-gray-200/70 p-1.5 rounded-2xl w-fit">
                             <button
                                 type="button"
@@ -1647,10 +2047,10 @@ export default function CreatePaper() {
                             /* ── AUTO FETCH CONFIGURATION SCREEN ── */
                             <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 space-y-6 max-w-3xl mx-auto">
                                 <div className="border-b border-gray-100 pb-4">
-                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Auto Engine</span>
-                                    <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Auto Fetch Configuration</h2>
+                                    <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 4: Auto Engine</span>
+                                    <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Difficulty Split & Generate</h2>
                                     <p className="text-xs text-gray-500 font-medium mt-1">
-                                        Assembling from {scopedQuestionPool.length} available questions across {selectedChapters.length || 'All'} chapters and {selectedConcepts.length || 'All'} concepts.
+                                        Assembling from {scopedQuestionPool.length} available questions across {effectiveChapters.length} chapters.
                                     </p>
                                 </div>
 
@@ -1732,99 +2132,204 @@ export default function CreatePaper() {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                                    <button
-                                        onClick={() => setCurrentStep(2)}
-                                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                                    >
-                                        ← Back
-                                    </button>
-                                    <button
-                                        onClick={handleGenerateAuto}
-                                        className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
-                                    >
-                                        <span>⚡ Generate & Proceed to Preview</span>
-                                        <span>→</span>
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            /* ── MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ── */
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
-                                
-                                {/* Active Swap Mode Banner */}
-                                {swappingQuestionIndex !== null && (
-                                    <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">🔄</span>
+                                    {/* ── CHAPTER-WISE QUESTION ALLOCATION (BLUEPRINT) ── */}
+                                    <div className="bg-gradient-to-br from-slate-900 to-navy text-white p-6 rounded-3xl border-2 border-gold/40 shadow-xl space-y-4">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/15 pb-3">
                                             <div>
-                                                <h4 className="font-black text-xs uppercase tracking-wider text-navy">
-                                                    Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
-                                                </h4>
-                                                <p className="text-[11px] font-bold text-navy/80">
-                                                    Click any question below in the repository to replace this question.
+                                                <div className="flex items-center gap-2.5 flex-wrap">
+                                                    <span className="text-gold font-black text-sm uppercase tracking-wider flex items-center gap-1.5">
+                                                        <span>🎯</span> Set Questions Needed Per Chapter
+                                                    </span>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black shadow-xs ${
+                                                        totalAllocatedQuestions === autoQty
+                                                            ? 'bg-emerald-400 text-slate-950'
+                                                            : totalAllocatedQuestions < autoQty
+                                                            ? 'bg-amber-400 text-slate-950'
+                                                            : 'bg-rose-500 text-white'
+                                                    }`}>
+                                                        {totalAllocatedQuestions} / {autoQty} Qs Allocated
+                                                        {totalAllocatedQuestions === autoQty ? ' ✓ Balanced' : totalAllocatedQuestions < autoQty ? ` (${autoQty - totalAllocatedQuestions} left)` : ` (${totalAllocatedQuestions - autoQty} over)`}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-300 font-medium mt-1">
+                                                    Specify exact question count to pull from each chapter (e.g. 20 from Chapter 1, 20 from Chapter 2, 20 from Chapter 3).
                                                 </p>
                                             </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setSwappingQuestionIndex(null)}
-                                            className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
-                                        >
-                                            ✕ Cancel Swap
-                                        </button>
-                                    </div>
-                                )}
 
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
-                                                {paperId ? 'Edit Mode' : 'Question Quality View'}
-                                            </span>
-                                            {paperId && (
-                                                <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
-                                                    Saved Paper #{paperId.slice(-6)}
-                                                </span>
-                                            )}
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, autoQty))}
+                                                    className="bg-gold hover:bg-gold/90 text-navy px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                                                >
+                                                    <span>⚡ Auto Split Evenly</span>
+                                                </button>
+                                                {totalAllocatedQuestions !== autoQty && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setAutoQty(totalAllocatedQuestions);
+                                                            setTargetCount(totalAllocatedQuestions);
+                                                        }}
+                                                        className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+                                                        title="Set Total Quantity to match current allocation sum"
+                                                    >
+                                                        Sync Total ({totalAllocatedQuestions})
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                        <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
-                                            {paperId ? `Editing: ${title || 'Saved Paper'}` : 'Select & Quality Check Questions'} ({filteredQuestions.length} in Pool)
-                                        </h2>
-                                        <p className="text-xs text-gray-500 font-bold">
-                                            {selectedQuestions.length} of {targetLimit} Questions Selected
-                                        </p>
-                                    </div>
+                                        
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-56 overflow-y-auto pr-1">
+                                            {effectiveChapters.map((ch, idx) => {
+                                                const count = chapterAllocations[ch] ?? 0;
+                                                const poolForCh = scopedQuestionPool.filter(q => (q.chapter || '').trim().toLowerCase() === ch.trim().toLowerCase());
+                                                return (
+                                                    <div key={ch} className="bg-white/10 backdrop-blur-sm p-3.5 rounded-2xl border border-white/15 flex items-center justify-between gap-3 hover:border-gold/50 transition">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-[10px] font-black text-gold bg-white/10 px-1.5 py-0.5 rounded">
+                                                                    Ch {idx + 1}
+                                                                </span>
+                                                                <p className="text-xs font-bold text-white truncate" title={ch}>{ch}</p>
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-300 font-semibold mt-0.5">
+                                                                {poolForCh.length} Qs available in bank
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: Math.max(0, (prev[ch] || 0) - 1) }))}
+                                                                className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/30 text-white font-black text-sm flex items-center justify-center transition cursor-pointer"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max="200"
+                                                                value={count}
+                                                                onChange={e => {
+                                                                    const val = Math.max(0, parseInt(e.target.value) || 0);
+                                                                    setChapterAllocations(prev => ({ ...prev, [ch]: val }));
+                                                                }}
+                                                                className="w-12 bg-white text-navy font-black text-center text-xs py-1.5 rounded-lg outline-none border border-gold/40 shadow-inner"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setChapterAllocations(prev => ({ ...prev, [ch]: (prev[ch] || 0) + 1 }))}
+                                                                className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/30 text-white font-black text-sm flex items-center justify-center transition cursor-pointer"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
 
-                                    {/* Action Bar with clear Back and Forward buttons */}
-                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                        {totalAllocatedQuestions !== autoQty && (
+                                            <p className="text-xs font-bold text-amber-200 bg-amber-950/60 border border-amber-500/40 px-3.5 py-2 rounded-xl flex items-center gap-2">
+                                                <span>⚠️</span>
+                                                <span>Allocated sum ({totalAllocatedQuestions} Qs) differs from target question count ({autoQty} Qs). Click <strong>⚡ Auto Split Evenly</strong> or <strong>Sync Total</strong> to match.</span>
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                    <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                                         <button
-                                            type="button"
-                                            onClick={() => setCurrentStep(1)}
-                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
+                                            onClick={() => setCurrentStep(3)}
+                                            className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
                                         >
-                                            <span>←</span> Setup (Step 1)
+                                            ← Back to Method
                                         </button>
                                         <button
-                                            type="button"
-                                            onClick={() => setShowReviewSelectedModal(true)}
-                                            className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
+                                            onClick={handleGenerateAuto}
+                                            className="bg-navy text-gold hover:scale-105 px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-xl flex items-center gap-2 cursor-pointer"
                                         >
-                                            <span>👁 Review Basket</span>
-                                            <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
-                                                {selectedQuestions.length}
-                                            </span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handlePreFinalizeCheck}
-                                            disabled={selectedQuestions.length === 0}
-                                            className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
-                                        >
-                                            <span>Preview Paper (Step 4)</span>
+                                            <span>⚡ Generate & Proceed to Preview</span>
                                             <span>→</span>
                                         </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* ── MANUAL SELECTION SCREEN (FULL QUALITY QUESTION CARDS) ── */
+                                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-200 space-y-6">
+                                    
+                                    {/* Active Swap Mode Banner */}
+                                    {swappingQuestionIndex !== null && (
+                                        <div className="bg-amber-500 text-navy p-4 rounded-2xl shadow-lg border-2 border-gold flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-2xl">🔄</span>
+                                                <div>
+                                                    <h4 className="font-black text-xs uppercase tracking-wider text-navy">
+                                                        Swap Mode Active: Replacing Question #{startQNo + swappingQuestionIndex}
+                                                    </h4>
+                                                    <p className="text-[11px] font-bold text-navy/80">
+                                                        Click any question below in the repository to replace this question.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => setSwappingQuestionIndex(null)}
+                                                className="bg-navy text-gold px-4 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-navy/90 transition cursor-pointer"
+                                            >
+                                                ✕ Cancel Swap
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">
+                                                    {paperId ? 'Edit Mode' : 'Question Quality View'}
+                                                </span>
+                                                {paperId && (
+                                                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+                                                        Saved Paper #{paperId.slice(-6)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h2 className="text-xl font-black text-navy mt-1 uppercase tracking-tight">
+                                                {paperId ? `Editing: ${title || 'Saved Paper'}` : 'Select & Quality Check Questions'} ({filteredQuestions.length} in Pool)
+                                            </h2>
+                                            <p className="text-xs text-gray-500 font-bold">
+                                                {selectedQuestions.length} of {targetLimit} Questions Selected
+                                            </p>
+                                        </div>
+
+                                        {/* Action Bar with clear Back and Forward buttons */}
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentStep(3)}
+                                                className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
+                                            >
+                                                <span>←</span> Method (Step 3)
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowReviewSelectedModal(true)}
+                                                className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer border border-gold/50 shadow-sm flex items-center gap-1.5"
+                                            >
+                                                <span>👁 Review Basket</span>
+                                                <span className="bg-navy text-gold px-2 py-0.5 rounded-full text-[10px] font-black">
+                                                    {selectedQuestions.length}
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handlePreFinalizeCheck}
+                                                disabled={selectedQuestions.length === 0}
+                                                className="bg-navy text-gold hover:scale-105 disabled:opacity-30 disabled:pointer-events-none px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                                            >
+                                                <span>Preview Paper (Step 5)</span>
+                                                <span>→</span>
+                                            </button>
                                         {paperId && (
                                             <button
                                                 type="button"
@@ -1838,8 +2343,89 @@ export default function CreatePaper() {
                                     </div>
                                 </div>
 
+                                {/* Chapter Quota Progress Tracker Bar */}
+                                {effectiveChapters.length > 0 && (
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <span className="text-xs font-black text-navy uppercase tracking-wider flex items-center gap-1.5">
+                                                <span>🎯 Chapter Quotas Tracker</span>
+                                                <span className="text-[10px] bg-navy text-gold px-2 py-0.5 rounded-full">
+                                                    {selectedQuestions.length} / {targetLimit} Selected
+                                                </span>
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setChapterAllocations(calculateEqualChapterSplit(effectiveChapters, targetLimit))}
+                                                    className="text-[10px] font-bold text-slate-600 hover:text-navy px-2 py-1 rounded-lg bg-white border border-slate-200 shadow-2xs hover:bg-slate-100 transition cursor-pointer"
+                                                >
+                                                    ⚡ Equalize Quotas
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5">
+                                            {effectiveChapters.map(ch => {
+                                                const canonCh = canonicalizeChapterName(ch);
+                                                const selectedForCh = selectedQuestions.filter(q => canonicalizeChapterName(q.chapter || '') === canonCh).length;
+                                                const quota = chapterAllocations[ch] ?? (Math.round(targetLimit / effectiveChapters.length) || 0);
+                                                const isComplete = selectedForCh >= quota && quota > 0;
+                                                const isActiveFilter = singleFilterChapter === ch;
+
+                                                return (
+                                                    <div
+                                                        key={ch}
+                                                        className={`shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs transition-all shadow-2xs ${
+                                                            isActiveFilter
+                                                                ? 'bg-navy text-white border-navy ring-2 ring-gold/40'
+                                                                : isComplete
+                                                                ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                                                : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSingleFilterChapter(isActiveFilter ? '' : ch);
+                                                                setPageNumber(1);
+                                                            }}
+                                                            className="text-left font-bold truncate max-w-[140px] hover:underline cursor-pointer"
+                                                            title={`Filter pool by ${ch}`}
+                                                        >
+                                                            {ch}
+                                                        </button>
+                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${
+                                                            isActiveFilter
+                                                                ? 'bg-gold text-navy'
+                                                                : isComplete
+                                                                ? 'bg-emerald-600 text-white'
+                                                                : 'bg-slate-100 text-slate-700'
+                                                        }`}>
+                                                            {selectedForCh}/{quota} {isComplete ? '✓' : ''}
+                                                        </span>
+                                                        {!isComplete && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleAutoFillChapter(ch, Math.max(1, quota - selectedForCh))}
+                                                                title={`Auto-fill remaining ${Math.max(0, quota - selectedForCh)} questions for ${ch}`}
+                                                                className={`text-[10px] font-black px-1.5 py-0.5 rounded-md hover:scale-105 transition cursor-pointer ${
+                                                                    isActiveFilter
+                                                                        ? 'bg-white/20 text-gold hover:bg-white/30'
+                                                                        : 'bg-navy text-gold hover:bg-navy/80'
+                                                                }`}
+                                                            >
+                                                                +Fill
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Quick Filters & Search */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                                     <input
                                         type="text"
                                         placeholder="🔍 Search in pool..."
@@ -1852,10 +2438,20 @@ export default function CreatePaper() {
                                         onChange={e => { setSingleFilterChapter(e.target.value); setPageNumber(1); }}
                                         className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
                                     >
-                                        <option value="">All Scoped Chapters ({selectedChapters.length || distinctChapters.length})</option>
+                                        <option value="">All Chapters ({selectedChapters.length || distinctChapters.length})</option>
                                         {(selectedChapters.length > 0 ? selectedChapters : distinctChapters).map(ch => (
                                             <option key={ch} value={ch}>{ch}</option>
                                         ))}
+                                    </select>
+                                    <select
+                                        value={filterSource}
+                                        onChange={e => { setFilterSource(e.target.value); setPageNumber(1); }}
+                                        className="border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white"
+                                    >
+                                        <option value="">All Active Sources</option>
+                                        {selectedSources.includes('REGULAR') && <option value="REGULAR">🏛️ Question Bank</option>}
+                                        {selectedSources.includes('PYQ') && <option value="PYQ">📜 Previous Years (PYQ)</option>}
+                                        {selectedSources.includes('GT') && <option value="GT">🏆 Grand Tests (GT)</option>}
                                     </select>
                                     <select
                                         value={filterDifficulty}
@@ -1923,6 +2519,23 @@ export default function CreatePaper() {
                                                     {/* ── Top Breadcrumbs & Selection Bar ── */}
                                                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                                         <div className="flex items-center gap-1.5 text-xs text-slate-500 flex-wrap font-medium">
+                                                            {/* Source Badge */}
+                                                            {q.sourceType === 'PYQ' ? (
+                                                                <span className="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
+                                                                    <span>📜 PYQ</span>
+                                                                    {q.sourceExam && <span>: {q.sourceExam} {q.sourceYear ? `'${String(q.sourceYear).slice(-2)}` : ''}</span>}
+                                                                </span>
+                                                            ) : q.sourceType === 'GT' ? (
+                                                                <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1">
+                                                                    <span>🏆 GT</span>
+                                                                    {q.sourcePaperName && <span className="truncate max-w-[120px]">: {q.sourcePaperName}</span>}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md font-bold text-[10px]">
+                                                                    🏛️ Bank
+                                                                </span>
+                                                            )}
+                                                            <span>•</span>
                                                             <span className="text-navy font-bold uppercase tracking-wider">{q.subject || subject}</span>
                                                             <span>•</span>
                                                             <span>Class {q.classes?.[0] || selectedClass}</span>
@@ -2257,9 +2870,9 @@ export default function CreatePaper() {
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
-                    STEP 4: TRUE A4 PAGE-BY-PAGE PREVIEW + TOOLS
+                    STEP 5: TRUE A4 PAGE-BY-PAGE PREVIEW + ALIGNMENT + SAVE
                 ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 4 && (
+                {currentStep === 5 && (
                     <div className="space-y-6 animate-fade-in">
                         {validationResult && validationResult.issues.length > 0 && (
                             <div className="bg-amber-50 border-2 border-amber-300 p-4 rounded-2xl text-xs font-bold text-amber-900 no-print flex items-center justify-between">
@@ -2277,11 +2890,11 @@ export default function CreatePaper() {
                                 type="button"
                                 onClick={() => {
                                     setMethod('manual');
-                                    setCurrentStep(3);
+                                    setCurrentStep(4);
                                 }}
                                 className="bg-navy text-gold hover:scale-105 px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md cursor-pointer flex items-center gap-2"
                             >
-                                <span>←</span> ✏️ Edit / Change Questions
+                                <span>←</span> ✏️ Edit / Change Questions (Step 4)
                             </button>
 
                             <div className="flex items-center gap-2.5 flex-wrap">
@@ -2304,89 +2917,16 @@ export default function CreatePaper() {
                                     <span>💡</span> Solutions Guide
                                 </button>
                                 <button
-                                    onClick={() => setCurrentStep(5)}
-                                    className="bg-slate-100 hover:bg-slate-200 text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>⚙️</span> Alignment Controls →
-                                </button>
-                                <button
                                     onClick={handleFinalizeAndSave}
                                     disabled={saving}
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>✓</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
+                                    <span>💾</span> {saving ? 'Saving...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
                                 </button>
                             </div>
                         </div>
 
                         {/* A4 Paper Renderer */}
-                        <div className="w-full flex justify-center">
-                            <PaperRenderer
-                                paper={currentPaperObject}
-                                isAssignment={paperCategory === 'assignment'}
-                                activeTemplate={activeTemplate}
-                                settings={{ ...settings, startQNo, endQNo }}
-                                setSettings={setSettings}
-                                showSettingsPanel={false}
-                                onProceedToAlignment={() => setCurrentStep(5)}
-                                onProceedToFinalize={handleFinalizeAndSave}
-                                onDiagramResize={handleDiagramResize}
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* ══════════════════════════════════════════════════════════════
-                    STEP 5: ALIGNMENT & FINE-TUNING
-                ══════════════════════════════════════════════════════════════ */}
-                {currentStep === 5 && (
-                    <div className="space-y-6 animate-fade-in">
-                        <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-2xl border border-gray-200 shadow-sm gap-3 no-print">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setCurrentStep(4)}
-                                    className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                                >
-                                    ← Back to Preview
-                                </button>
-                                <button
-                                    onClick={() => setCurrentStep(3)}
-                                    className="bg-gray-100 text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer"
-                                >
-                                    ✏️ Edit Questions
-                                </button>
-                            </div>
-
-                            <div className="flex items-center gap-2.5 flex-wrap">
-                                <button
-                                    onClick={() => setShowAnalysisModal(true)}
-                                    className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>📊</span> View Analysis
-                                </button>
-                                <button
-                                    onClick={() => setShowAnswerKeyModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>🔑</span> Answer Key
-                                </button>
-                                <button
-                                    onClick={() => setShowSolutionsModal(true)}
-                                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>💡</span> Solutions Guide
-                                </button>
-                                <button
-                                    onClick={handleFinalizeAndSave}
-                                    disabled={saving}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center gap-2 cursor-pointer"
-                                >
-                                    <span>✓</span> {saving ? 'Finalizing...' : `Save ${paperCategory === 'assignment' ? 'Assignment' : 'Paper'}`}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Renderer with Alignment panel open */}
                         <div className="w-full flex justify-center">
                             <PaperRenderer
                                 paper={currentPaperObject}

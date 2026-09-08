@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Paper = require('../models/Paper');
+const Question = require('../models/Question');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const supabaseQuestions = require('../services/supabaseQuestions');
+const supabaseGtPyqQuestions = require('../services/supabaseGtPyqQuestions');
 const { createNotification } = require('./notifications');
 
 // Helper to record question usage and notify admin
@@ -45,7 +48,7 @@ async function handlePaperFinalization(paper, user, exam = null) {
     }
 }
 
-// Helper to populate paper questions from Supabase if stored as IDs
+// Helper to populate paper questions from Supabase & MongoDB if stored as IDs
 async function populatePaperQuestions(paper) {
     const pObj = paper.toObject ? paper.toObject() : paper;
     if (Array.isArray(pObj.questions) && pObj.questions.length > 0) {
@@ -56,11 +59,53 @@ async function populatePaperQuestions(paper) {
         const stringIds = pObj.questions.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(Boolean);
         if (stringIds.length > 0 && typeof pObj.questions[0] === 'string') {
             try {
-                const fetched = await supabaseQuestions.getQuestionsByIds(stringIds);
-                if (fetched && fetched.length > 0) {
-                    const fetchedMap = new Map(fetched.map(q => [(q._id || q.id).toString(), q]));
+                const fetchedMap = new Map();
+                
+                // 1. Try Primary Supabase (Question Bank)
+                const fetchedSupa = await supabaseQuestions.getQuestionsByIds(stringIds);
+                (fetchedSupa || []).forEach(q => fetchedMap.set((q._id || q.id).toString(), q));
+
+                // 2. Try Secondary Supabase (GT & PYQ Question DB) for missing UUIDs
+                const missingUuidIds = stringIds.filter(id => !fetchedMap.has(id.toString()));
+                if (missingUuidIds.length > 0) {
+                    const fetchedGtPyq = await supabaseGtPyqQuestions.getQuestionsByIds(missingUuidIds);
+                    (fetchedGtPyq || []).forEach(q => fetchedMap.set((q._id || q.id).toString(), q));
+                }
+
+                // 3. For any IDs still missing, try MongoDB Question model
+                const missingIds = stringIds.filter(id => !fetchedMap.has(id.toString()) && mongoose.Types.ObjectId.isValid(id));
+                if (missingIds.length > 0) {
+                    const mongoDocs = await Question.find({ _id: { $in: missingIds } }).lean();
+                    (mongoDocs || []).forEach(mq => {
+                        fetchedMap.set(mq._id.toString(), {
+                            _id: mq._id.toString(),
+                            id: mq._id.toString(),
+                            questionId: mq.questionId || mq._id.toString(),
+                            subject: mq.subject,
+                            classes: Array.isArray(mq.classes) ? mq.classes : [mq.classes || '12'],
+                            chapter: mq.chapter || 'General',
+                            concept: mq.concept || mq.chapter || 'General',
+                            subConcept: mq.subConcept || '',
+                            level: mq.level || 'medium',
+                            type: mq.type || 'MCQ',
+                            questionText: mq.questionText,
+                            imageUrl: mq.imageUrl || null,
+                            solutionImageUrl: mq.solutionImageUrl || null,
+                            options: Array.isArray(mq.options) ? mq.options : [],
+                            matchPairs: Array.isArray(mq.matchPairs) ? mq.matchPairs : [],
+                            answer: mq.answer || '',
+                            solutionText: mq.solutionText || '',
+                            sourceType: mq.sourceType || 'REGULAR',
+                            sourceExam: mq.sourceExam || '',
+                            sourceYear: mq.sourceYear || null,
+                            sourcePaperName: mq.sourcePaperName || '',
+                        });
+                    });
+                }
+
+                if (fetchedMap.size > 0) {
                     const ordered = stringIds.map(id => fetchedMap.get(id.toString())).filter(Boolean);
-                    pObj.questions = ordered.length > 0 ? ordered : fetched;
+                    pObj.questions = ordered.length > 0 ? ordered : (pObj.questionObjects || []);
                 } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
                     pObj.questions = pObj.questionObjects;
                 }
