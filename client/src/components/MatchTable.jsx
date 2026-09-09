@@ -18,84 +18,104 @@ import MathRenderer from './MathRenderer';
 export function parseMTFFromText(text) {
     if (!text || typeof text !== 'string') return null;
 
-    // Fast check: must have indicators of two columns or match lists
     const hasMTFKeyword = /match\s+(?:the\s+)?(?:list|column|pairs?)|(?:column|list)\s*[-–—\s]*I\b/i.test(text);
     if (!hasMTFKeyword) return null;
 
-    let c1Match = null;
-    let c2Match = null;
+    const clean = text.replace(/\*\*/g, '');
 
-    // Strategy 1: Look for markdown bold **Column I** / **List-I** and **Column II** / **List-II**
-    const boldC1 = text.match(/\*{2}(?:Column|List)\s*[-–—\s]*(?:I|1|A)\*{2}/i);
-    const boldC2 = text.match(/\*{2}(?:Column|List)\s*[-–—\s]*(?:II|2|B)\*{2}/i);
+    let searchStart = 0;
+    const introSentenceMatch = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+(?:the\s+)?(?:following\s+)?(?:items\s+in\s+)?(?:Column|List)\s*[-–—\s]*(?:I|1|A)\s+with\s+(?:Column|List)\s*[-–—\s]*(?:II|2|B)[^.\n]*[.\n:\-]?\s*/i);
+    if (introSentenceMatch) {
+        searchStart = introSentenceMatch[0].length;
+    }
 
-    if (boldC1 && boldC2 && boldC1.index < boldC2.index) {
-        c1Match = boldC1;
-        c2Match = boldC2;
-    } else {
-        // Strategy 2: Look for non-bold Column I / Column II (avoiding "List-I with List-II" in introduction)
-        const allC1 = [...text.matchAll(/(?:\n|<br\s*\/?>|\.|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)(?:\s*[:\-])?/gi)];
-        const allC2 = [...text.matchAll(/(?:\n|<br\s*\/?>|\.|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)(?:\s*[:\-])?/gi)];
+    const c1Regex = /(?:^|\n|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)(?:\s*[:\-])?/i;
+    const c2Regex = /(?:^|\n|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)(?:\s*[:\-])?/i;
 
-        for (const m1 of allC1) {
-            const afterM1 = text.substring(m1.index, m1.index + 25);
-            if (/with|and\s+list/i.test(afterM1)) continue;
+    let col1Offset = -1;
+    let col1HeaderLen = 0;
+    let col2Offset = -1;
+    let col2HeaderLen = 0;
 
-            for (const m2 of allC2) {
-                if (m2.index > m1.index) {
-                    c1Match = m1;
-                    c2Match = m2;
+    const textToSearch = clean.substring(searchStart);
+    const m1 = textToSearch.match(c1Regex);
+    if (m1) {
+        col1Offset = searchStart + m1.index;
+        col1HeaderLen = m1[0].length;
+        const afterC1 = clean.substring(col1Offset + col1HeaderLen);
+        const m2 = afterC1.match(c2Regex);
+        if (m2) {
+            col2Offset = col1Offset + col1HeaderLen + m2.index;
+            col2HeaderLen = m2[0].length;
+        }
+    }
+
+    if (col1Offset === -1 || col2Offset === -1) {
+        const allC1 = [...clean.matchAll(/(?:\n|^|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)(?:\s*[:\-])?/gi)];
+        const allC2 = [...clean.matchAll(/(?:\n|^|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)(?:\s*[:\-])?/gi)];
+
+        for (const c1 of allC1) {
+            const snippet = clean.substring(c1.index, c1.index + 35);
+            if (/with\s+(?:Column|List)/i.test(snippet)) continue;
+
+            for (const c2 of allC2) {
+                if (c2.index > c1.index) {
+                    col1Offset = c1.index;
+                    col1HeaderLen = c1[0].length;
+                    col2Offset = c2.index;
+                    col2HeaderLen = c2[0].length;
                     break;
                 }
             }
-            if (c1Match && c2Match) break;
+            if (col1Offset !== -1 && col2Offset !== -1) break;
         }
     }
 
-    if (!c1Match || !c2Match) return null;
+    if (col1Offset === -1 || col2Offset === -1) return null;
 
-    const stem = text.substring(0, c1Match.index).trim();
-    const col1Header = c1Match[0].replace(/[\*\n\r:]/g, '').trim() || 'Column I';
-    const col2Header = c2Match[0].replace(/[\*\n\r:]/g, '').trim() || 'Column II';
+    const stem = clean.substring(0, col1Offset).trim();
+    const col1Header = clean.substring(col1Offset, col1Offset + col1HeaderLen).replace(/[\*\n\r:]/g, '').trim() || 'Column I';
+    const col2Header = clean.substring(col2Offset, col2Offset + col2HeaderLen).replace(/[\*\n\r:]/g, '').trim() || 'Column II';
 
-    const col1Raw = text.substring(c1Match.index + c1Match[0].length, c2Match.index).trim();
-    const col2Raw = text.substring(c2Match.index + c2Match[0].length).trim();
+    let col1Raw = clean.substring(col1Offset + col1HeaderLen, col2Offset).trim();
+    let col2Raw = clean.substring(col2Offset + col2HeaderLen).trim();
 
-    function extractItems(raw, defaultLabels) {
+    col2Raw = col2Raw.replace(/(?:\n|\s)*(?:(?:\([1-4A-D]\)|[1-4A-D]\.|\b(?:Codes?|Options?))\s*(?:[a-d][\-–—\s]*\(?[ivx0-9p-t]+\)?[\s,;]*)+|(?:\([1-4A-D]\)\s+[A-Da-d][\-–—].*)|(?:Choose|Select)\s+(?:the\s+)?correct[\s\S]*)$/i, '').trim();
+
+    function extractItems(raw, isLeft = true, defaultLabels) {
         if (!raw) return [];
 
-        // 1. Try explicit labels: (A), (B), (C), (D) or (p), (q), (r), (s) or (i), (ii), (iii), (iv) or a), b), c), d) or 1., 2., 3., 4.
-        const labelRegex = /(?:^\s*|\s+)(?:\(([A-Za-z0-9ivxLCDM]+)\)|([A-Za-z0-9ivxLCDM]+)[\.\)]|\b([pqrstuvw])\)|\b([a-d])\))\s*/gi;
-        const matches = [...raw.matchAll(labelRegex)];
+        const lines = raw.split(/\r\n|\n|<br\s*\/?>/i).map(l => l.trim()).filter(Boolean);
+        if (lines.length >= 2) {
+            return lines.map((l, idx) => {
+                const cleaned = l.replace(/^[\(\[]?\s*(?:[A-Za-z0-9ivxIVX]+|[p-tP-T])\s*[\)\]\.:\-]\s*/, '').trim();
+                const label = isLeft ? `(${String.fromCharCode(97 + idx)})` : `(${['i','ii','iii','iv','v','vi'][idx] || (idx+1)})`;
+                return { label, content: cleaned || l };
+            });
+        }
 
+        const strictLabelRegex = isLeft
+            ? /(?:^|\s)(?:\(([a-eA-E])\)|([a-eA-E])[\.\:\-])\s+/g
+            : /(?:^|\s)(?:\(([1-6]|i{1,3}|iv|v|vi|[p-tP-T])\)|([1-6]|i{1,3}|iv|v|vi|[p-tP-T])[\.\:\-])\s+/g;
+
+        const matches = [...raw.matchAll(strictLabelRegex)];
         if (matches.length >= 2) {
             const items = [];
             for (let i = 0; i < matches.length; i++) {
-                const fullMatch = matches[i][0];
-                const cleanLabel = matches[i][1] || matches[i][2] || matches[i][3] || matches[i][4] || fullMatch.trim();
-                const start = matches[i].index + fullMatch.length;
+                const start = matches[i].index + matches[i][0].length;
                 const end = i < matches.length - 1 ? matches[i + 1].index : raw.length;
-                const content = raw.substring(start, end).trim();
-                items.push({ label: `(${cleanLabel})`, content });
+                const piece = raw.substring(start, end).trim();
+                const label = isLeft ? `(${String.fromCharCode(97 + i)})` : `(${['i','ii','iii','iv','v','vi'][i] || (i+1)})`;
+                if (piece) items.push({ label, content: piece });
             }
-            return items;
+            if (items.length >= 2) return items;
         }
 
-        // 2. Try splitting by newlines or <br>
-        const lines = raw.split(/\r\n|\n|<br\s*\/?>/i).map(l => l.trim()).filter(Boolean);
-        if (lines.length >= 2) {
-            return lines.map((l, idx) => ({
-                label: defaultLabels[idx] || `(${idx + 1})`,
-                content: l
-            }));
-        }
-
-        // 3. Fallback: single item
         return [{ label: defaultLabels[0] || '(1)', content: raw }];
     }
 
-    const items1 = extractItems(col1Raw, ['(A)', '(B)', '(C)', '(D)', '(E)']);
-    const items2 = extractItems(col2Raw, ['(p)', '(q)', '(r)', '(s)', '(t)']);
+    const items1 = extractItems(col1Raw, true, ['(a)', '(b)', '(c)', '(d)', '(e)']);
+    const items2 = extractItems(col2Raw, false, ['(i)', '(ii)', '(iii)', '(iv)', '(v)']);
 
     if (items1.length === 0 && items2.length === 0) return null;
 

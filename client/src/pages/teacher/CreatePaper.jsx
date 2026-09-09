@@ -771,18 +771,48 @@ export default function CreatePaper() {
         setEditingQuestionModal(null);
     };
 
+    // Helper to get normalized signature for deduplication
+    const getQuestionSignature = (q) => {
+        if (!q) return '';
+        const raw = (q.questionText || q.question || '').toLowerCase()
+            .replace(/\\(?:textbf|textit|mathrm|text|bm)\{([^}]*)\}/g, '$1')
+            .replace(/[^a-z0-9]/g, '');
+        return raw.slice(0, 160);
+    };
+
     // Auto Fetch Generator
     const handleGenerateAuto = () => {
+        const usedIds = new Set();
+        const usedSignatures = new Set();
+
+        const isUnused = (q) => {
+            if (!q) return false;
+            const id = (q._id || q.id || '').toString();
+            const sig = getQuestionSignature(q);
+            if (id && usedIds.has(id)) return false;
+            if (sig && sig.length > 20 && usedSignatures.has(sig)) return false;
+            return true;
+        };
+
+        const markUsed = (q) => {
+            if (!q) return;
+            const id = (q._id || q.id || '').toString();
+            const sig = getQuestionSignature(q);
+            if (id) usedIds.add(id);
+            if (sig && sig.length > 20) usedSignatures.add(sig);
+        };
+
+        const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
         // If specific chapter quotas are configured, generate strictly adhering to per-chapter allocations
         if (selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0) {
             const combined = [];
-            const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
 
             for (const chName of selectedChapters) {
                 const qty = parseInt(chapterQuotas[chName], 10) || 0;
                 if (qty <= 0) continue;
 
-                const chPool = scopedQuestionPool.filter(q => q.chapter === chName);
+                const chPool = scopedQuestionPool.filter(q => q.chapter === chName && isUnused(q));
                 if (chPool.length === 0) continue;
 
                 const easyTarget = Math.round(qty * (autoDist.easy / 100));
@@ -793,16 +823,42 @@ export default function CreatePaper() {
                 const medPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
                 const hardPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
 
-                const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
-                const pickedMed = shuffle(medPool).slice(0, medTarget);
-                const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+                const pickedEasy = [];
+                for (const q of shuffle(easyPool)) {
+                    if (pickedEasy.length >= easyTarget) break;
+                    if (isUnused(q)) {
+                        pickedEasy.push(q);
+                        markUsed(q);
+                    }
+                }
+
+                const pickedMed = [];
+                for (const q of shuffle(medPool)) {
+                    if (pickedMed.length >= medTarget) break;
+                    if (isUnused(q)) {
+                        pickedMed.push(q);
+                        markUsed(q);
+                    }
+                }
+
+                const pickedHard = [];
+                for (const q of shuffle(hardPool)) {
+                    if (pickedHard.length >= hardTarget) break;
+                    if (isUnused(q)) {
+                        pickedHard.push(q);
+                        markUsed(q);
+                    }
+                }
 
                 let chCombined = [...pickedEasy, ...pickedMed, ...pickedHard];
-                const usedIds = new Set(chCombined.map(q => q._id || q.id));
 
                 if (chCombined.length < qty) {
-                    const remainder = chPool.filter(q => !usedIds.has(q._id || q.id));
-                    chCombined.push(...shuffle(remainder).slice(0, qty - chCombined.length));
+                    const remainder = chPool.filter(q => isUnused(q));
+                    for (const q of shuffle(remainder)) {
+                        if (chCombined.length >= qty) break;
+                        chCombined.push(q);
+                        markUsed(q);
+                    }
                 }
                 combined.push(...chCombined);
             }
@@ -826,22 +882,46 @@ export default function CreatePaper() {
         const medTarget = Math.round(count * (autoDist.medium / 100));
         const hardTarget = Math.max(0, count - easyTarget - medTarget);
 
-        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy' && isUnused(q));
+        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium' && isUnused(q));
+        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard' && isUnused(q));
 
-        const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+        const pickedEasy = [];
+        for (const q of shuffle(easyPool)) {
+            if (pickedEasy.length >= easyTarget) break;
+            if (isUnused(q)) {
+                pickedEasy.push(q);
+                markUsed(q);
+            }
+        }
 
-        const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
-        const pickedMed = shuffle(medPool).slice(0, medTarget);
-        const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+        const pickedMed = [];
+        for (const q of shuffle(medPool)) {
+            if (pickedMed.length >= medTarget) break;
+            if (isUnused(q)) {
+                pickedMed.push(q);
+                markUsed(q);
+            }
+        }
+
+        const pickedHard = [];
+        for (const q of shuffle(hardPool)) {
+            if (pickedHard.length >= hardTarget) break;
+            if (isUnused(q)) {
+                pickedHard.push(q);
+                markUsed(q);
+            }
+        }
 
         let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
-        const usedIds = new Set(combined.map(q => q._id || q.id));
 
         if (combined.length < count) {
-            const remainder = scopedQuestionPool.filter(q => !usedIds.has(q._id || q.id));
-            combined.push(...shuffle(remainder).slice(0, count - combined.length));
+            const remainder = scopedQuestionPool.filter(q => isUnused(q));
+            for (const q of shuffle(remainder)) {
+                if (combined.length >= count) break;
+                combined.push(q);
+                markUsed(q);
+            }
         }
 
         setSelectedQuestions(combined);

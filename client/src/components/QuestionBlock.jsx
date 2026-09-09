@@ -680,79 +680,120 @@ function parseMatchFromText(q) {
         }
         return { introText: cleanQuestionText(q.questionText || q.question || ''), pairs };
     }
-    let txt = cleanQuestionText(q.questionText || q.question || '');
+    const txt = cleanQuestionText(q.questionText || q.question || '');
     if (!txt) return { introText: '', pairs: [] };
 
     // Strip bold asterisks from Column/List headers
     const clean = txt.replace(/\*\*/g, '');
 
     // Check if introductory match phrase exists: e.g. "Match Column I with Column II."
-    const introM = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+(?:the\s+following\s+)?(?:items\s+in\s+)?(?:Column|List)\s*(?:I|A)\s+with\s+(?:Column|List)\s*(?:II|B)[.:\-]?\s*/i);
-    let introText = introM ? introM[0].trim() : 'Match Column I with Column II:';
-    let searchFrom = introM ? introM[0].length : 0;
+    let searchStart = 0;
+    const introSentenceMatch = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+(?:the\s+)?(?:following\s+)?(?:items\s+in\s+)?(?:Column|List)\s*[-–—\s]*(?:I|1|A)\s+with\s+(?:Column|List)\s*[-–—\s]*(?:II|2|B)[^.\n]*[.\n:\-]?\s*/i);
+    if (introSentenceMatch) {
+        searchStart = introSentenceMatch[0].length;
+    }
 
-    // Search for actual Column I / List I and Column II / List II headers
-    const col1Idx = clean.toLowerCase().indexOf('column i', searchFrom) !== -1 
-        ? clean.toLowerCase().indexOf('column i', searchFrom) 
-        : (clean.toLowerCase().indexOf('list i', searchFrom) !== -1 ? clean.toLowerCase().indexOf('list i', searchFrom) : clean.toLowerCase().indexOf('column a', searchFrom));
-        
-    const col2Idx = clean.toLowerCase().indexOf('column ii', searchFrom) !== -1 
-        ? clean.toLowerCase().indexOf('column ii', searchFrom) 
-        : (clean.toLowerCase().indexOf('list ii', searchFrom) !== -1 ? clean.toLowerCase().indexOf('list ii', searchFrom) : clean.toLowerCase().indexOf('column b', searchFrom));
+    const c1Regex = /(?:^|\n|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)(?:\s*[:\-])?/i;
+    const c2Regex = /(?:^|\n|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)(?:\s*[:\-])?/i;
 
-    if (col1Idx !== -1 && col2Idx !== -1 && col2Idx > col1Idx) {
-        const col1HeaderMatch = clean.substring(col1Idx).match(/^(?:Column|List)\s*(?:I|A)\b[:\-]?\s*/i);
-        const col2HeaderMatch = clean.substring(col2Idx).match(/^(?:Column|List)\s*(?:II|B)\b[:\-]?\s*/i);
-        
-        const col1HeaderLen = col1HeaderMatch ? col1HeaderMatch[0].length : 8;
-        const col2HeaderLen = col2HeaderMatch ? col2HeaderMatch[0].length : 9;
+    let col1Offset = -1;
+    let col1HeaderLen = 0;
+    let col2Offset = -1;
+    let col2HeaderLen = 0;
 
-        let rawCol1 = clean.substring(col1Idx + col1HeaderLen, col2Idx).trim();
-        let rawCol2 = clean.substring(col2Idx + col2HeaderLen).replace(/(?:Choose|Select)\s+(?:the\s+)?correct[\s\S]*$/i, '').trim();
+    const textToSearch = clean.substring(searchStart);
+    const m1 = textToSearch.match(c1Regex);
+    if (m1) {
+        col1Offset = searchStart + m1.index;
+        col1HeaderLen = m1[0].length;
+        const afterC1 = clean.substring(col1Offset + col1HeaderLen);
+        const m2 = afterC1.match(c2Regex);
+        if (m2) {
+            col2Offset = col1Offset + col1HeaderLen + m2.index;
+            col2HeaderLen = m2[0].length;
+        }
+    }
 
-        const splitSmart = (colStr, isLeft = true) => {
-            if (!colStr) return [];
-            // 1. Explicit (A)/(a)/(1)/(i) labels
-            const labeled = [];
-            const itemRegex = /(?:^|\s)(?:\(([a-z0-9ivx]+)\)|([a-z0-9ivx]+)[\.:\-])\s*([\s\S]*?)(?=(?:\s(?:\([a-z0-9ivx]+\)|[a-z0-9ivx]+[\.:\-]))|$)/gi;
-            let m;
-            while ((m = itemRegex.exec(colStr)) !== null) {
-                const text = cleanStatementText(m[3]);
-                if (text && !/^(?:with|Column|List)$/i.test(text)) {
-                    labeled.push(text);
+    // Fallback: search anywhere in clean (skipping "Column I with Column II")
+    if (col1Offset === -1 || col2Offset === -1) {
+        const allC1 = [...clean.matchAll(/(?:\n|^|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)(?:\s*[:\-])?/gi)];
+        const allC2 = [...clean.matchAll(/(?:\n|^|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)(?:\s*[:\-])?/gi)];
+
+        for (const c1 of allC1) {
+            const snippet = clean.substring(c1.index, c1.index + 35);
+            if (/with\s+(?:Column|List)/i.test(snippet)) continue;
+
+            for (const c2 of allC2) {
+                if (c2.index > c1.index) {
+                    col1Offset = c1.index;
+                    col1HeaderLen = c1[0].length;
+                    col2Offset = c2.index;
+                    col2HeaderLen = c2[0].length;
+                    break;
                 }
             }
-            if (labeled.length >= 2) return labeled;
-
-            // 2. Newlines or HTML breaks
-            if (colStr.includes('\n') || colStr.includes('<br')) {
-                const lines = colStr.split(/(?:\n|<br\s*\/?>)+/).map(s => cleanStatementText(s.replace(/^[\(\[]?[A-Da-d0-9ivxIVX]+[\)\]\.:\-]\s*/, ''))).filter(s => s && !/^(?:with|Column|List)$/i.test(s));
-                if (lines.length >= 2) return lines;
-            }
-
-            // 3. Capitalized phrase chunking (e.g. Dicot root Monocot root Dicot leaf Monocot leaf)
-            const chunks = colStr.match(/[A-Z][a-z0-9_\-\/]*(?:\s+[a-z0-9_\-\/]+)*/g);
-            if (chunks && chunks.length >= 2 && chunks.length <= 8) {
-                return chunks.map(s => s.trim()).filter(Boolean);
-            }
-
-            return [];
-        };
-
-        const leftItems = splitSmart(rawCol1, true);
-        const rightItems = splitSmart(rawCol2, false);
-
-        if (leftItems.length >= 2 && rightItems.length >= 2) {
-            const maxLen = Math.max(leftItems.length, rightItems.length);
-            const pairs = [];
-            for (let i = 0; i < maxLen; i++) {
-                pairs.push({
-                    left: leftItems[i] || '',
-                    right: rightItems[i] || ''
-                });
-            }
-            return { introText: introText || 'Match Column I with Column II:', pairs };
+            if (col1Offset !== -1 && col2Offset !== -1) break;
         }
+    }
+
+    if (col1Offset === -1 || col2Offset === -1) return { introText: txt, pairs: [] };
+
+    let introText = clean.substring(0, col1Offset).trim();
+    if (!introText || introText.length < 10 || /^(?:Match|Connect|Pair)\s+(?:the\s+)?(?:Column|List)?\s*(?:I|A)?\s*(?:with|and)?$/i.test(introText)) {
+        introText = 'Match Column I with Column II:';
+    }
+
+    let rawCol1 = clean.substring(col1Offset + col1HeaderLen, col2Offset).trim();
+    let rawCol2 = clean.substring(col2Offset + col2HeaderLen).trim();
+
+    // Strip trailing answer options e.g. (1) a-(i), b-(ii)... or Codes: or Choose correct option
+    rawCol2 = rawCol2.replace(/(?:\n|\s)*(?:(?:\([1-4A-D]\)|[1-4A-D]\.|\b(?:Codes?|Options?))\s*(?:[a-d][\-–—\s]*\(?[ivx0-9p-t]+\)?[\s,;]*)+|(?:\([1-4A-D]\)\s+[A-Da-d][\-–—].*)|(?:Choose|Select)\s+(?:the\s+)?correct[\s\S]*)$/i, '').trim();
+
+    const extractItems = (colStr, isLeft = true) => {
+        if (!colStr) return [];
+
+        // 1. Split by newlines first
+        const rawLines = colStr.split(/\n+/).map(l => l.trim()).filter(Boolean);
+        if (rawLines.length >= 2) {
+            const cleaned = rawLines.map(l => {
+                return l.replace(/^[\(\[]?\s*(?:[A-Za-z0-9ivxIVX]+|[p-tP-T])\s*[\)\]\.:\-]\s*/, '').trim();
+            }).filter(Boolean);
+            if (cleaned.length >= 2) return cleaned;
+        }
+
+        // 2. Strict inline labels: (a)-(e) for left, (i)-(vi)/(1)-(6)/(p)-(t) for right
+        const strictLabelRegex = isLeft
+            ? /(?:^|\s)(?:\(([a-eA-E])\)|([a-eA-E])[\.\:\-])\s+/g
+            : /(?:^|\s)(?:\(([1-6]|i{1,3}|iv|v|vi|[p-tP-T])\)|([1-6]|i{1,3}|iv|v|vi|[p-tP-T])[\.\:\-])\s+/g;
+
+        const matches = [...colStr.matchAll(strictLabelRegex)];
+        if (matches.length >= 2) {
+            const items = [];
+            for (let i = 0; i < matches.length; i++) {
+                const start = matches[i].index + matches[i][0].length;
+                const end = i < matches.length - 1 ? matches[i + 1].index : colStr.length;
+                const piece = colStr.substring(start, end).trim();
+                if (piece) items.push(piece);
+            }
+            if (items.length >= 2) return items;
+        }
+
+        return rawLines.length > 0 ? rawLines : [colStr];
+    };
+
+    const leftItems = extractItems(rawCol1, true);
+    const rightItems = extractItems(rawCol2, false);
+
+    if (leftItems.length >= 2 && rightItems.length >= 2) {
+        const maxLen = Math.max(leftItems.length, rightItems.length);
+        const pairs = [];
+        for (let i = 0; i < maxLen; i++) {
+            pairs.push({
+                left: leftItems[i] || '',
+                right: rightItems[i] || ''
+            });
+        }
+        return { introText, pairs };
     }
 
     return { introText: txt, pairs: [] };

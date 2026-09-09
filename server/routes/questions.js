@@ -132,16 +132,48 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
 
-        let combinedQuestions = [];
-        let totalCount = 0;
+        const getQuestionSignature = (q) => {
+            if (!q) return '';
+            const raw = (q.questionText || q.question || '').toLowerCase()
+                .replace(/\\(?:textbf|textit|mathrm|text|bm)\{([^}]*)\}/g, '$1')
+                .replace(/[^a-z0-9]/g, '');
+            return raw.slice(0, 160);
+        };
+
+        const existingIds = new Set();
+        const existingSignatures = new Set();
+
+        const addUniqueQuestions = (questionsList, isGtPyqFilter = false) => {
+            (questionsList || []).forEach(q => {
+                if (!q) return;
+                const id = (q._id || q.id || '').toString();
+                const sig = getQuestionSignature(q);
+
+                if (isGtPyqFilter) {
+                    const isGT = q.sourceType === 'GT';
+                    const isPYQ = q.sourceType === 'PYQ';
+                    if (!((isGT && includeGT) || (isPYQ && includePYQ) || (!isGT && !isPYQ))) {
+                        return;
+                    }
+                }
+
+                if (id && existingIds.has(id)) return;
+                if (sig && sig.length > 20 && existingSignatures.has(sig)) return;
+
+                if (id) existingIds.add(id);
+                if (sig && sig.length > 20) existingSignatures.add(sig);
+
+                combinedQuestions.push(q);
+                totalCount++;
+            });
+        };
 
         // 1. Fetch from Supabase (Standard Question Bank) if enabled
         if (includeBank) {
             try {
                 const result = await supabaseQuestions.getQuestions(filters, page, limit);
                 if (result && Array.isArray(result.questions)) {
-                    combinedQuestions.push(...result.questions);
-                    totalCount += result.pagination?.total || result.questions.length;
+                    addUniqueQuestions(result.questions);
                 }
             } catch (supaErr) {
                 console.warn('[QUESTIONS GET] Supabase fetch warning:', supaErr.message);
@@ -153,18 +185,7 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
             try {
                 const gtPyqResult = await supabaseGtPyqQuestions.getQuestions(filters, page, limit);
                 if (gtPyqResult && Array.isArray(gtPyqResult.questions)) {
-                    const existingIds = new Set(combinedQuestions.map(q => (q._id || q.id || '').toString()));
-                    gtPyqResult.questions.forEach(gq => {
-                        const isGT = gq.sourceType === 'GT';
-                        const isPYQ = gq.sourceType === 'PYQ';
-                        if ((isGT && includeGT) || (isPYQ && includePYQ) || (!isGT && !isPYQ)) {
-                            if (!existingIds.has(gq.id)) {
-                                combinedQuestions.push(gq);
-                                existingIds.add(gq.id);
-                                totalCount++;
-                            }
-                        }
-                    });
+                    addUniqueQuestions(gtPyqResult.questions, true);
                 }
             } catch (gtPyqErr) {
                 console.warn('[QUESTIONS GET] GT/PYQ Supabase fetch warning:', gtPyqErr.message);
@@ -249,14 +270,7 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
                     };
                 });
 
-                // Deduplicate with existing
-                const existingIds = new Set(combinedQuestions.map(q => (q._id || q.id || '').toString()));
-                mappedMongo.forEach(mq => {
-                    if (!existingIds.has(mq.id)) {
-                        combinedQuestions.push(mq);
-                        totalCount++;
-                    }
-                });
+                addUniqueQuestions(mappedMongo);
             } catch (mongoErr) {
                 console.warn('[QUESTIONS GET] Mongo fetch warning:', mongoErr.message);
             }
