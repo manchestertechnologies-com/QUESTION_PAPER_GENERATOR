@@ -113,6 +113,7 @@ export default function A4PaperEngine({
                                 templateUrl={activeTemplate?.fileUrl}
                                 isAssignment={isAssignment}
                                 setName={paper?.setName || 'P'}
+                                institutionName={paper?.institutionName}
                             />
                         </div>
 

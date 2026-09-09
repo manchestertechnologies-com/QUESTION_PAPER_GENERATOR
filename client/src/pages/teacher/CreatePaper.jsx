@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CreatePaper.jsx
  *
  * Ultra-Fast & High-Quality Assessment & Assignment Generation Suite
@@ -104,9 +104,27 @@ export default function CreatePaper() {
 
     // Chapter-wise Question Quotas (e.g. { "Electric Charges and Fields": 20, "Current Electricity": 20 })
     const [chapterQuotas, setChapterQuotas] = useState({});
+    // Chapter-wise Previous Year Questions (PYQ) Option
+    const [chapterPyqOptions, setChapterPyqOptions] = useState({});
 
     // Question Source Repositories (Subject Database vs PYQ/Grand Tests qbp-control)
     const [selectedSources, setSelectedSources] = useState(['subject', 'qbp_control']);
+
+    // Current Quota Tracker & Cap Resolution
+    const currentQuotaKey = useMemo(() => {
+        if (paperCategory === 'assignment' || examType === 'ASSIGNMENT' || examType === 'ASSESSMENT' || examType === 'BOARD') return 'assessment';
+        const norm = String(examType || '').toUpperCase();
+        if (norm.includes('JEE')) return 'jee';
+        if (norm.includes('NEET')) return 'neet';
+        if (norm.includes('CET')) return 'cet';
+        return 'assessment';
+    }, [paperCategory, examType]);
+
+    const currentQuotaInfo = useMemo(() => {
+        return user?.quotas?.[currentQuotaKey] || { used: 0, max: 2, maxQuestions: currentQuotaKey === 'assessment' ? 60 : 240 };
+    }, [user, currentQuotaKey]);
+
+    const isQuotaExceeded = Boolean(user?.isTrial !== false && user?.role === 'teacher' && (currentQuotaInfo.used >= currentQuotaInfo.max));
 
     // Fast Meta state (loaded in < 50ms)
     const [metaData, setMetaData] = useState({ total: 0, chapters: [], concepts: [] });
@@ -844,7 +862,19 @@ export default function CreatePaper() {
 
     // Finalize and Save Paper
     const handleFinalizeAndSave = async () => {
-        if (selectedQuestions.length === 0) return alert('No questions selected.');
+        if (selectedQuestions.length === 0) return alert('Please select at least 1 question.');
+        
+        // Quota Limit Validation for Trial Teachers
+        if (isQuotaExceeded) {
+            alert(`Trial quota limit reached for ${currentQuotaKey.toUpperCase()}. You have generated ${currentQuotaInfo.used}/${currentQuotaInfo.max} allowed papers. Please contact your institution administrator.`);
+            return;
+        }
+
+        if (user?.isTrial !== false && user?.role === 'teacher' && selectedQuestions.length > currentQuotaInfo.maxQuestions) {
+            alert(`Maximum allowed questions for ${currentQuotaKey.toUpperCase()} trial paper is ${currentQuotaInfo.maxQuestions} (currently selected ${selectedQuestions.length}). Please reduce your question count.`);
+            return;
+        }
+
         setSaving(true);
 
         try {
@@ -855,11 +885,13 @@ export default function CreatePaper() {
                 examId: examId || undefined,
                 duration: duration || (paperCategory === 'assignment' ? null : '180 Minutes'),
                 isAssignment: paperCategory === 'assignment',
+                examType: paperCategory === 'assignment' ? 'ASSIGNMENT' : examType,
                 startQNo: startQNo || 1,
                 endQNo: endQNo || (startQNo + selectedQuestions.length - 1),
                 questions: selectedQuestions.map(q => q._id || q.id),
                 questionObjects: selectedQuestions,
                 difficultyDistribution: autoDist,
+                institutionName: user?.institutionName || 'Manchester College',
                 status: user?.role === 'admin' ? 'Approved' : 'Pending Approval',
             };
 
@@ -870,7 +902,7 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
-            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now saved in Department Archives.`);
+            alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Question Paper'} successfully saved! It is now recorded in Department Archives.`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
             } else {
@@ -878,7 +910,8 @@ export default function CreatePaper() {
             }
         } catch (err) {
             console.error('Error saving paper:', err);
-            alert('Failed to save paper. Please verify details and try again.');
+            const errMsg = err.response?.data?.msg || 'Failed to save paper. Please verify details and try again.';
+            alert(`Error: ${errMsg}`);
         } finally {
             setSaving(false);
         }
@@ -919,8 +952,9 @@ export default function CreatePaper() {
             questions: displayQuestions,
             examType: paperCategory === 'assignment' ? 'ASSIGNMENT' : examType,
             isAssignment: paperCategory === 'assignment',
+            institutionName: user?.institutionName || 'Manchester College',
         };
-    }, [paperId, title, paperCategory, subject, selectedClass, duration, selectedQuestions, examType, startQNo, endQNo]);
+    }, [paperId, title, paperCategory, subject, selectedClass, duration, selectedQuestions, examType, startQNo, endQNo, user]);
 
     return (
         <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -978,12 +1012,34 @@ export default function CreatePaper() {
                 ══════════════════════════════════════════════════════════════ */}
                 {currentStep === 1 && (
                     <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-200 animate-fade-in space-y-8">
-                        <div className="border-b border-gray-100 pb-4">
-                            <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 1 of 5</span>
-                            <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Academic Scope & Syllabus Setup</h2>
-                            <p className="text-xs text-gray-500 font-medium mt-1">
-                                Choose mode, specify details, and check multiple chapters and concepts to customize your question pool.
-                            </p>
+                        <div className="border-b border-gray-100 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <span className="text-[10px] font-black text-gold uppercase tracking-[0.2em] bg-navy px-3 py-1 rounded-full">Step 1 of 5</span>
+                                <h2 className="text-2xl font-black text-navy mt-2 uppercase tracking-tight">Academic Scope & Syllabus Setup</h2>
+                                <p className="text-xs text-gray-500 font-medium mt-1">
+                                    Institution: <strong>{user?.institutionName || 'Manchester PU College'}</strong> • Choose format, specify details, and allocate chapter quotas.
+                                </p>
+                            </div>
+
+                            {/* Trial Quota Pill */}
+                            {user?.isTrial !== false && user?.role === 'teacher' && (
+                                <div className={`p-3.5 rounded-2xl border flex items-center gap-3 ${
+                                    isQuotaExceeded
+                                        ? 'bg-rose-50 border-rose-300 text-rose-900'
+                                        : 'bg-gradient-to-r from-navy to-slate-900 text-white border-gold/40 shadow-md'
+                                }`}>
+                                    <span className="text-lg">{isQuotaExceeded ? '⚠️' : '🎯'}</span>
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-black uppercase tracking-wider text-gold">
+                                            {currentQuotaKey.toUpperCase()} Trial Quota
+                                        </div>
+                                        <div className="text-xs font-black">
+                                            {currentQuotaInfo.used} / {currentQuotaInfo.max} Papers Used
+                                            {isQuotaExceeded && <span className="text-red-400 block text-[9px] font-bold">Quota Limit Reached</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* ── MODE SELECTION: TEST VS ASSIGNMENT ── */}
@@ -1390,6 +1446,22 @@ export default function CreatePaper() {
                                                             +
                                                         </button>
                                                     </div>
+                                                </div>
+
+                                                {/* Previous Year Questions Option */}
+                                                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-dashed border-gray-200 mt-0.5">
+                                                    <span className="text-[9px] font-black text-amber-800 uppercase flex items-center gap-1">
+                                                        <span>📜</span> PYQ Option:
+                                                    </span>
+                                                    <label className="flex items-center gap-1 text-[10px] font-bold text-navy cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={Boolean(chapterPyqOptions[ch])}
+                                                            onChange={e => setChapterPyqOptions(prev => ({ ...prev, [ch]: e.target.checked }))}
+                                                            className="w-3.5 h-3.5 text-navy rounded border-gray-300 cursor-pointer"
+                                                        />
+                                                        <span>Include PYQ</span>
+                                                    </label>
                                                 </div>
                                             </div>
                                         );

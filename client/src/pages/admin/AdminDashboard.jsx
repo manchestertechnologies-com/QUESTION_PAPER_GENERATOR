@@ -1077,9 +1077,9 @@ const AdminDashboard = () => {
             ]
         },
         {
-            group: 'Faculty & Access Control',
+            group: 'Faculty & Institution Access',
             items: [
-                { title: 'Faculty & OMR Access', path: '/admin/dashboard/create-teacher', icon: '👥', desc: 'Manage faculty & toggle OMR permissions' }
+                { title: 'Institution & Teacher Management', path: '/admin/dashboard/create-teacher', icon: '🏛️', desc: 'Onboard institutions, teachers & manage quotas' }
             ]
         }
     ];
@@ -1094,7 +1094,7 @@ const AdminDashboard = () => {
         if (location.pathname.includes('previous-year-papers')) return 'Previous Year Papers';
         if (location.pathname.includes('exam-blueprints')) return 'Exam Blueprints';
         if (location.pathname.includes('upload-template')) return 'Templates';
-        if (location.pathname.includes('create-teacher')) return 'Faculty & OMR Access';
+        if (location.pathname.includes('create-teacher')) return 'Institution & Teacher Management';
         return 'Executive Overview';
     };
 

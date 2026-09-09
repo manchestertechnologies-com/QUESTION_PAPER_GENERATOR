@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AssignmentGenerator.jsx
  *
  * Dedicated Practice Assignment Generator:
@@ -258,9 +258,10 @@ const AssignmentGenerator = () => {
         questions: visibleQs,
         duration: null,
         isAssignment: true,
+        institutionName: user?.institutionName || 'Manchester PU College',
         startQNo,
         endQNo: endQNo || (startQNo + visibleQs.length - 1),
-    }), [title, subject, visibleQs, startQNo, endQNo]);
+    }), [title, subject, visibleQs, startQNo, endQNo, user?.institutionName]);
 
     // Save Assignment to MongoDB & Supabase
     const handleSaveAssignment = async () => {
@@ -271,6 +272,8 @@ const AssignmentGenerator = () => {
                 title: title || `${subject.toUpperCase()} Practice Assignment`,
                 subject,
                 classes: ['12'],
+                paperType: 'assessment',
+                institutionName: user?.institutionName || 'Manchester PU College',
                 duration: null,
                 isAssignment: true,
                 startQNo: startQNo || 1,
@@ -285,7 +288,8 @@ const AssignmentGenerator = () => {
             navigate('/teacher/dashboard/saved-papers');
         } catch (err) {
             console.error('Error saving assignment:', err);
-            alert('Failed to save assignment. Please try again.');
+            const errMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to save assignment. Please try again.';
+            alert(errMsg);
         } finally {
             setSaving(false);
         }

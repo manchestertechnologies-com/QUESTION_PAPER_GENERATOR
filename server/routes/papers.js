@@ -163,20 +163,68 @@ function findMatchingAssignment(exam, paper, user) {
 }
 
 // @route   POST /api/papers
-// @desc    Save a paper (stores Supabase question IDs and paper pattern)
+// @desc    Save a paper (stores Supabase question IDs and paper pattern) with Trial Quota Enforcement
 // @access  Teacher / Admin
 router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { examId, title, subject: reqSubject, questions, questionObjects, ...rest } = req.body;
+        const { examId, title, subject: reqSubject, questions, questionObjects, examType, isAssignment, ...rest } = req.body;
         const paperSubject = reqSubject || (req.user.role === 'admin' ? 'Physics' : (req.user.subject || 'Physics'));
         const paperTitle = title || `${paperSubject} Assessment`;
+
+        // ── Determine Quota Category & Caps ──
+        let quotaKey = 'assessment';
+        const normExamType = String(examType || '').toUpperCase().trim();
+        if (normExamType.includes('JEE')) {
+            quotaKey = 'jee';
+        } else if (normExamType.includes('NEET')) {
+            quotaKey = 'neet';
+        } else if (normExamType.includes('CET')) {
+            quotaKey = 'cet';
+        } else if (isAssignment || normExamType.includes('ASSIGN') || normExamType.includes('ASSESS') || normExamType === 'BOARD') {
+            quotaKey = 'assessment';
+        }
+
+        const resolvedQuestions = Array.isArray(questions) ? questions : (Array.isArray(questionObjects) ? questionObjects.map(q => q._id || q.id) : []);
+        const totalQuestionCount = resolvedQuestions.length;
+
+        // ── Teacher Quota Check & Enforcement ──
+        let dbUser = null;
+        if (req.user.role === 'teacher' && req.user.id) {
+            dbUser = await User.findById(req.user.id);
+            if (dbUser) {
+                if (dbUser.status === 'disabled') {
+                    return res.status(403).json({ msg: 'Your teacher account is disabled. Please contact the administrator.' });
+                }
+
+                if (dbUser.isTrial !== false) {
+                    const currentQuota = dbUser.quotas?.[quotaKey] || { used: 0, max: 2, maxQuestions: quotaKey === 'assessment' ? 60 : 240 };
+                    if (currentQuota.used >= currentQuota.max) {
+                        return res.status(403).json({ 
+                            msg: `Trial quota exceeded for ${quotaKey.toUpperCase()}. You have generated ${currentQuota.used}/${currentQuota.max} allowed papers.`,
+                            quotaExceeded: true,
+                            quotaKey
+                        });
+                    }
+
+                    if (totalQuestionCount > currentQuota.maxQuestions) {
+                        return res.status(400).json({ 
+                            msg: `Maximum allowed questions for ${quotaKey.toUpperCase()} trial paper is ${currentQuota.maxQuestions} (requested ${totalQuestionCount}).`,
+                            questionCapExceeded: true
+                        });
+                    }
+                }
+            }
+        }
 
         const paperData = {
             ...rest,
             title: paperTitle,
             subject: paperSubject,
+            examType: examType || (isAssignment ? 'ASSIGNMENT' : 'CET'),
+            isAssignment: Boolean(isAssignment),
+            institutionName: (dbUser?.institutionName || req.user.institutionName || 'Manchester College').trim(),
             teacherId: (req.user.id || req.user._id || 'admin').toString(),
-            questions: Array.isArray(questions) ? questions : (Array.isArray(questionObjects) ? questionObjects.map(q => q._id || q.id) : []),
+            questions: resolvedQuestions,
             questionObjects: Array.isArray(questionObjects) ? questionObjects : (Array.isArray(questions) ? questions : [])
         };
 
@@ -188,6 +236,24 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
 
         const paper = new Paper(paperData);
         await paper.save();
+
+        // ── Increment Quota upon Successful Paper Generation ──
+        if (dbUser && dbUser.isTrial !== false) {
+            if (!dbUser.quotas) {
+                dbUser.quotas = {
+                    assessment: { used: 0, max: 2, maxQuestions: 60 },
+                    jee: { used: 0, max: 2, maxQuestions: 240 },
+                    neet: { used: 0, max: 2, maxQuestions: 240 },
+                    cet: { used: 0, max: 2, maxQuestions: 240 }
+                };
+            }
+            if (!dbUser.quotas[quotaKey]) {
+                dbUser.quotas[quotaKey] = { used: 0, max: 2, maxQuestions: quotaKey === 'assessment' ? 60 : 240 };
+            }
+            dbUser.quotas[quotaKey].used += 1;
+            dbUser.markModified('quotas');
+            await dbUser.save();
+        }
 
         // Background non-blocking sync: Link to exam and send notifications
         (async () => {

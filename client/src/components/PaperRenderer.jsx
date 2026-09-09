@@ -233,7 +233,7 @@ export function InstructionCoverPage({ paper, questions = [], duration, totalMar
 }
 
 // ─── Paper Header ─────────────────────────────────────────────────────────────
-export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false, setName = 'P' }) {
+export function PaperHeader({ title, subject, classes, duration, totalMarks, templateUrl, isAssignment = false, setName = 'P', institutionName }) {
     // Clean assignment title
     let displayTitle = title;
     if (isAssignment) {
@@ -249,6 +249,7 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
     }
 
     const currentSet = (setName || 'P').toUpperCase();
+    const collegeTitle = institutionName || 'Manchester PU College';
 
     return (
         <div style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
@@ -262,18 +263,18 @@ export function PaperHeader({ title, subject, classes, duration, totalMarks, tem
                     />
                 </div>
             ) : (
-                /* Official Manchester PU College Davanagere Header Crest */
+                /* Official College Header Crest */
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '8px' }}>
                     <div style={{ width: '68px', height: '68px', flexShrink: 0 }}>
                         <img 
                             src="/ManchesterLogo.jpeg" 
-                            alt="Manchester PU College" 
+                            alt={collegeTitle} 
                             style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         />
                     </div>
                     <div style={{ flex: 1, textAlign: 'center' }}>
                         <div style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#000', lineHeight: 1.1 }}>
-                            Manchester PU College
+                            {collegeTitle}
                         </div>
                         <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#333', marginTop: '2px' }}>
                             DAVANAGERE • THE LAND OF OPPORTUNITY

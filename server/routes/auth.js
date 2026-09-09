@@ -37,16 +37,14 @@ router.post('/login', loginLimiter, async (req, res) => {
         return res.status(400).json({ msg: 'Email and password are required.' });
     }
 
-    // ── Hardcoded Admin Account ──────────────────────────────────────────────
-    if (email === 'college@gmail.com') {
-        const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
+    // ── Hardcoded Master / Admin Accounts ──────────────────────────────────
+    if (email === 'manchestertechnologies@gmail.com' || email === 'college@gmail.com') {
+        const isMaster = email === 'manchestertechnologies@gmail.com';
+        const expectedPass = isMaster 
+            ? (process.env.MASTER_PASSWORD || 'Manchester') 
+            : (process.env.ADMIN_PASSWORD || '123456');
 
-        // Warn in logs if using the weak default password
-        if (ADMIN_PASSWORD === '123456' || ADMIN_PASSWORD.length < 8) {
-            console.warn('[SECURITY WARNING] Admin account is using a weak password. Set a strong ADMIN_PASSWORD env var in production.');
-        }
-
-        if (password !== ADMIN_PASSWORD) {
+        if (password !== expectedPass) {
             return res.status(400).json({ msg: 'Invalid credentials.' });
         }
 
@@ -57,10 +55,16 @@ router.post('/login', loginLimiter, async (req, res) => {
         // Set HttpOnly cookie
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
-        // Return token in body for cross-site authorization header fallback
         return res.json({
             token,
-            user: { id: adminId, name: 'College Admin', email, role: 'admin' }
+            user: { 
+                id: adminId, 
+                name: isMaster ? 'Manchester Master Admin' : 'College Admin', 
+                email, 
+                role: 'admin',
+                institutionName: 'Manchester Technologies',
+                isTrial: false
+            }
         });
     }
 
@@ -68,8 +72,12 @@ router.post('/login', loginLimiter, async (req, res) => {
     try {
         const user = await User.findOne({ email });
         if (!user) {
-            // Generic message — don't reveal if email exists
             return res.status(400).json({ msg: 'Invalid credentials.' });
+        }
+
+        // Check account active/disabled status
+        if (user.status === 'disabled') {
+            return res.status(403).json({ msg: 'Your teacher account has been disabled by the administrator. Please contact your institution master.' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
@@ -88,7 +96,6 @@ router.post('/login', loginLimiter, async (req, res) => {
         // Set HttpOnly cookie
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
-        // Return token in body for cross-site authorization header fallback
         return res.json({
             token,
             user: {
@@ -96,7 +103,18 @@ router.post('/login', loginLimiter, async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                subject: user.subject
+                subject: user.subject,
+                institutionName: user.institutionName || 'Manchester College',
+                institutionEmail: user.institutionEmail || '',
+                status: user.status || 'active',
+                isTrial: user.isTrial !== undefined ? user.isTrial : true,
+                quotas: user.quotas || {
+                    assessment: { used: 0, max: 2, maxQuestions: 60 },
+                    jee: { used: 0, max: 2, maxQuestions: 240 },
+                    neet: { used: 0, max: 2, maxQuestions: 240 },
+                    cet: { used: 0, max: 2, maxQuestions: 240 }
+                },
+                omrAccess: user.omrAccess !== undefined ? user.omrAccess : true
             }
         });
     } catch (err) {
@@ -132,17 +150,49 @@ router.get('/me', auth, async (req, res) => {
         // Admin special case (hardcoded)
         if (id === '000000000000000000000000') {
             return res.json({
-                user: { id, name: 'College Admin', email: 'college@gmail.com', role: 'admin' }
+                user: { 
+                    id, 
+                    name: 'Manchester Master Admin', 
+                    email: 'manchestertechnologies@gmail.com', 
+                    role: 'admin',
+                    institutionName: 'Manchester Technologies',
+                    isTrial: false
+                }
             });
         }
 
         const user = await User.findById(id).select('-password');
         if (!user) return res.status(404).json({ msg: 'User not found.' });
 
+        if (user.status === 'disabled') {
+            return res.status(403).json({ msg: 'Account disabled.' });
+        }
+
         return res.json({
-            user: { id: user.id, name: user.name, email: user.email, role: user.role, subject: user.subject }
+            user: { 
+                id: user.id, 
+                name: user.name, 
+                email: user.email, 
+                role: user.role, 
+                subject: user.subject,
+                institutionName: user.institutionName || 'Manchester College',
+                institutionEmail: user.institutionEmail || '',
+                status: user.status || 'active',
+                isTrial: user.isTrial !== undefined ? user.isTrial : true,
+                quotas: user.quotas || {
+                    assessment: { used: 0, max: 2, maxQuestions: 60 },
+                    jee: { used: 0, max: 2, maxQuestions: 240 },
+                    neet: { used: 0, max: 2, maxQuestions: 240 },
+                    cet: { used: 0, max: 2, maxQuestions: 240 }
+                },
+                omrAccess: user.omrAccess !== undefined ? user.omrAccess : true
+            }
         });
     } catch (err) {
+        console.error('[AUTH] /me error:', err.message);
+        return res.status(500).json({ msg: 'Server error.' });
+    }
+});
         console.error('[AUTH] /me error:', err.message);
         return res.status(500).json({ msg: 'Server error.' });
     }
