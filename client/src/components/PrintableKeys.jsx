@@ -264,80 +264,14 @@ export function A4SolutionKeySheet({
                                     }}
                                 >
                                     <div className="flex justify-between items-center border-b border-slate-100 pb-1 flex-wrap gap-2">
-                                        <span className="font-bold text-xs text-slate-900">Question {qNo}</span>
+                                        <span className="font-bold text-xs text-slate-900 bg-slate-900 text-white px-2 py-0.5 rounded">Question {qNo}</span>
                                         <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold px-2 py-0.5 rounded">
                                             Correct Answer: Option ({ansLabel})
                                         </span>
                                     </div>
 
-                                    {/* Question stem */}
-                                    <div className="text-slate-800 font-normal leading-relaxed text-[11.5px]">
-                                        <MathRenderer inline text={qText} />
-                                    </div>
-
-                                    {/* Diagram if present */}
-                                    {qImg && (
-                                        <div className="my-1 text-center">
-                                            <img
-                                                src={qImg}
-                                                alt={`Q${qNo} diagram`}
-                                                className="max-h-28 object-contain mx-auto rounded border border-slate-200"
-                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* Match Table in Solution Guide if present */}
-                                    {(() => {
-                                        const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0)
-                                            ? q.matchPairs
-                                            : (Array.isArray(q.column_a) && q.column_a.length > 0)
-                                                ? q.column_a.map((left, pIdx) => ({ left, right: (q.column_b && q.column_b[pIdx]) || '' }))
-                                                : (Array.isArray(q.columnA) && q.columnA.length > 0)
-                                                    ? q.columnA.map((left, pIdx) => ({ left, right: (q.columnB && q.columnB[pIdx]) || '' }))
-                                                    : null;
-
-                                        if (!pairs || pairs.length === 0) return null;
-
-                                        return (
-                                            <div className="my-1.5 border border-slate-300 rounded-lg overflow-hidden bg-slate-50/50">
-                                                <table className="w-full text-[10px] text-left border-collapse">
-                                                    <thead className="bg-slate-200/80 font-bold text-slate-800 border-b border-slate-300">
-                                                        <tr>
-                                                            <th className="p-1 w-1/2">Column A</th>
-                                                            <th className="p-1 w-1/2 border-l border-slate-300">Column B</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-200 text-slate-700">
-                                                        {pairs.map((pair, pIdx) => {
-                                                            const leftText = pair.left || '';
-                                                            const rightText = pair.right || '';
-                                                            const roman = ['(i)', '(ii)', '(iii)', '(iv)', '(v)', '(vi)'][pIdx] || `(${pIdx + 1})`;
-                                                            const letter = `(${String.fromCharCode(97 + pIdx)})`;
-                                                            const hasLeftLabel = /^\s*(\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+[\.\)])/.test(leftText);
-                                                            const hasRightLabel = /^\s*(\([a-zA-Z0-9ivxLCDM]+\)|[a-zA-Z0-9ivxLCDM]+[\.\)])/i.test(rightText);
-
-                                                            return (
-                                                                <tr key={pIdx}>
-                                                                    <td className="p-1 align-top">
-                                                                        {!hasLeftLabel && <span className="font-bold text-slate-800 mr-1">{letter}</span>}
-                                                                        <MathRenderer inline text={leftText} />
-                                                                    </td>
-                                                                    <td className="p-1 align-top border-l border-slate-300">
-                                                                        {!hasRightLabel && <span className="font-bold text-slate-800 mr-1">{roman}</span>}
-                                                                        <MathRenderer inline text={rightText} />
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        );
-                                    })()}
-
-                                    {/* Explanation box */}
-                                    <div className="bg-slate-50/80 border-l-3 border-navy p-1.5 rounded-r-lg text-slate-700 text-[11px] leading-relaxed">
+                                    {/* Explanation box ONLY */}
+                                    <div className="bg-slate-50/80 border-l-3 border-navy p-2 rounded-r-lg text-slate-800 text-[11.5px] leading-relaxed">
                                         <span className="font-bold text-navy block text-[10px] uppercase tracking-wider mb-0.5">
                                             Explanation / Working:
                                         </span>

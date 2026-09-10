@@ -224,13 +224,13 @@ export default function A4SolutionKey({
                                                     </div>
                                                 )}
                                                 <div
-                                                    className="border border-slate-300 rounded-xl p-3.5 bg-white space-y-2 shadow-2xs"
-                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid', fontSize: '13px' }}
+                                                    className="border-2 border-slate-300 rounded-xl p-3.5 bg-white space-y-2 shadow-2xs"
+                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
                                                 >
                                                     {/* Question Card Header: Dark Q number badge on left, crisp light/green answer pill on right */}
                                                     <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="bg-slate-900 text-white font-black text-xs px-2.5 py-1 rounded-md shadow-2xs">
+                                                            <span className="bg-slate-900 text-white font-black text-xs px-2.5 py-1 rounded-md shadow-xs">
                                                                 Question {currentQNo}
                                                             </span>
                                                             {q.originalQNo && q.originalQNo !== currentQNo && (
@@ -250,59 +250,14 @@ export default function A4SolutionKey({
                                                         )}
                                                     </div>
 
-                                                    {/* Question Text */}
-                                                    <div className="text-xs text-slate-900 font-normal leading-relaxed">
-                                                        <MathRenderer inline text={qText} />
-                                                    </div>
-
-                                                    {/* Diagram if present */}
-                                                    {diagramImg && (
-                                                        <div className="my-1.5 max-w-xs mx-auto border border-slate-200 rounded-lg p-1 bg-white">
-                                                            <img
-                                                                src={diagramImg}
-                                                                alt={`Q${currentQNo} Diagram`}
-                                                                className="max-h-32 object-contain mx-auto"
-                                                                onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
-                                                            />
-                                                        </div>
-                                                    )}
-
-                                                    {/* Options summary with correct option highlighted */}
-                                                    {options.length > 0 && (
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5 text-[11px] text-slate-700">
-                                                            {options.map((opt, oi) => {
-                                                                const isCorrect = isOptionCorrect(q, oi);
-                                                                return (
-                                                                    <div
-                                                                        key={oi}
-                                                                        className={`p-1.5 rounded-lg flex items-start gap-1.5 transition ${
-                                                                            isCorrect
-                                                                                ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-300 shadow-2xs'
-                                                                                : 'bg-slate-50 border border-slate-200'
-                                                                        }`}
-                                                                    >
-                                                                        <span className={`font-bold min-w-[20px] ${isCorrect ? 'text-emerald-800' : 'text-slate-600'}`}>
-                                                                            {labels[oi] || String.fromCharCode(65 + oi)}:
-                                                                        </span>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt)} />
-                                                                        </div>
-                                                                        {isCorrect && <span className="text-emerald-600 font-black ml-1">✓</span>}
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Explanation Box - Clean, compact without blank gaps (~9.75pt / 12px text) */}
-                                                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11.5px] text-slate-800 space-y-1">
-                                                        <span className="font-black text-navy text-[11px] uppercase tracking-wider block">Explanation / Solution:</span>
+                                                    {/* ONLY Explanation / Solution Body */}
+                                                    <div className="pt-1 text-[12px] text-slate-900 font-normal leading-relaxed">
                                                         {explanation ? (
-                                                            <div className="leading-relaxed">
+                                                            <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
                                                                 <MathRenderer inline text={explanation} />
                                                             </div>
                                                         ) : (
-                                                            <p className="text-slate-400 italic text-[11px]">
+                                                            <p className="text-slate-400 italic text-[11px] py-1">
                                                                 {options.length >= 2 ? `Option (${answerLabel}) is the verified correct answer.` : `Value ${answerLabel} is the verified correct answer.`}
                                                             </p>
                                                         )}
