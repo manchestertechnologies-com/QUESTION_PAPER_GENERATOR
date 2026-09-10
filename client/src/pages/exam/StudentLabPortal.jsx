@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
+import FourDotLoader from '../../components/FourDotLoader';
 
 export default function StudentLabPortal() {
     const navigate = useNavigate();
@@ -362,8 +363,7 @@ export default function StudentLabPortal() {
                         {/* Loading State */}
                         {loading ? (
                             <div className="py-20 text-center">
-                                <div className="w-10 h-10 border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin mx-auto mb-3" />
-                                <p className="text-xs text-slate-400 tracking-wider uppercase font-semibold">Synchronizing Exam Schedules...</p>
+                                <FourDotLoader size="lg" text="Synchronizing Exam Schedules..." />
                             </div>
                         ) : visibleExams.length === 0 ? (
                             /* No exams visible yet */

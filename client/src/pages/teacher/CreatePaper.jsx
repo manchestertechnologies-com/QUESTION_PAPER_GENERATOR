@@ -25,6 +25,7 @@ import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer'
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
+import FourDotLoader from '../../components/FourDotLoader';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 import { optionLabel, getResolvedAnswerLabel, getQuestionOptionLabels } from '../../utils/sanitize';
 
@@ -407,6 +408,52 @@ export default function CreatePaper() {
         });
     };
 
+    const CHAPTER_ALIASES = {
+        // Physics Thermal Physics / Thermodynamics
+        'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
+        'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
+        'kinetic theory': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
+        'kinetic theory of gases': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
+        
+        // Physics Solids & Fluids
+        'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
+        'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
+
+        // Physics Rotational
+        'system of particles and rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion', 'Laws of Motion', 'Motion in a Plane'],
+        
+        // Physics Semiconductors
+        'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)', 'Semiconductor Electronics'],
+        'semiconductor electronics: materials, devices and simple circuits': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
+
+        // Chemistry p-Block
+        'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
+        'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
+
+        // Chemistry Redox
+        'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
+
+        // Chemistry Electrochemistry
+        'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
+
+        // Chemistry Kinetics
+        'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
+
+        // Chemistry Principles & Techniques
+        'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques'],
+
+        // Mathematics
+        'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
+        'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)'],
+        'probability': ['Probability', 'Probability (Legacy / Removed Syllabus)'],
+        'continuity and differentiability': ['Continuity and Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
+        'matrices': ['Matrices', 'Matrices (Legacy / Removed Syllabus)'],
+        'relations and functions': ['Relations and Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
+        'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)'],
+        'application of integrals': ['Application of Integrals', 'Application of Integrals (Legacy / Removed Syllabus)'],
+        'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)']
+    };
+
     // Canonicalize biology & assessment chapter names
     const canonicalizeChapterName = (name) => {
         if (!name || typeof name !== 'string') return '';
@@ -454,6 +501,16 @@ export default function CreatePaper() {
         return clean;
     };
 
+    // Helper to test if a question matches a selected chapter (considering aliases and casing)
+    const isChapterMatch = (questionChapter, targetChapter) => {
+        if (!questionChapter || !targetChapter) return false;
+        const qClean = questionChapter.trim().toLowerCase();
+        const tClean = targetChapter.trim().toLowerCase();
+        if (qClean === tClean) return true;
+        const aliases = CHAPTER_ALIASES[tClean] || [];
+        return aliases.some(a => a.toLowerCase().trim() === qClean);
+    };
+
     // Count of selected questions per canonical chapter
     const selectedChapterCounts = useMemo(() => {
         const counts = {};
@@ -498,16 +555,14 @@ export default function CreatePaper() {
 
             const rawCh = q.chapter || 'General';
             const ch = canonicalizeChapterName(rawCh);
-            // Only include chapters in current class syllabus if metadata exists
-            if (canonicalMetaChapters.length > 0 && !canonicalMetaChapters.includes(ch) && ch !== 'General') {
-                return;
-            }
-
-            chaptersSet.add(ch);
-            if (!map[ch]) map[ch] = new Set();
-            const cpt = q.concept || q.topic;
-            if (cpt && cpt !== 'General' && cpt !== ch) {
-                map[ch].add(cpt.trim());
+            // Include chapters from question bank
+            if (ch && ch !== 'General') {
+                chaptersSet.add(ch);
+                if (!map[ch]) map[ch] = new Set();
+                const cpt = q.concept || q.topic;
+                if (cpt && cpt !== 'General' && cpt !== ch) {
+                    map[ch].add(cpt.trim());
+                }
             }
         });
 
@@ -609,9 +664,10 @@ export default function CreatePaper() {
                 }
             }
 
-            // Chapter check
+            // Chapter check with smart alias expansion & case-insensitivity
             if (selectedChapters.length > 0) {
-                if (!selectedChapters.includes(q.chapter) && q.chapter !== 'General') return false;
+                const matchesAnySelected = selectedChapters.some(selCh => isChapterMatch(q.chapter, selCh));
+                if (!matchesAnySelected && q.chapter !== 'General') return false;
             }
 
             // Concept check
@@ -632,7 +688,7 @@ export default function CreatePaper() {
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesSingleChapter = !singleFilterChapter || q.chapter === singleFilterChapter;
+            const matchesSingleChapter = !singleFilterChapter || isChapterMatch(q.chapter, singleFilterChapter);
             const matchesSingleConcept = !singleFilterConcept || (q.concept === singleFilterConcept || q.topic === singleFilterConcept);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
@@ -2206,7 +2262,7 @@ export default function CreatePaper() {
 
                                 {/* Questions List (Full Question & Option Rendering) */}
                                 {loadingQuestions ? (
-                                    <div className="p-12 text-center text-xs font-bold text-gray-400">Loading questions pool...</div>
+                                    <FourDotLoader text="Loading questions pool..." size="md" className="py-12" />
                                 ) : filteredQuestions.length === 0 ? (
                                     <div className="p-12 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
                                         No questions match the active filters in this pool.

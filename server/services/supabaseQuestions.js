@@ -9,6 +9,52 @@ const memoryTestQuestions = new Map();
 const metadataCache = new Map();
 const METADATA_TTL_MS = 5 * 60 * 1000;
 
+const CHAPTER_ALIASES = {
+    // Physics Thermal Physics / Thermodynamics
+    'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
+    'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
+    'kinetic theory': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
+    'kinetic theory of gases': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
+    
+    // Physics Solids & Fluids
+    'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
+    'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
+
+    // Physics Rotational
+    'system of particles and rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion', 'Laws of Motion', 'Motion in a Plane'],
+    
+    // Physics Semiconductors
+    'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)', 'Semiconductor Electronics'],
+    'semiconductor electronics: materials, devices and simple circuits': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
+
+    // Chemistry p-Block
+    'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
+    'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
+
+    // Chemistry Redox
+    'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
+
+    // Chemistry Electrochemistry
+    'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
+
+    // Chemistry Kinetics
+    'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
+
+    // Chemistry Principles & Techniques
+    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques'],
+
+    // Mathematics
+    'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
+    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)'],
+    'probability': ['Probability', 'Probability (Legacy / Removed Syllabus)'],
+    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
+    'matrices': ['Matrices', 'Matrices (Legacy / Removed Syllabus)'],
+    'relations and functions': ['Relations and Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
+    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)'],
+    'application of integrals': ['Application of Integrals', 'Application of Integrals (Legacy / Removed Syllabus)'],
+    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)']
+};
+
 /**
  * Universal tag cleaner to strip all internal difficulty and QPV/QBP metadata tags.
  */
@@ -335,19 +381,25 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
 
     // 3. Chapter filter
     if (filters.chapter) {
-        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
-        if (chapters.length > 0) {
+        const rawChapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+        if (rawChapters.length > 0) {
             const chVariants = [];
-            chapters.forEach(ch => {
-                chVariants.push(ch);
-                chVariants.push(ch.replace(/:/g, ' -'));
-                chVariants.push(ch.replace(/:/g, ''));
-                chVariants.push(ch.replace(/\s+and\s+/gi, ' and '));
-                chVariants.push(ch.replace(/\s+and\s+/gi, ' And '));
-                chVariants.push(ch.replace(/\s+their\s+/gi, ' their '));
-                chVariants.push(ch.replace(/\s+their\s+/gi, ' Their '));
-                chVariants.push(ch.replace(/\s+its\s+/gi, ' its '));
-                chVariants.push(ch.replace(/\s+its\s+/gi, ' Its '));
+            const sub = (filters.subject || '').toLowerCase();
+
+            rawChapters.forEach(rawCh => {
+                const normKey = rawCh.toLowerCase().trim();
+                const aliases = CHAPTER_ALIASES[normKey] || [rawCh];
+                aliases.forEach(ch => {
+                    chVariants.push(ch);
+                    chVariants.push(ch.replace(/:/g, ' -'));
+                    chVariants.push(ch.replace(/:/g, ''));
+                    chVariants.push(ch.replace(/\s+and\s+/gi, ' and '));
+                    chVariants.push(ch.replace(/\s+and\s+/gi, ' And '));
+                    chVariants.push(ch.replace(/\s+their\s+/gi, ' their '));
+                    chVariants.push(ch.replace(/\s+their\s+/gi, ' Their '));
+                    chVariants.push(ch.replace(/\s+its\s+/gi, ' its '));
+                    chVariants.push(ch.replace(/\s+its\s+/gi, ' Its '));
+                });
             });
             whereClauses.push(`(q.chapter = ANY($${paramIndex}::text[]) OR q.chapter ILIKE ANY($${paramIndex++}::text[]))`);
             values.push([...new Set(chVariants)]);

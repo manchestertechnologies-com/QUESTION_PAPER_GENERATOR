@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api';
+import FourDotLoader from '../../components/FourDotLoader';
 
 export default function StaticExamPortal() {
     const [exams, setExams] = useState([]);
@@ -331,9 +332,8 @@ export default function StaticExamPortal() {
                     </div>
 
                     {loading ? (
-                        <div className="p-16 text-center text-gray-400 font-bold bg-white rounded-3xl border border-gray-200 space-y-3">
-                            <div className="w-8 h-8 border-4 border-navy border-t-gold rounded-full animate-spin mx-auto"></div>
-                            <p className="text-xs">Fetching active online examinations...</p>
+                        <div className="p-16 text-center bg-white rounded-3xl border border-gray-200">
+                            <FourDotLoader size="md" text="Fetching active online examinations..." />
                         </div>
                     ) : filteredExams.length === 0 ? (
                         <div className="p-12 text-center bg-white rounded-3xl border-2 border-dashed border-gray-200 space-y-3">

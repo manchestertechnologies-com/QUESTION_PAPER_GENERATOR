@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import FourDotLoader from '../../components/FourDotLoader';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -42,7 +43,11 @@ export default function Scorecard() {
         window.open(downloadUrl, '_blank');
     };
 
-    if (loading) return <div style={styles.center}>Loading scorecard...</div>;
+    if (loading) return (
+        <div style={styles.center}>
+            <FourDotLoader size="lg" text="Loading Examination Scorecard..." />
+        </div>
+    );
     if (!data) return <div style={styles.center}>Scorecard not found.</div>;
 
     const percentage = data.totalQuestions > 0

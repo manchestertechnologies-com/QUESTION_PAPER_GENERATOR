@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { LoadingProvider, useLoading } from './context/LoadingContext';
 import { setLoadingCallback } from './api';
+import FourDotLoader from './components/FourDotLoader';
 import UnifiedLogin from './pages/auth/UnifiedLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -39,8 +40,8 @@ const AppLoadingSpinner = () => (
         <div className="w-16 h-16 rounded-2xl bg-white shadow-xl flex items-center justify-center p-2.5 mb-5 border-2 border-gold/30">
             <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-contain" />
         </div>
-        <div className="w-8 h-8 border-4 border-navy border-t-gold rounded-full animate-spin mb-3"></div>
-        <h3 className="text-sm font-black text-navy uppercase tracking-widest">Manchester College</h3>
+        <FourDotLoader size="md" />
+        <h3 className="text-sm font-black text-navy uppercase tracking-widest mt-2">Manchester College</h3>
         <p className="text-[10px] text-slate/40 font-bold uppercase tracking-wider mt-1">Connecting to Secure Assessment Network...</p>
     </div>
 );

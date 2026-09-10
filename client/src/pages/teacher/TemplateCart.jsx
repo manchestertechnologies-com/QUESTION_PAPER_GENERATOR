@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../api';
+import FourDotLoader from '../../components/FourDotLoader';
 
 const TemplateCart = ({ onClose }) => {
     const [templates, setTemplates] = useState([]);
@@ -20,27 +21,35 @@ const TemplateCart = ({ onClose }) => {
         fetchTemplates();
     }, []);
 
-    return (
-        <>
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-navy/40 backdrop-blur-sm z-40"
-                onClick={onClose}
-            />
+    const handleSelect = async (template) => {
+        try {
+            await api.put(`/api/templates/${template._id}/activate`);
+            setSelected(template._id);
+            alert('Template applied successfully!');
+            onClose();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to apply template');
+        }
+    };
 
-            {/* Drawer */}
-            <div className="fixed top-0 right-0 h-full w-full max-w-sm bg-white z-50 shadow-2xl flex flex-col animate-slide-in-right border-l-4 border-gold">
-                {/* Drawer Header */}
-                <div className="bg-navy p-6 flex items-center justify-between border-b-4 border-gold">
-                    <div>
-                        <h2 className="font-black text-white text-lg uppercase tracking-widest">Templates</h2>
-                        <p className="text-gold/60 text-[10px] font-black uppercase tracking-widest mt-0.5">
-                            {templates.length} available
-                        </p>
+    return (
+        <div className="fixed inset-0 bg-black/60 z-[999] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-gold/30 overflow-hidden">
+                {/* Header */}
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-navy to-navy/90 text-white">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gold/20 flex items-center justify-center text-xl border border-gold/40">
+                            🎨
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-black text-white">Header & Watermark Templates</h2>
+                            <p className="text-xs text-gold font-semibold">Select an approved layout for printed question papers</p>
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
-                        className="bg-white/10 text-gold w-10 h-10 rounded-2xl flex items-center justify-center font-black text-lg hover:bg-white/20 transition"
+                        className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center font-bold text-sm transition"
                     >
                         ✕
                     </button>
@@ -49,9 +58,8 @@ const TemplateCart = ({ onClose }) => {
                 {/* Templates List */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-4">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center h-48 gap-4">
-                            <div className="w-10 h-10 border-4 border-navy/20 border-t-navy rounded-full animate-spin" />
-                            <p className="text-slate/40 font-bold text-xs uppercase tracking-widest">Loading templates...</p>
+                        <div className="flex flex-col items-center justify-center h-48">
+                            <FourDotLoader text="Loading templates..." size="md" />
                         </div>
                     ) : templates.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-48 gap-4">
@@ -147,7 +155,7 @@ const TemplateCart = ({ onClose }) => {
                     </div>
                 </div>
             )}
-        </>
+        </div>
     );
 };
 

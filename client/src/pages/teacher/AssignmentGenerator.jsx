@@ -19,6 +19,7 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
 import ResizableDiagram from '../../components/ResizableDiagram';
+import FourDotLoader from '../../components/FourDotLoader';
 import { optionLabel, getResolvedAnswerLabel } from '../../utils/sanitize';
 
 // Helper component to render complete options for a question
@@ -173,6 +174,29 @@ const AssignmentGenerator = () => {
         );
     };
 
+    const CHAPTER_ALIASES = {
+        'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
+        'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
+        'kinetic theory': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
+        'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
+        'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
+        'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
+        'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
+        'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
+        'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
+        'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
+        'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)']
+    };
+
+    const isChapterMatch = (qChapter, targetChapter) => {
+        if (!qChapter || !targetChapter) return false;
+        const qClean = qChapter.trim().toLowerCase();
+        const tClean = targetChapter.trim().toLowerCase();
+        if (qClean === tClean) return true;
+        const aliases = CHAPTER_ALIASES[tClean] || [];
+        return aliases.some(a => a.toLowerCase().trim() === qClean);
+    };
+
     // Scoped pool based on checked chapters & concepts
     const scopedPool = useMemo(() => {
         return questionsPool.filter(q => {
@@ -183,7 +207,10 @@ const AssignmentGenerator = () => {
                                 q.options.length < 2;
             if (isNumerical) return false;
 
-            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) return false;
+            if (selectedChapters.length > 0) {
+                const matchesAny = selectedChapters.some(sch => isChapterMatch(q.chapter, sch));
+                if (!matchesAny && q.chapter !== 'General') return false;
+            }
             if (selectedConcepts.length > 0) {
                 const cpt = q.concept || q.topic;
                 if (!selectedConcepts.includes(cpt)) return false;
@@ -200,7 +227,7 @@ const AssignmentGenerator = () => {
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = !filterChapter || q.chapter === filterChapter;
+            const matchesChapter = !filterChapter || isChapterMatch(q.chapter, filterChapter);
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 

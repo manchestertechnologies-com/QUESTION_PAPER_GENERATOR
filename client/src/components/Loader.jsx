@@ -1,19 +1,9 @@
 import React from 'react';
+import FourDotLoader from './FourDotLoader';
 
-const Loader = ({ fullPage = false }) => {
-    if (fullPage) {
-        return (
-            <div className="loader-overlay">
-                <div className="loader"></div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex items-center justify-center p-8">
-            <div className="loader"></div>
-        </div>
-    );
+const Loader = ({ fullPage = false, text = '', size = 'md', className = '' }) => {
+    return <FourDotLoader fullPage={fullPage} text={text} size={size} className={className} />;
 };
 
 export default Loader;
+

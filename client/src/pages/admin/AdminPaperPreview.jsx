@@ -25,6 +25,7 @@ import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer'
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
+import FourDotLoader from '../../components/FourDotLoader';
 import { generatePaperSet, generateAllPQRS, generateAnswerKey } from '../../utils/pqrsGenerator';
 
 const AdminPaperPreview = () => {
@@ -158,8 +159,7 @@ const AdminPaperPreview = () => {
     if (loading) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
-                <div className="w-10 h-10 border-4 border-navy border-t-gold rounded-full animate-spin mb-4"></div>
-                <h3 className="text-sm font-black text-navy uppercase tracking-widest">Generating A4 Assessment Preview...</h3>
+                <FourDotLoader size="lg" text="Generating A4 Assessment Preview..." />
             </div>
         );
     }

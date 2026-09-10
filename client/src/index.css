@@ -84,3 +84,15 @@ body {
   100% { background-position: 200% 0%; }
 }
 
+@keyframes bounceDot {
+  0%, 80%, 100% {
+    transform: scale(0.6) translateY(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1.15) translateY(-8px);
+    opacity: 1;
+  }
+}
+
+

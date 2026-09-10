@@ -4,6 +4,7 @@ import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import ResizableDiagram from '../../components/ResizableDiagram';
+import FourDotLoader from '../../components/FourDotLoader';
 
 function extractDiagramFromText(rawText, existingImageUrl) {
     if (!rawText) return { cleanText: '', diagramUrl: existingImageUrl || null };
@@ -374,7 +375,11 @@ export default function ExamEngine() {
         return acc;
     }, {});
 
-    if (loading) return <div style={styles.center}>Loading exam...</div>;
+    if (loading) return (
+        <div style={styles.center}>
+            <FourDotLoader size="lg" text="Loading Exam Portal..." />
+        </div>
+    );
     if (!exam) return <div style={styles.center}>Exam not available.</div>;
 
     const currentQ = exam.questions[current];

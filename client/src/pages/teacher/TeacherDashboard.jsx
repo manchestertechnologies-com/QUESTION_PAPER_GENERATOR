@@ -13,6 +13,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AddQuestion from './AddQuestion';
 import SavedPapers from './SavedPapers';
+import FourDotLoader from '../../components/FourDotLoader';
 import TemplateCart from './TemplateCart';
 import GrandTestList from '../admin/GrandTestList';
 import PreviousYearPapers from '../admin/PreviousYearPapers';
@@ -208,9 +209,8 @@ const TeacherAssignmentsSection = () => {
 
     if (loading) {
         return (
-            <div className="mb-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-xs flex items-center justify-center gap-2.5">
-                <div className="w-4 h-4 border-2 border-navy border-t-gold rounded-full animate-spin"></div>
-                <span className="text-xs font-bold text-slate/60">Checking assignments...</span>
+            <div className="mb-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-xs flex items-center justify-center">
+                <FourDotLoader size="sm" text="Checking assignments..." />
             </div>
         );
     }
