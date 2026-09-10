@@ -40,6 +40,14 @@ export default function A4PaperEngine({
     const visibleCount = Math.max(0, endQNo - startQNo + 1);
     const visibleQuestions = useMemo(() => questions.slice(0, visibleCount), [questions, visibleCount]);
 
+    const isJeePaper = useMemo(() => {
+        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
+        const title = (paper?.title || '').toUpperCase();
+        const paperClasses = paper?.classes || classes || [];
+        const isJeeClass = Array.isArray(paperClasses) && paperClasses.some(c => String(c).toUpperCase() === 'JEE');
+        return examType.includes('JEE') || title.includes('JEE') || Boolean(paper?.isJEE) || isJeeClass;
+    }, [paper, classes]);
+
     const zoomScale = (zoom || 100) / 100;
     const isTwoCol = settings.columns === 2;
 
