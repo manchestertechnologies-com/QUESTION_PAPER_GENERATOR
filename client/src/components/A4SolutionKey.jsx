@@ -24,6 +24,12 @@ export default function A4SolutionKey({
 
     const paperTitle = activePaper?.title || paper.title || `${paper.subject || 'Academic'} Assessment`;
 
+    const isJeePaper = useMemo(() => {
+        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
+        const title = (paper?.title || '').toUpperCase();
+        return examType.includes('JEE') || title.includes('JEE') || paper?.isJEE;
+    }, [paper]);
+
     const handlePrint = () => {
         document.body.classList.add('printing-solution-key');
         setTimeout(() => {
@@ -178,13 +184,41 @@ export default function A4SolutionKey({
                                         const diagramImg = q.imageUrl || q.image_url;
                                         const explanation = q.solutionText || q.solution || q.explanation || '';
                                         const options = Array.isArray(q.options) ? q.options : [];
+                                        const showSecAHeader = isJeePaper && (idx % 30 === 0);
+                                        const showSecBHeader = isJeePaper && (idx % 30 === 25);
 
                                         return (
-                                            <div
-                                                key={idx}
-                                                className="border border-slate-200 rounded-2xl p-5 bg-slate-50/40 space-y-3"
-                                                style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                                            >
+                                            <React.Fragment key={idx}>
+                                                {showSecAHeader && (
+                                                    <div 
+                                                        className="bg-slate-900 text-white p-3.5 rounded-xl border-2 border-slate-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
+                                                        style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                                    >
+                                                        <span className="font-black text-xs sm:text-sm tracking-widest text-amber-400 uppercase">
+                                                            SECTION A
+                                                        </span>
+                                                        <span className="text-[11px] font-bold text-slate-200 uppercase">
+                                                            (MULTIPLE CHOICE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 25, resolvedQuestions.length)})
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {showSecBHeader && (
+                                                    <div 
+                                                        className="bg-amber-500 text-slate-950 p-3.5 rounded-xl border-2 border-amber-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
+                                                        style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                                    >
+                                                        <span className="font-black text-xs sm:text-sm tracking-widest uppercase text-slate-950">
+                                                            SECTION B
+                                                        </span>
+                                                        <span className="text-[11px] font-black text-slate-900 uppercase">
+                                                            (NUMERICAL VALUE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 5, resolvedQuestions.length)})
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div
+                                                    className="border border-slate-200 rounded-2xl p-5 bg-slate-50/40 space-y-3"
+                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                                >
                                                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                                                     <span className="font-bold text-sm text-navy">
                                                         Question {currentQNo}
@@ -249,7 +283,8 @@ export default function A4SolutionKey({
                                                         </p>
                                                     )}
                                                 </div>
-                                            </div>
+                                                </div>
+                                            </React.Fragment>
                                         );
                                     })}
                                 </div>

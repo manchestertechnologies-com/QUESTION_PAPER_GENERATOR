@@ -37,6 +37,12 @@ export default function A4AnswerKey({
 
     const paperTitle = activePaper?.title || paper.title || `${paper.subject || 'Academic'} Assessment`;
 
+    const isJeePaper = useMemo(() => {
+        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
+        const title = (paper?.title || '').toUpperCase();
+        return examType.includes('JEE') || title.includes('JEE') || paper?.isJEE;
+    }, [paper]);
+
     // Handle editing a specific question's answer in localQuestions
     const handleAnswerChange = (qIndex, newAnswer) => {
         setLocalQuestions(prev => {
@@ -300,11 +306,25 @@ export default function A4AnswerKey({
                                         const currentQNo = q.setQNo || (startQNo + idx);
                                         const answerLabel = getResolvedAnswerLabel(q);
                                         const isLong = isDescriptiveAnswer(q.answer || answerLabel);
+                                        const showSecAHeader = isJeePaper && (idx % 30 === 0);
+                                        const showSecBHeader = isJeePaper && (idx % 30 === 25);
 
                                         return (
-                                            <div
-                                                key={idx}
-                                                className={`border rounded-xl p-2.5 flex flex-col justify-between transition ${
+                                            <React.Fragment key={idx}>
+                                                {showSecAHeader && (
+                                                    <div className="col-span-full bg-navy text-white px-3.5 py-1.5 rounded-xl flex items-center justify-between font-black text-xs uppercase tracking-wider my-1 border border-navy shadow-xs">
+                                                        <span>SECTION A — MULTIPLE CHOICE QUESTIONS</span>
+                                                        <span className="text-amber-400 text-[10px]">Q.{idx + 1} TO Q.{Math.min(idx + 25, resolvedQuestions.length)}</span>
+                                                    </div>
+                                                )}
+                                                {showSecBHeader && (
+                                                    <div className="col-span-full bg-amber-500 text-navy px-3.5 py-1.5 rounded-xl flex items-center justify-between font-black text-xs uppercase tracking-wider my-1 border border-amber-600 shadow-xs">
+                                                        <span>SECTION B — NUMERICAL VALUE QUESTIONS</span>
+                                                        <span className="text-navy text-[10px] font-black">Q.{idx + 1} TO Q.{Math.min(idx + 5, resolvedQuestions.length)}</span>
+                                                    </div>
+                                                )}
+                                                <div
+                                                    className={`border rounded-xl p-2.5 flex flex-col justify-between transition ${
                                                     isEditing 
                                                         ? 'bg-amber-50/40 border-amber-300 shadow-xs' 
                                                         : 'border-slate-300 bg-slate-50/50 hover:bg-slate-100'
@@ -363,7 +383,8 @@ export default function A4AnswerKey({
                                                         </div>
                                                     )
                                                 )}
-                                            </div>
+                                                </div>
+                                            </React.Fragment>
                                         );
                                     })}
                                 </div>

@@ -128,32 +128,99 @@ export default function A4PaperEngine({
                         >
                             {visibleQuestions.map((q, idx) => {
                                 const displayNum = startQNo + idx;
+
+                                // ── JEE Section Headers Detection ──
+                                const isCurrentNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
+                                                           (q.q_type || '').toLowerCase() === 'numerical' || 
+                                                           !Array.isArray(q.options) || 
+                                                           q.options.length < 2;
+
+                                const prevQ = idx > 0 ? visibleQuestions[idx - 1] : null;
+                                const isPrevNumerical = prevQ ? (
+                                    (prevQ.type || '').toUpperCase() === 'NUMERICAL' || 
+                                    (prevQ.q_type || '').toLowerCase() === 'numerical' || 
+                                    !Array.isArray(prevQ.options) || 
+                                    prevQ.options.length < 2
+                                ) : false;
+
+                                let sectionBanner = null;
+                                if (isJeePaper) {
+                                    if (idx === 0 && !isCurrentNumerical) {
+                                        sectionBanner = {
+                                            title: 'SECTION A',
+                                            subtitle: '(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. 1 TO 25)'
+                                        };
+                                    } else if (isCurrentNumerical && (!prevQ || !isPrevNumerical)) {
+                                        sectionBanner = {
+                                            title: 'SECTION B',
+                                            subtitle: '(NUMERICAL VALUE QUESTIONS — ENTER THE CORRECT NUMERICAL VALUE)'
+                                        };
+                                    } else if (!isCurrentNumerical && prevQ && isPrevNumerical) {
+                                        sectionBanner = {
+                                            title: 'SECTION A',
+                                            subtitle: '(MULTIPLE CHOICE QUESTIONS)'
+                                        };
+                                    }
+                                }
+
                                 return (
-                                    <div
-                                        key={q._id || displayNum}
-                                        className="question-print-item"
-                                        style={{
-                                            breakInside: 'avoid',
-                                            WebkitColumnBreakInside: 'avoid',
-                                            pageBreakInside: 'avoid',
-                                            marginBottom: settings.questionSpacing || (isTwoCol ? '8px' : '10px'),
-                                        }}
-                                    >
-                                        <QuestionBlock
-                                            q={q}
-                                            displayNum={displayNum}
-                                            classes={classes}
-                                            showMarks={settings.showMarks}
-                                            singleColMode={!isTwoCol}
-                                            isTwoCol={isTwoCol}
-                                            fontSize={settings.fontSize}
-                                            lineHeight={settings.lineHeight}
-                                            formatMarks={formatMarks}
-                                            extraStyle={{ marginBottom: '0px' }}
-                                            diagramMaxHeight={settings.diagramMaxHeight}
-                                            onDiagramResize={onDiagramResize}
-                                        />
-                                    </div>
+                                    <React.Fragment key={q._id || displayNum}>
+                                        {/* ── Prominent Bold & Caps JEE Section Banner ── */}
+                                        {sectionBanner && (
+                                            <div
+                                                className="a4-jee-section-banner"
+                                                style={{
+                                                    textAlign: 'center',
+                                                    padding: '6px 10px',
+                                                    margin: idx === 0 ? '4px 0 10px 0' : '14px 0 10px 0',
+                                                    borderTop: '2.5px solid #000',
+                                                    borderBottom: '2.5px solid #000',
+                                                    background: '#f8fafc',
+                                                    columnSpan: 'all',
+                                                    WebkitColumnSpan: 'all',
+                                                    breakInside: 'avoid',
+                                                    WebkitColumnBreakInside: 'avoid',
+                                                    pageBreakInside: 'avoid',
+                                                    width: '100%',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            >
+                                                <div style={{ fontWeight: 900, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#000' }}>
+                                                    <strong>{sectionBanner.title}</strong>
+                                                </div>
+                                                {sectionBanner.subtitle && (
+                                                    <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#333', marginTop: '2px' }}>
+                                                        {sectionBanner.subtitle}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <div
+                                            className="question-print-item"
+                                            style={{
+                                                breakInside: 'avoid',
+                                                WebkitColumnBreakInside: 'avoid',
+                                                pageBreakInside: 'avoid',
+                                                marginBottom: settings.questionSpacing || (isTwoCol ? '8px' : '10px'),
+                                            }}
+                                        >
+                                            <QuestionBlock
+                                                q={q}
+                                                displayNum={displayNum}
+                                                classes={classes}
+                                                showMarks={settings.showMarks}
+                                                singleColMode={!isTwoCol}
+                                                isTwoCol={isTwoCol}
+                                                fontSize={settings.fontSize}
+                                                lineHeight={settings.lineHeight}
+                                                formatMarks={formatMarks}
+                                                extraStyle={{ marginBottom: '0px' }}
+                                                diagramMaxHeight={settings.diagramMaxHeight}
+                                                onDiagramResize={onDiagramResize}
+                                            />
+                                        </div>
+                                    </React.Fragment>
                                 );
                             })}
                         </div>

@@ -328,10 +328,32 @@ async function generatePaperDoc(paper, template = null) {
         }
     } else {
         // Flat layout
+        const isJeePaper = ((paper.examType || paper.paperType || '').toUpperCase().includes('JEE') || (paper.title || '').toUpperCase().includes('JEE') || paper.isJEE);
+
         for (let idx = 0; idx < questions.length; idx++) {
             const q = questions[idx];
             const qNum = idx + 1;
             
+            if (isJeePaper && idx % 30 === 0) {
+                docChildren.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({ text: "SECTION A — MULTIPLE CHOICE QUESTIONS", bold: true, size: 22, font: 'Calibri', underline: {} })
+                        ],
+                        spacing: { before: 240, after: 120 }
+                    })
+                );
+            } else if (isJeePaper && idx % 30 === 25) {
+                docChildren.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({ text: "SECTION B — NUMERICAL VALUE QUESTIONS", bold: true, size: 22, font: 'Calibri', underline: {} })
+                        ],
+                        spacing: { before: 240, after: 120 }
+                    })
+                );
+            }
+
             const qRuns = await textToRuns(q.questionText);
             docChildren.push(
                 new Paragraph({
