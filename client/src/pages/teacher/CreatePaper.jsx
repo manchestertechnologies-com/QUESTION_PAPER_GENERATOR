@@ -574,10 +574,23 @@ export default function CreatePaper() {
 
     // Scoped Question Pool (Ensure all questions load reliably)
     const scopedQuestionPool = useMemo(() => {
+        const isJeeFormat = paperCategory !== 'assignment' && String(examType || '').toUpperCase().includes('JEE');
+
         return availableQuestions.filter(q => {
             // If already in selected questions, always preserve it
             const isAlreadySelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
             if (isAlreadySelected) return true;
+
+            // Numerical / No-options questions check:
+            // MUST ONLY BE INCLUDED IN JEE FORMAT; NOWHERE ELSE!
+            const isNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
+                                (q.q_type || '').toLowerCase() === 'numerical' || 
+                                !Array.isArray(q.options) || 
+                                q.options.length < 2;
+
+            if (!isJeeFormat && isNumerical) {
+                return false;
+            }
 
             // Class check (permissive: JEE/NEET/CET entrance questions match all high school classes)
             if (selectedClass && selectedClass !== 'Both' && q.classes && q.classes.length > 0) {
@@ -609,7 +622,7 @@ export default function CreatePaper() {
 
             return true;
         });
-    }, [availableQuestions, selectedQuestions, selectedChapters, selectedConcepts, selectedClass]);
+    }, [availableQuestions, selectedQuestions, selectedChapters, selectedConcepts, selectedClass, examType, paperCategory]);
 
     // Filtered questions for Manual Selection
     const filteredQuestions = useMemo(() => {
@@ -645,22 +658,33 @@ export default function CreatePaper() {
                 return next;
             });
             setSwappingQuestionIndex(null);
+            setShowReviewSelectedModal(false);
             return;
         }
 
-        // Standard Toggle
-        setSelectedQuestions(prev => {
-            const exists = prev.some(q => (q._id || q.id) === qId);
-            if (exists) {
-                return prev.filter(q => (q._id || q.id) !== qId);
-            } else {
-                if (prev.length >= targetLimit) {
-                    setShowLimitReachedModal(true);
-                    return prev;
-                }
-                return [...prev, question];
+        const isSelected = selectedQuestions.some(q => (q._id || q.id) === qId);
+
+        if (isSelected) {
+            setSelectedQuestions(prev => prev.filter(q => (q._id || q.id) !== qId));
+        } else {
+            if (selectedQuestions.length >= targetLimit) {
+                setShowLimitReachedModal(true);
+                return;
             }
-        });
+            setSelectedQuestions(prev => [...prev, question]);
+        }
+    };
+
+    // Remove selected question
+    const handleRemoveQuestion = (idx) => {
+        setSelectedQuestions(prev => prev.filter((_, i) => i !== idx));
+    };
+
+    // Update edited question
+    const handleSaveEditedQuestion = (updatedQuestion) => {
+        setSelectedQuestions(prev => prev.map(q => (q._id || q.id) === (editingQuestionModal.question._id || editingQuestionModal.question.id) ? updatedQuestion : q));
+        setAvailableQuestions(prev => prev.map(q => (q._id || q.id) === (editingQuestionModal.question._id || editingQuestionModal.question.id) ? updatedQuestion : q));
+        setEditingQuestionModal(null);
     };
 
     const removeQuestionByIndex = (index) => {
@@ -782,6 +806,7 @@ export default function CreatePaper() {
 
     // Auto Fetch Generator
     const handleGenerateAuto = () => {
+        const isJeeFormat = paperCategory !== 'assignment' && String(examType || '').toUpperCase().includes('JEE');
         const usedIds = new Set();
         const usedSignatures = new Set();
 
@@ -804,9 +829,45 @@ export default function CreatePaper() {
 
         const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
 
+        // Helper to pick balanced questions from a pool given target count and difficulty distribution
+        const pickBalanced = (pool, count) => {
+            if (count <= 0 || pool.length === 0) return [];
+            const easyTarget = Math.round(count * (autoDist.easy / 100));
+            const medTarget = Math.round(count * (autoDist.medium / 100));
+            const hardTarget = Math.max(0, count - easyTarget - medTarget);
+
+            const easyPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'easy' && isUnused(q));
+            const medPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'medium' && isUnused(q));
+            const hardPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'hard' && isUnused(q));
+
+            const picked = [];
+            for (const q of shuffle(easyPool)) {
+                if (picked.length >= easyTarget) break;
+                if (isUnused(q)) { picked.push(q); markUsed(q); }
+            }
+            for (const q of shuffle(medPool)) {
+                if (picked.length >= easyTarget + medTarget) break;
+                if (isUnused(q)) { picked.push(q); markUsed(q); }
+            }
+            for (const q of shuffle(hardPool)) {
+                if (picked.length >= count) break;
+                if (isUnused(q)) { picked.push(q); markUsed(q); }
+            }
+            if (picked.length < count) {
+                const remainder = pool.filter(q => isUnused(q));
+                for (const q of shuffle(remainder)) {
+                    if (picked.length >= count) break;
+                    picked.push(q);
+                    markUsed(q);
+                }
+            }
+            return picked;
+        };
+
         // If specific chapter quotas are configured, generate strictly adhering to per-chapter allocations
         if (selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0) {
-            const combined = [];
+            const standardCombined = [];
+            const numericalCombined = [];
 
             for (const chName of selectedChapters) {
                 const qty = parseInt(chapterQuotas[chName], 10) || 0;
@@ -815,118 +876,106 @@ export default function CreatePaper() {
                 const chPool = scopedQuestionPool.filter(q => q.chapter === chName && isUnused(q));
                 if (chPool.length === 0) continue;
 
-                const easyTarget = Math.round(qty * (autoDist.easy / 100));
-                const medTarget = Math.round(qty * (autoDist.medium / 100));
-                const hardTarget = Math.max(0, qty - easyTarget - medTarget);
+                if (isJeeFormat) {
+                    // In JEE: 25 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 30 Qs
+                    const chNumTarget = Math.round(qty * (5 / 30));
+                    const chStdTarget = Math.max(0, qty - chNumTarget);
 
-                const easyPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-                const medPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-                const hardPool = chPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+                    const chStdPool = chPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2);
+                    const chNumPool = chPool.filter(q => (q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2);
 
-                const pickedEasy = [];
-                for (const q of shuffle(easyPool)) {
-                    if (pickedEasy.length >= easyTarget) break;
-                    if (isUnused(q)) {
-                        pickedEasy.push(q);
-                        markUsed(q);
+                    const pickedStd = pickBalanced(chStdPool, chStdTarget);
+                    const pickedNum = [];
+                    for (const q of shuffle(chNumPool)) {
+                        if (pickedNum.length >= chNumTarget) break;
+                        if (isUnused(q)) { pickedNum.push(q); markUsed(q); }
                     }
-                }
 
-                const pickedMed = [];
-                for (const q of shuffle(medPool)) {
-                    if (pickedMed.length >= medTarget) break;
-                    if (isUnused(q)) {
-                        pickedMed.push(q);
-                        markUsed(q);
-                    }
+                    standardCombined.push(...pickedStd);
+                    numericalCombined.push(...pickedNum);
+                } else {
+                    // Non-JEE: Strictly standard questions with options only
+                    const pickedStd = pickBalanced(chPool, qty);
+                    standardCombined.push(...pickedStd);
                 }
-
-                const pickedHard = [];
-                for (const q of shuffle(hardPool)) {
-                    if (pickedHard.length >= hardTarget) break;
-                    if (isUnused(q)) {
-                        pickedHard.push(q);
-                        markUsed(q);
-                    }
-                }
-
-                let chCombined = [...pickedEasy, ...pickedMed, ...pickedHard];
-
-                if (chCombined.length < qty) {
-                    const remainder = chPool.filter(q => isUnused(q));
-                    for (const q of shuffle(remainder)) {
-                        if (chCombined.length >= qty) break;
-                        chCombined.push(q);
-                        markUsed(q);
-                    }
-                }
-                combined.push(...chCombined);
             }
 
-            if (combined.length === 0) {
+            // In JEE, if numerical count is less than needed, backfill from remaining numerical pool
+            let finalSelected = [];
+            if (isJeeFormat) {
+                const totalTarget = Object.values(chapterQuotas).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                const desiredNumericals = Math.round(totalTarget * (5 / 30));
+                if (numericalCombined.length < desiredNumericals) {
+                    const allNumPool = scopedQuestionPool.filter(q => ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) && isUnused(q));
+                    for (const q of shuffle(allNumPool)) {
+                        if (numericalCombined.length >= desiredNumericals) break;
+                        numericalCombined.push(q);
+                        markUsed(q);
+                    }
+                }
+                // JEE format: Standard Questions (Q1 to Q25) first, then Numerical Questions (Q26 to Q30)
+                finalSelected = [...standardCombined, ...numericalCombined];
+            } else {
+                finalSelected = standardCombined;
+            }
+
+            if (finalSelected.length === 0) {
                 return alert('No questions found matching the selected syllabus chapters.');
             }
 
-            setSelectedQuestions(combined);
-            setMethod('manual'); // automatically set method to manual so review shows questions
-            setCurrentStep(4); // Move to Preview
+            setSelectedQuestions(finalSelected);
+            setMethod('manual');
+            setCurrentStep(4);
             return;
         }
 
+        // Global Auto-generation (no per-chapter quotas)
         if (scopedQuestionPool.length === 0) {
             return alert('No questions found matching the selected syllabus chapters & concepts.');
         }
 
         const count = Math.min(targetLimit, scopedQuestionPool.length);
-        const easyTarget = Math.round(count * (autoDist.easy / 100));
-        const medTarget = Math.round(count * (autoDist.medium / 100));
-        const hardTarget = Math.max(0, count - easyTarget - medTarget);
+        let finalSelected = [];
 
-        const easyPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'easy' && isUnused(q));
-        const medPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'medium' && isUnused(q));
-        const hardPool = scopedQuestionPool.filter(q => (q.level || 'medium').toLowerCase() === 'hard' && isUnused(q));
+        if (isJeeFormat) {
+            // In JEE: 25 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 30 Qs
+            const numTarget = Math.min(count, Math.max(1, Math.round(count * (5 / 30))));
+            const stdTarget = Math.max(0, count - numTarget);
 
-        const pickedEasy = [];
-        for (const q of shuffle(easyPool)) {
-            if (pickedEasy.length >= easyTarget) break;
-            if (isUnused(q)) {
-                pickedEasy.push(q);
-                markUsed(q);
+            const stdPool = scopedQuestionPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2 && isUnused(q));
+            const numPool = scopedQuestionPool.filter(q => ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) && isUnused(q));
+
+            const pickedStd = pickBalanced(stdPool, stdTarget);
+            const pickedNum = [];
+            for (const q of shuffle(numPool)) {
+                if (pickedNum.length >= numTarget) break;
+                if (isUnused(q)) { pickedNum.push(q); markUsed(q); }
             }
+
+            // Fallback backfill if pool had fewer than target of either
+            if (pickedStd.length + pickedNum.length < count) {
+                const remainder = scopedQuestionPool.filter(q => isUnused(q));
+                for (const q of shuffle(remainder)) {
+                    if (pickedStd.length + pickedNum.length >= count) break;
+                    if ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) {
+                        pickedNum.push(q);
+                    } else {
+                        pickedStd.push(q);
+                    }
+                    markUsed(q);
+                }
+            }
+
+            // JEE format: Standard questions (Q1 to Q25) first, followed by Numerical questions (Q26 to Q30)
+            finalSelected = [...pickedStd, ...pickedNum];
+        } else {
+            // Non-JEE: Strictly standard multiple-choice questions with options only
+            finalSelected = pickBalanced(scopedQuestionPool, count);
         }
 
-        const pickedMed = [];
-        for (const q of shuffle(medPool)) {
-            if (pickedMed.length >= medTarget) break;
-            if (isUnused(q)) {
-                pickedMed.push(q);
-                markUsed(q);
-            }
-        }
-
-        const pickedHard = [];
-        for (const q of shuffle(hardPool)) {
-            if (pickedHard.length >= hardTarget) break;
-            if (isUnused(q)) {
-                pickedHard.push(q);
-                markUsed(q);
-            }
-        }
-
-        let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
-
-        if (combined.length < count) {
-            const remainder = scopedQuestionPool.filter(q => isUnused(q));
-            for (const q of shuffle(remainder)) {
-                if (combined.length >= count) break;
-                combined.push(q);
-                markUsed(q);
-            }
-        }
-
-        setSelectedQuestions(combined);
-        setMethod('manual'); // Crucial: automatically set method to manual so editing shows questions!
-        setCurrentStep(4); // Move to Preview
+        setSelectedQuestions(finalSelected);
+        setMethod('manual');
+        setCurrentStep(4);
     };
 
     // Pre-finalize check
@@ -1247,12 +1296,28 @@ export default function CreatePaper() {
                                     <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Exam Format</label>
                                     <select
                                         value={examType}
-                                        onChange={e => setExamType(e.target.value)}
+                                        onChange={e => {
+                                            const nextType = e.target.value;
+                                            setExamType(nextType);
+                                            if (nextType === 'JEE') {
+                                                setTargetCount(30);
+                                                setAutoQty(30);
+                                            } else if (nextType === 'NEET') {
+                                                setTargetCount(45);
+                                                setAutoQty(45);
+                                            } else if (nextType === 'CET') {
+                                                setTargetCount(60);
+                                                setAutoQty(60);
+                                            } else if (nextType === 'BOARD') {
+                                                setTargetCount(30);
+                                                setAutoQty(30);
+                                            }
+                                        }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
                                     >
-                                        <option value="CET">CET Standard</option>
-                                        <option value="NEET">NEET Standard</option>
-                                        <option value="JEE">JEE Standard</option>
+                                        <option value="CET">CET Standard (All Multiple Choice)</option>
+                                        <option value="NEET">NEET Standard (All Multiple Choice)</option>
+                                        <option value="JEE">JEE Standard (25 Standard + 5 Numericals)</option>
                                         <option value="BOARD">PUC Board Standard</option>
                                     </select>
                                 </div>
@@ -1275,7 +1340,7 @@ export default function CreatePaper() {
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
                                     />
-                                    {[30, 45, 60, 90].map(cnt => (
+                                    {(examType === 'JEE' ? [30, 60, 90, 120] : (examType === 'NEET' ? [45, 50, 90, 180] : (examType === 'CET' ? [30, 60, 120, 180] : [25, 30, 45, 60]))).map(cnt => (
                                         <button
                                             key={cnt}
                                             type="button"
@@ -1291,6 +1356,11 @@ export default function CreatePaper() {
                                         </button>
                                     ))}
                                 </div>
+                                {examType === 'JEE' && paperCategory === 'test' && (
+                                    <p className="text-[11px] font-bold text-blue-700 bg-blue-50/80 border border-blue-200 rounded-xl px-2.5 py-1.5 mt-2">
+                                        ⚡ <strong>JEE Pattern:</strong> Auto-fetches <strong>25 Standard Questions</strong> (MCQ, Match, Statement, Assertion-Reason) + <strong>5 Numerical Value Questions</strong> (No Options) per 30 Qs.
+                                    </p>
+                                )}
                             </div>
 
                             {/* Class */}
@@ -2114,6 +2184,9 @@ export default function CreatePaper() {
                                         <option value="ASSERTION_REASON">Assertion & Reason</option>
                                         <option value="MATCH_FOLLOWING">Match the Column</option>
                                         <option value="STATEMENT_BASED">Statement Based</option>
+                                        {examType === 'JEE' && (
+                                            <option value="NUMERICAL">🔢 Numerical Answer (JEE only)</option>
+                                        )}
                                     </select>
                                     <div className="flex items-center gap-2">
                                         <button

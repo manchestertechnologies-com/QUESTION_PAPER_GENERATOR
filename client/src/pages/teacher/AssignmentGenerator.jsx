@@ -176,6 +176,13 @@ const AssignmentGenerator = () => {
     // Scoped pool based on checked chapters & concepts
     const scopedPool = useMemo(() => {
         return questionsPool.filter(q => {
+            // Numericals and questions without options should only ever be in JEE format
+            const isNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
+                                (q.q_type || '').toLowerCase() === 'numerical' || 
+                                !Array.isArray(q.options) || 
+                                q.options.length < 2;
+            if (isNumerical) return false;
+
             if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) return false;
             if (selectedConcepts.length > 0) {
                 const cpt = q.concept || q.topic;
