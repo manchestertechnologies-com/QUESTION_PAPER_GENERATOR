@@ -324,65 +324,55 @@ export default function A4AnswerKey({
                                                     </div>
                                                 )}
                                                 <div
-                                                    className={`border rounded-xl p-2.5 flex flex-col justify-between transition ${
+                                                    className={`border-2 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2 transition ${
                                                     isEditing 
-                                                        ? 'bg-amber-50/40 border-amber-300 shadow-xs' 
-                                                        : 'border-slate-300 bg-slate-50/50 hover:bg-slate-100'
+                                                        ? 'bg-amber-50/50 border-amber-400 shadow-xs' 
+                                                        : 'border-slate-300 bg-white hover:bg-slate-50/90 shadow-2xs'
                                                 }`}
-                                                style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                                            >
-                                                <div className="flex items-center justify-between gap-1 mb-1.5">
-                                                    <span className="font-black text-slate-700 text-xs">
+                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                                >
+                                                    {/* Left: Question No in Bold Dark / Black Box Badge */}
+                                                    <div className="flex items-center justify-center bg-slate-900 text-white font-black text-xs px-2.5 py-1 rounded-md min-w-[42px] tracking-tight shadow-xs shrink-0">
                                                         Q.{currentQNo}
-                                                    </span>
-                                                    {!isEditing && (
-                                                        <span className={`font-black px-2.5 py-0.5 rounded text-xs text-center shadow-2xs ${
+                                                    </div>
+
+                                                    {/* Right: Answer in Clean Lite Colour Badge (Alphabet / Number strictly matching options) */}
+                                                    {!isEditing ? (
+                                                        <div className={`font-black px-3 py-1 rounded-md text-xs text-center border shadow-2xs flex-1 max-w-[110px] truncate ${
                                                             isLong
-                                                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                                                : 'bg-navy text-amber-400 min-w-[26px]'
+                                                                ? 'bg-amber-50 text-amber-950 border-amber-300'
+                                                                : 'bg-slate-100 text-slate-900 border-slate-300 min-w-[36px]'
                                                         }`}>
                                                             {isLong ? 'See Below' : answerLabel}
-                                                        </span>
+                                                        </div>
+                                                    ) : (
+                                                        /* Edit Mode Controls */
+                                                        <div className="flex-1 min-w-0 space-y-1">
+                                                            <div className="flex items-center gap-1 justify-between">
+                                                                {(q.options && q.options.length > 0 ? ['A', 'B', 'C', 'D'].slice(0, q.options.length) : ['A', 'B', 'C', 'D']).map(optKey => (
+                                                                    <button
+                                                                        key={optKey}
+                                                                        type="button"
+                                                                        onClick={() => handleAnswerChange(idx, optKey)}
+                                                                        className={`flex-1 py-0.5 rounded text-[11px] font-black transition cursor-pointer ${
+                                                                            answerLabel === optKey
+                                                                                ? 'bg-navy text-gold shadow-sm ring-1 ring-gold'
+                                                                                : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-300'
+                                                                        }`}
+                                                                    >
+                                                                        {optKey}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                value={q.answer || ''}
+                                                                onChange={e => handleAnswerChange(idx, e.target.value)}
+                                                                placeholder="Or type answer..."
+                                                                className="w-full text-[11px] font-bold px-2 py-0.5 border border-slate-300 rounded bg-white text-navy outline-none focus:border-navy"
+                                                            />
+                                                        </div>
                                                     )}
-                                                </div>
-
-                                                {/* Edit Mode Controls */}
-                                                {isEditing ? (
-                                                    <div className="space-y-1.5 pt-1">
-                                                        {/* Quick option pills for MCQ */}
-                                                        <div className="flex items-center gap-1 justify-between">
-                                                            {['A', 'B', 'C', 'D'].map(optKey => (
-                                                                <button
-                                                                    key={optKey}
-                                                                    type="button"
-                                                                    onClick={() => handleAnswerChange(idx, optKey)}
-                                                                    className={`flex-1 py-1 rounded text-[11px] font-black transition cursor-pointer ${
-                                                                        answerLabel === optKey
-                                                                            ? 'bg-navy text-gold shadow-sm ring-1 ring-gold'
-                                                                            : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-300'
-                                                                    }`}
-                                                                >
-                                                                    {optKey}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                        {/* Custom answer text input for numerical or 1-line answer */}
-                                                        <input
-                                                            type="text"
-                                                            value={q.answer || ''}
-                                                            onChange={e => handleAnswerChange(idx, e.target.value)}
-                                                            placeholder="Or type answer..."
-                                                            className="w-full text-[11px] font-bold px-2 py-1 border border-slate-300 rounded bg-white text-navy outline-none focus:border-navy"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    // In view mode, show small preview if it's a short text answer
-                                                    !isLong && q.answer && q.answer !== answerLabel && (
-                                                        <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                                                            {String(q.answer).slice(0, 20)}
-                                                        </div>
-                                                    )
-                                                )}
                                                 </div>
                                             </React.Fragment>
                                         );

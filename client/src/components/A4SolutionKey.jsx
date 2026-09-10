@@ -12,15 +12,23 @@ export default function A4SolutionKey({
 }) {
     const [activeSet, setActiveSet] = useState(setName || paper?.setName || 'P');
 
+    const baseQs = useMemo(() => {
+        return (questions && questions.length > 0) ? questions : (paper?.questions || []);
+    }, [questions, paper]);
+
     const activePaper = useMemo(() => {
-        if (!paper || !paper.questions) return paper;
-        return generatePaperSet(paper, activeSet);
-    }, [paper, activeSet]);
+        const fullPaper = {
+            ...paper,
+            questions: baseQs
+        };
+        if (!baseQs || baseQs.length === 0) return fullPaper;
+        return generatePaperSet(fullPaper, activeSet);
+    }, [paper, baseQs, activeSet]);
 
     const resolvedQuestions = useMemo(() => {
         if (activePaper?.questions && activePaper.questions.length > 0) return activePaper.questions;
-        return questions.length > 0 ? questions : (paper.questions || []);
-    }, [activePaper, questions, paper]);
+        return baseQs;
+    }, [activePaper, baseQs]);
 
     const paperTitle = activePaper?.title || paper.title || `${paper.subject || 'Academic'} Assessment`;
 
@@ -59,7 +67,7 @@ export default function A4SolutionKey({
                                     onClick={() => setActiveSet(s)}
                                     className={`px-2.5 py-0.5 rounded-lg text-xs font-black transition cursor-pointer ${
                                         activeSet === s
-                                            ? 'bg-navy text-gold shadow-sm'
+                                            ? 'bg-navy text-gold shadow-sm scale-105'
                                             : 'bg-white text-slate-700 hover:bg-slate-200'
                                     }`}
                                 >
@@ -101,7 +109,7 @@ export default function A4SolutionKey({
                     <div className="mx-auto w-full max-w-[794px]">
                         <div
                             id="print-target-solution-key"
-                            className="a4-solution-key-sheet bg-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full text-slate-800 space-y-6 border border-slate-300 relative"
+                            className="a4-solution-key-sheet bg-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full text-slate-800 space-y-5 border border-slate-300 relative"
                             style={{
                                 minHeight: 'auto',
                                 boxSizing: 'border-box',
@@ -143,12 +151,12 @@ export default function A4SolutionKey({
 
                             <div style={{ position: 'relative', zIndex: 1 }}>
                                 {/* ── College Header ── */}
-                                <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
+                                <div className="text-center border-b-2 border-slate-900 pb-3 mb-5">
                                     <div className="flex items-center justify-center gap-3 mb-2">
                                         <img
                                             src="/ManchesterLogo.jpeg"
                                             alt="Manchester PU College"
-                                            className="w-14 h-14 object-contain rounded-full border border-slate-200 shadow-xs"
+                                            className="w-13 h-13 object-contain rounded-full border border-slate-200 shadow-xs"
                                             onError={e => { e.currentTarget.style.display = 'none'; }}
                                         />
                                         <div className="text-left">
@@ -161,21 +169,21 @@ export default function A4SolutionKey({
                                         </div>
                                     </div>
 
-                                    <div className="mt-3 pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs font-semibold text-slate-700">
+                                    <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs font-semibold text-slate-700">
                                         <span className="font-bold text-navy">{paperTitle}</span>
-                                        {setName && <span>SET: <strong>{setName}</strong></span>}
+                                        <span>SET: <strong>{activeSet}</strong></span>
                                         {paper.subject && <span>Subject: <strong>{paper.subject}</strong></span>}
                                         <span>Total Questions: <strong>{resolvedQuestions.length}</strong></span>
                                     </div>
-                                    <div className="mt-1 text-center">
+                                    <div className="mt-1.5 text-center">
                                         <span className="inline-block bg-slate-900 text-amber-400 font-bold text-[11px] uppercase tracking-widest px-4 py-0.5 rounded-full">
-                                            Detailed Solutions Guide
+                                            Detailed Solutions Guide — SET {activeSet}
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* ── Questions & Explanations Flow ── */}
-                                <div className="space-y-6">
+                                <div className="space-y-4">
                                     {resolvedQuestions.map((q, idx) => {
                                         const currentQNo = q.setQNo || (startQNo + idx);
                                         const answerLabel = getResolvedAnswerLabel(q);
@@ -191,104 +199,114 @@ export default function A4SolutionKey({
                                             <React.Fragment key={idx}>
                                                 {showSecAHeader && (
                                                     <div 
-                                                        className="bg-slate-900 text-white p-3.5 rounded-xl border-2 border-slate-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
+                                                        className="bg-slate-900 text-white p-3 rounded-xl border-2 border-slate-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
                                                         style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
                                                     >
                                                         <span className="font-black text-xs sm:text-sm tracking-widest text-amber-400 uppercase">
-                                                            SECTION A
+                                                            SECTION A — MULTIPLE CHOICE QUESTIONS
                                                         </span>
                                                         <span className="text-[11px] font-bold text-slate-200 uppercase">
-                                                            (MULTIPLE CHOICE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 20, resolvedQuestions.length)})
+                                                            (QUESTION NOS. {idx + 1} TO {Math.min(idx + 20, resolvedQuestions.length)})
                                                         </span>
                                                     </div>
                                                 )}
                                                 {showSecBHeader && (
                                                     <div 
-                                                        className="bg-amber-500 text-slate-950 p-3.5 rounded-xl border-2 border-amber-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
+                                                        className="bg-amber-500 text-slate-950 p-3 rounded-xl border-2 border-amber-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
                                                         style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
                                                     >
                                                         <span className="font-black text-xs sm:text-sm tracking-widest uppercase text-slate-950">
-                                                            SECTION B
+                                                            SECTION B — NUMERICAL VALUE QUESTIONS
                                                         </span>
                                                         <span className="text-[11px] font-black text-slate-900 uppercase">
-                                                            (NUMERICAL VALUE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 5, resolvedQuestions.length)})
+                                                            (QUESTION NOS. {idx + 1} TO {Math.min(idx + 5, resolvedQuestions.length)})
                                                         </span>
                                                     </div>
                                                 )}
                                                 <div
-                                                    className="border border-slate-200 rounded-2xl p-4 bg-slate-50/40 space-y-2.5"
+                                                    className="border border-slate-300 rounded-xl p-3.5 bg-white space-y-2 shadow-2xs"
                                                     style={{ breakInside: 'avoid', pageBreakInside: 'avoid', fontSize: '13px' }}
                                                 >
-                                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                                    <span className="font-bold text-sm text-navy">
-                                                        Question {currentQNo}
-                                                    </span>
-                                                    {options.length >= 2 ? (
-                                                        <span className="bg-emerald-100 text-emerald-900 text-xs font-black px-3 py-1 rounded-md border border-emerald-300 shadow-2xs">
-                                                            Correct Answer: ({answerLabel})
-                                                        </span>
-                                                    ) : (
-                                                        <span className="bg-amber-100 text-amber-950 text-xs font-black px-3 py-1 rounded-md border border-amber-300 shadow-2xs">
-                                                            Correct Value: {answerLabel}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {/* Question Text */}
-                                                <div className="text-xs text-slate-800 font-normal leading-relaxed">
-                                                    <MathRenderer inline text={qText} />
-                                                </div>
-
-                                                {/* Diagram if present */}
-                                                {diagramImg && (
-                                                    <div className="my-2 max-w-xs mx-auto border border-slate-200 rounded-lg p-1 bg-white">
-                                                        <img
-                                                            src={diagramImg}
-                                                            alt={`Q${currentQNo} Diagram`}
-                                                            className="max-h-36 object-contain mx-auto"
-                                                            onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
-                                                        />
-                                                    </div>
-                                                )}
-
-                                                {/* Options summary */}
-                                                {options.length > 0 && (
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px] text-slate-600">
-                                                        {options.map((opt, oi) => {
-                                                            const isCorrect = isOptionCorrect(q, oi);
-                                                            return (
-                                                                <div
-                                                                    key={oi}
-                                                                    className={`p-1.5 rounded flex items-start gap-1.5 ${
-                                                                        isCorrect
-                                                                            ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-300'
-                                                                            : 'bg-white border border-slate-100'
-                                                                    }`}
-                                                                >
-                                                                    <span className="font-bold">({labels[oi] || String.fromCharCode(65 + oi)})</span>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        <MathRenderer inline text={typeof opt === 'object' ? (opt.text || '') : String(opt)} />
-                                                                    </div>
-                                                                    {isCorrect && <span className="text-emerald-700 font-black">✓</span>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-
-                                                {/* Explanation Box with full KaTeX Math Rendering */}
-                                                <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
-                                                    <span className="font-bold text-navy block">Explanation:</span>
-                                                    {explanation ? (
-                                                        <div className="leading-relaxed">
-                                                            <MathRenderer inline text={explanation} />
+                                                    {/* Question Card Header: Dark Q number badge on left, crisp light/green answer pill on right */}
+                                                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="bg-slate-900 text-white font-black text-xs px-2.5 py-1 rounded-md shadow-2xs">
+                                                                Question {currentQNo}
+                                                            </span>
+                                                            {q.originalQNo && q.originalQNo !== currentQNo && (
+                                                                <span className="text-[10px] font-bold text-slate-400">
+                                                                    (Original Q.{q.originalQNo})
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    ) : (
-                                                        <p className="text-slate-400 italic text-[11px]">
-                                                            {options.length >= 2 ? `Option (${answerLabel}) is the verified correct answer.` : `Value ${answerLabel} is the verified correct answer.`}
-                                                        </p>
+                                                        {options.length >= 2 ? (
+                                                            <span className="bg-emerald-50 text-emerald-950 text-xs font-black px-3 py-1 rounded-md border border-emerald-300 shadow-2xs">
+                                                                Correct Answer: ({answerLabel})
+                                                            </span>
+                                                        ) : (
+                                                            <span className="bg-amber-50 text-amber-950 text-xs font-black px-3 py-1 rounded-md border border-amber-300 shadow-2xs">
+                                                                Correct Value: {answerLabel}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Question Text */}
+                                                    <div className="text-xs text-slate-900 font-normal leading-relaxed">
+                                                        <MathRenderer inline text={qText} />
+                                                    </div>
+
+                                                    {/* Diagram if present */}
+                                                    {diagramImg && (
+                                                        <div className="my-1.5 max-w-xs mx-auto border border-slate-200 rounded-lg p-1 bg-white">
+                                                            <img
+                                                                src={diagramImg}
+                                                                alt={`Q${currentQNo} Diagram`}
+                                                                className="max-h-32 object-contain mx-auto"
+                                                                onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                            />
+                                                        </div>
                                                     )}
-                                                </div>
+
+                                                    {/* Options summary with correct option highlighted */}
+                                                    {options.length > 0 && (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5 text-[11px] text-slate-700">
+                                                            {options.map((opt, oi) => {
+                                                                const isCorrect = isOptionCorrect(q, oi);
+                                                                return (
+                                                                    <div
+                                                                        key={oi}
+                                                                        className={`p-1.5 rounded-lg flex items-start gap-1.5 transition ${
+                                                                            isCorrect
+                                                                                ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-300 shadow-2xs'
+                                                                                : 'bg-slate-50 border border-slate-200'
+                                                                        }`}
+                                                                    >
+                                                                        <span className={`font-bold min-w-[20px] ${isCorrect ? 'text-emerald-800' : 'text-slate-600'}`}>
+                                                                            {labels[oi] || String.fromCharCode(65 + oi)}:
+                                                                        </span>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <MathRenderer inline text={typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt)} />
+                                                                        </div>
+                                                                        {isCorrect && <span className="text-emerald-600 font-black ml-1">✓</span>}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Explanation Box - Clean, compact without blank gaps (~9.75pt / 12px text) */}
+                                                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11.5px] text-slate-800 space-y-1">
+                                                        <span className="font-black text-navy text-[11px] uppercase tracking-wider block">Explanation / Solution:</span>
+                                                        {explanation ? (
+                                                            <div className="leading-relaxed">
+                                                                <MathRenderer inline text={explanation} />
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-slate-400 italic text-[11px]">
+                                                                {options.length >= 2 ? `Option (${answerLabel}) is the verified correct answer.` : `Value ${answerLabel} is the verified correct answer.`}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </React.Fragment>
                                         );

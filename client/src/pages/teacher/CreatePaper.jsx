@@ -2985,7 +2985,7 @@ export default function CreatePaper() {
                 {/* ── MODAL: ANSWER KEY (TRUE A4 VIEW, DYNAMIC LABELS, INDEPENDENT PRINT & DOWNLOAD) ── */}
                 {showAnswerKeyModal && (
                     <A4AnswerKey
-                        paper={{ title, subject, classes: [selectedClass, examType], _id: paperId }}
+                        paper={{ title, subject, classes: [selectedClass, examType], _id: paperId, questions: selectedQuestions }}
                         questions={selectedQuestions}
                         startQNo={startQNo}
                         onClose={() => setShowAnswerKeyModal(false)}
@@ -2998,7 +2998,7 @@ export default function CreatePaper() {
                 {/* ── MODAL: SOLUTIONS GUIDE (TRUE A4 VIEW, KATEX MATH, INDEPENDENT PRINT & DOWNLOAD) ── */}
                 {showSolutionsModal && (
                     <A4SolutionKey
-                        paper={{ title, subject, classes: [selectedClass, examType] }}
+                        paper={{ title, subject, classes: [selectedClass, examType], _id: paperId, questions: selectedQuestions }}
                         questions={selectedQuestions}
                         startQNo={startQNo}
                         onClose={() => setShowSolutionsModal(false)}

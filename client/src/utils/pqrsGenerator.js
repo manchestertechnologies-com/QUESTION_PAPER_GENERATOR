@@ -8,7 +8,7 @@
  * - S Set: Maximum shuffle (shuffled questions, shuffled options) with recalculated answer keys.
  */
 
-import { getResolvedAnswerLabel } from './sanitize.js';
+import { getResolvedAnswerLabel, getQuestionOptionLabels } from './sanitize.js';
 
 // Seeded pseudo-random number generator for deterministic shuffling per paper ID + set name
 function createSeededRandom(seedStr) {
@@ -63,15 +63,22 @@ export function getAnswerIndex(answer, options = []) {
     // Check option match by string content
     const matchIdx = options.findIndex(opt => {
         if (!opt) return false;
-        const cleanOpt = String(opt).trim().toLowerCase();
+        const optText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt);
+        const cleanOpt = optText.trim().toLowerCase();
         const cleanAns = String(answer).trim().toLowerCase();
         return cleanOpt === cleanAns || cleanOpt.includes(cleanAns) || cleanAns.includes(cleanOpt);
     });
     return matchIdx;
 }
 
+function isNumQuestion(q) {
+    if (!q) return false;
+    const t = (q.type || q.q_type || '').toUpperCase();
+    return t === 'NUMERICAL' || !Array.isArray(q.options) || q.options.length < 2;
+}
+
 /**
- * Shuffle options of a single question and compute the new correct answer letter
+ * Shuffle options of a single question and compute the new correct answer letter/number
  */
 function shuffleQuestionOptions(question, randomFn) {
     const originalOptions = Array.isArray(question.options) ? question.options : [];
@@ -94,12 +101,14 @@ function shuffleQuestionOptions(question, randomFn) {
     const newOptions = shuffledIndexed
         .filter(item => item && item.opt !== undefined)
         .map(item => item.opt);
+    
+    const labels = getQuestionOptionLabels(question);
     let newAnsLetter = question.answer;
 
     if (origAnsIdx >= 0) {
         const newAnsIdx = shuffledIndexed.findIndex(item => item.origIdx === origAnsIdx);
         if (newAnsIdx >= 0) {
-            newAnsLetter = getOptionLetter(newAnsIdx);
+            newAnsLetter = labels[newAnsIdx] || getOptionLetter(newAnsIdx);
         }
     }
 
@@ -139,11 +148,22 @@ export function generatePaperSet(paper, setName = 'P') {
             // Q Set: Shuffle questions only, keep options original
             {
                 const indexed = baseQuestions.map((q, idx) => ({ ...q, originalQNo: idx + 1 }));
-                const shuffled = shuffleArray(indexed, random);
-                processedQuestions = shuffled.map((q, idx) => ({
-                    ...q,
-                    setQNo: idx + 1,
-                }));
+                const hasBothSections = indexed.some(isNumQuestion) && indexed.some(q => !isNumQuestion(q));
+                if (hasBothSections) {
+                    const mcqs = indexed.filter(q => !isNumQuestion(q));
+                    const nums = indexed.filter(isNumQuestion);
+                    const shuffled = [...shuffleArray(mcqs, random), ...shuffleArray(nums, random)];
+                    processedQuestions = shuffled.map((q, idx) => ({
+                        ...q,
+                        setQNo: idx + 1,
+                    }));
+                } else {
+                    const shuffled = shuffleArray(indexed, random);
+                    processedQuestions = shuffled.map((q, idx) => ({
+                        ...q,
+                        setQNo: idx + 1,
+                    }));
+                }
             }
             break;
 
@@ -164,14 +184,25 @@ export function generatePaperSet(paper, setName = 'P') {
             // S Set: Both questions shuffled AND options shuffled (answers recalculated)
             {
                 const indexed = baseQuestions.map((q, idx) => ({ ...q, originalQNo: idx + 1 }));
-                const shuffledQs = shuffleArray(indexed, random);
-                processedQuestions = shuffledQs.map((q, idx) => {
-                    const qWithShuffledOpts = shuffleQuestionOptions(q, random);
-                    return {
-                        ...qWithShuffledOpts,
+                const hasBothSections = indexed.some(isNumQuestion) && indexed.some(q => !isNumQuestion(q));
+                if (hasBothSections) {
+                    const mcqs = indexed.filter(q => !isNumQuestion(q)).map(q => shuffleQuestionOptions(q, random));
+                    const nums = indexed.filter(isNumQuestion);
+                    const shuffled = [...shuffleArray(mcqs, random), ...shuffleArray(nums, random)];
+                    processedQuestions = shuffled.map((q, idx) => ({
+                        ...q,
                         setQNo: idx + 1,
-                    };
-                });
+                    }));
+                } else {
+                    const shuffledQs = shuffleArray(indexed, random);
+                    processedQuestions = shuffledQs.map((q, idx) => {
+                        const qWithShuffledOpts = shuffleQuestionOptions(q, random);
+                        return {
+                            ...qWithShuffledOpts,
+                            setQNo: idx + 1,
+                        };
+                    });
+                }
             }
             break;
     }
