@@ -94,6 +94,7 @@ export default function CreatePaper() {
     const [title, setTitle] = useState('');
     const [duration, setDuration] = useState('180 Minutes');
     const [targetCount, setTargetCount] = useState(60);
+    const [numericalCount, setNumericalCount] = useState(5);
 
     // Assignment custom question numbering
     const [startQNo, setStartQNo] = useState(1);
@@ -924,6 +925,9 @@ export default function CreatePaper() {
         if (selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0) {
             const standardCombined = [];
             const numericalCombined = [];
+            const totalTarget = Object.values(chapterQuotas).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+            const userNumTarget = Math.max(0, parseInt(numericalCount, 10) || 0);
+            const desiredNumericals = Math.min(totalTarget, userNumTarget);
 
             for (const chName of selectedChapters) {
                 const qty = parseInt(chapterQuotas[chName], 10) || 0;
@@ -932,9 +936,9 @@ export default function CreatePaper() {
                 const chPool = scopedQuestionPool.filter(q => q.chapter === chName && isUnused(q));
                 if (chPool.length === 0) continue;
 
-                if (isJeeFormat) {
-                    // In JEE: 20 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 25 Qs
-                    const chNumTarget = Math.round(qty * (5 / 25));
+                if (isJeeFormat && desiredNumericals > 0) {
+                    // Proportionally distribute user-specified numerical target across chapters
+                    const chNumTarget = totalTarget > 0 ? Math.round(qty * (desiredNumericals / totalTarget)) : 0;
                     const chStdTarget = Math.max(0, qty - chNumTarget);
 
                     const chStdPool = chPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2);
@@ -950,17 +954,15 @@ export default function CreatePaper() {
                     standardCombined.push(...pickedStd);
                     numericalCombined.push(...pickedNum);
                 } else {
-                    // Non-JEE: Strictly standard questions with options only
+                    // Non-JEE or 0 numericals: Strictly standard questions with options only
                     const pickedStd = pickBalanced(chPool, qty);
                     standardCombined.push(...pickedStd);
                 }
             }
 
-            // In JEE, if numerical count is less than needed, backfill from remaining numerical pool
+            // In JEE, if numerical count is less than user's desired target, backfill from remaining numerical pool
             let finalSelected = [];
-            if (isJeeFormat) {
-                const totalTarget = Object.values(chapterQuotas).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-                const desiredNumericals = Math.round(totalTarget * (5 / 25));
+            if (isJeeFormat && desiredNumericals > 0) {
                 if (numericalCombined.length < desiredNumericals) {
                     const allNumPool = scopedQuestionPool.filter(q => ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) && isUnused(q));
                     for (const q of shuffle(allNumPool)) {
@@ -969,7 +971,7 @@ export default function CreatePaper() {
                         markUsed(q);
                     }
                 }
-                // JEE format: Standard Questions (Q1 to Q20) first, then Numerical Questions (Q21 to Q25)
+                // Standard questions (Section A) first, then Numerical questions (Section B)
                 finalSelected = [...standardCombined, ...numericalCombined];
             } else {
                 finalSelected = standardCombined;
@@ -994,8 +996,8 @@ export default function CreatePaper() {
         let finalSelected = [];
 
         if (isJeeFormat) {
-            // In JEE: 20 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 25 Qs
-            const numTarget = Math.min(count, Math.max(1, Math.round(count * (5 / 25))));
+            const userNumTarget = Math.max(0, parseInt(numericalCount, 10) || 0);
+            const numTarget = Math.min(count, userNumTarget);
             const stdTarget = Math.max(0, count - numTarget);
 
             const stdPool = scopedQuestionPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2 && isUnused(q));
@@ -1014,15 +1016,20 @@ export default function CreatePaper() {
                 for (const q of shuffle(remainder)) {
                     if (pickedStd.length + pickedNum.length >= count) break;
                     if ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) {
-                        pickedNum.push(q);
+                        if (pickedNum.length < numTarget) {
+                            pickedNum.push(q);
+                            markUsed(q);
+                        }
                     } else {
-                        pickedStd.push(q);
+                        if (pickedStd.length < stdTarget) {
+                            pickedStd.push(q);
+                            markUsed(q);
+                        }
                     }
-                    markUsed(q);
                 }
             }
 
-            // JEE format: Standard questions (Q1 to Q20) first, followed by Numerical questions (Q21 to Q25)
+            // Standard questions (Section A) first, followed by Numerical questions (Section B)
             finalSelected = [...pickedStd, ...pickedNum];
         } else {
             // Non-JEE: Strictly standard multiple-choice questions with options only
@@ -1365,15 +1372,28 @@ export default function CreatePaper() {
                                                 setTargetCount(60);
                                                 setAutoQty(60);
                                             } else if (nextType === 'BOARD') {
+                                                setTargetCount(25);
+                                                setAutoQty(25);
+                                                setNumericalCount(5);
+                                            } else if (val === 'NEET') {
+                                                setTargetCount(45);
+                                                setAutoQty(45);
+                                                setNumericalCount(0);
+                                            } else if (val === 'CET') {
+                                                setTargetCount(60);
+                                                setAutoQty(60);
+                                                setNumericalCount(0);
+                                            } else {
                                                 setTargetCount(30);
                                                 setAutoQty(30);
+                                                setNumericalCount(0);
                                             }
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
                                     >
                                         <option value="CET">CET Standard (All Multiple Choice)</option>
                                         <option value="NEET">NEET Standard (All Multiple Choice)</option>
-                                        <option value="JEE">JEE Standard (20 Standard + 5 Numericals per 25 Qs)</option>
+                                        <option value="JEE">JEE Standard (Section A MCQs + Section B Numericals)</option>
                                         <option value="BOARD">PUC Board Standard</option>
                                     </select>
                                 </div>
@@ -1403,6 +1423,9 @@ export default function CreatePaper() {
                                             onClick={() => {
                                                 setTargetCount(cnt);
                                                 setAutoQty(cnt);
+                                                if (examType === 'JEE') {
+                                                    setNumericalCount(Math.round(cnt * (5 / 25)));
+                                                }
                                             }}
                                             className={`px-2.5 py-3 rounded-xl text-xs font-black transition cursor-pointer ${
                                                 targetCount === cnt ? 'bg-navy text-gold' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
@@ -1412,12 +1435,45 @@ export default function CreatePaper() {
                                         </button>
                                     ))}
                                 </div>
-                                {examType === 'JEE' && paperCategory === 'test' && (
-                                    <p className="text-[11px] font-bold text-blue-700 bg-blue-50/80 border border-blue-200 rounded-xl px-2.5 py-1.5 mt-2">
-                                        ⚡ <strong>JEE Pattern:</strong> Auto-fetches <strong>20 Standard Questions</strong> (MCQ, Match, Statement, Assertion-Reason) + <strong>5 Numerical Value Questions</strong> (No Options) per 25 Qs.
-                                    </p>
-                                )}
                             </div>
+
+                            {/* User-Customizable Numericals Count for JEE */}
+                            {examType === 'JEE' && (
+                                <div className="bg-amber-50/70 p-4 rounded-2xl border-2 border-amber-200 space-y-2 animate-fade-in">
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider">
+                                        🔢 Numericals Count (Section B)
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={targetCount}
+                                            value={numericalCount}
+                                            onChange={e => {
+                                                const v = Math.max(0, parseInt(e.target.value) || 0);
+                                                setNumericalCount(v);
+                                            }}
+                                            className="w-full border-2 border-amber-300 focus:border-navy rounded-2xl px-4 py-3 text-sm font-black text-navy outline-none bg-white"
+                                            placeholder="Enter numericals count..."
+                                        />
+                                        {[0, 5, 10, 15].map(cnt => (
+                                            <button
+                                                key={cnt}
+                                                type="button"
+                                                onClick={() => setNumericalCount(cnt)}
+                                                className={`px-3 py-3 rounded-xl text-xs font-black transition cursor-pointer ${
+                                                    numericalCount === cnt ? 'bg-amber-500 text-navy shadow-sm' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'
+                                                }`}
+                                            >
+                                                {cnt}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[11px] font-bold text-slate-700">
+                                        Distribution: <strong className="text-navy">{Math.max(0, targetCount - numericalCount)} Section A MCQs</strong> + <strong className="text-amber-800">{numericalCount} Section B Numericals</strong> (Total: {targetCount} Qs).
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Class */}
                             <div>
@@ -1918,7 +1974,7 @@ export default function CreatePaper() {
                                 <div className="space-y-5">
                                     {/* Quantity */}
                                     <div>
-                                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Question Quantity</label>
+                                        <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Total Questions Quantity</label>
                                         <div className="flex items-center gap-3">
                                             <input
                                                 type="number"
@@ -1929,24 +1985,74 @@ export default function CreatePaper() {
                                                     const v = parseInt(e.target.value) || 0;
                                                     setAutoQty(v);
                                                     setTargetCount(v);
+                                                    if (String(examType || '').toUpperCase().includes('JEE')) {
+                                                        setNumericalCount(Math.round(v * (5 / 25)));
+                                                    }
                                                 }}
                                                 className="w-32 border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-lg font-black text-navy text-center outline-none"
                                             />
-                                            {[15, 30, 45, 60].map(cnt => (
+                                            {(String(examType || '').toUpperCase().includes('JEE') ? [25, 50, 75, 100] : [15, 30, 45, 60]).map(cnt => (
                                                 <button
                                                     key={cnt}
                                                     type="button"
                                                     onClick={() => {
                                                         setAutoQty(cnt);
                                                         setTargetCount(cnt);
+                                                        if (String(examType || '').toUpperCase().includes('JEE')) {
+                                                            setNumericalCount(Math.round(cnt * (5 / 25)));
+                                                        }
                                                     }}
-                                                    className="px-3.5 py-2.5 rounded-xl font-black text-xs bg-navy/5 hover:bg-navy hover:text-gold text-navy transition cursor-pointer"
+                                                    className={`px-3.5 py-2.5 rounded-xl font-black text-xs transition cursor-pointer ${
+                                                        autoQty === cnt ? 'bg-navy text-gold shadow-xs' : 'bg-navy/5 hover:bg-navy hover:text-gold text-navy'
+                                                    }`}
                                                 >
                                                     {cnt} Qs
                                                 </button>
                                             ))}
                                         </div>
                                     </div>
+
+                                    {/* User-Customizable Numericals for JEE in Auto Engine */}
+                                    {String(examType || '').toUpperCase().includes('JEE') && (
+                                        <div className="bg-amber-50/70 p-5 rounded-2xl border-2 border-amber-200 space-y-3 animate-fade-in">
+                                            <div className="flex justify-between items-center">
+                                                <label className="block text-xs font-black text-navy uppercase tracking-wider">
+                                                    🔢 Numericals Quantity (Section B)
+                                                </label>
+                                                <span className="text-[11px] font-black text-amber-900 bg-amber-200/80 px-2.5 py-0.5 rounded-full">
+                                                    Section B Pool
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <input
+                                                    type="number"
+                                                    min={0}
+                                                    max={autoQty}
+                                                    value={numericalCount}
+                                                    onChange={e => {
+                                                        const v = Math.max(0, parseInt(e.target.value) || 0);
+                                                        setNumericalCount(v);
+                                                    }}
+                                                    className="w-32 border-2 border-amber-300 focus:border-navy bg-white rounded-2xl px-4 py-3 text-lg font-black text-navy text-center outline-none"
+                                                />
+                                                {[0, 5, 10, 15].map(cnt => (
+                                                    <button
+                                                        key={cnt}
+                                                        type="button"
+                                                        onClick={() => setNumericalCount(cnt)}
+                                                        className={`px-3.5 py-2.5 rounded-xl font-black text-xs transition cursor-pointer ${
+                                                            numericalCount === cnt ? 'bg-amber-500 text-navy shadow-sm' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'
+                                                        }`}
+                                                    >
+                                                        {cnt} Numericals
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs font-bold text-slate-700">
+                                                Auto-assemble: <strong className="text-navy">{Math.max(0, autoQty - numericalCount)} Section A MCQs</strong> + <strong className="text-amber-800">{numericalCount} Section B Numericals</strong> (Total: {autoQty} Qs).
+                                            </p>
+                                        </div>
+                                    )}
 
                                     {/* Difficulty Split */}
                                     <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 space-y-4">
