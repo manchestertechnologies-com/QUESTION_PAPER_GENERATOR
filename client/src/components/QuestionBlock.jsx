@@ -469,24 +469,6 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
     // Render Options List
     const renderOptions = (forceSingle = false) => {
         if (options.length === 0) {
-            const isNum = (q.type || q.q_type || '').toUpperCase() === 'NUMERICAL';
-            const isBlank = (q.type || q.q_type || '').toUpperCase().includes('FILL') || (q.type || q.q_type || '').toUpperCase().includes('BLANK') || /_{3,}/.test(qText || '');
-            if (isNum) {
-                return (
-                    <div style={{ marginTop: '4px', fontSize: '0.92em', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>Answer:</span>
-                        <span style={{ display: 'inline-block', borderBottom: '1.5px solid #000', width: '130px' }}>&nbsp;</span>
-                    </div>
-                );
-            }
-            if (isBlank) {
-                return (
-                    <div style={{ marginTop: '4px', fontSize: '0.92em', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>Blank:</span>
-                        <span style={{ display: 'inline-block', borderBottom: '1.5px solid #000', width: '180px' }}>&nbsp;</span>
-                    </div>
-                );
-            }
             return null;
         }
         return (

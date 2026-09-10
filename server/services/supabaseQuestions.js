@@ -60,10 +60,11 @@ const CHAPTER_ALIASES = {
  */
 function cleanDifficultyTags(text) {
     if (!text || typeof text !== 'string') return '';
-    // Matches [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], [QPV_...:...]
+    // Matches [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], [QPV_...:...], [DIAGRAM REQUIRED]
     return text
         .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .replace(/\[DIAGRAM\s+REQUIRED\]/gi, '')
         .trim();
 }
 

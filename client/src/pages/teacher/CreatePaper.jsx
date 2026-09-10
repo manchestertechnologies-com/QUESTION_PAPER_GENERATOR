@@ -794,10 +794,12 @@ export default function CreatePaper() {
                 if (!matchesAnySelected && q.chapter !== 'General') return false;
             }
 
-            // Concept check
-            if (selectedConcepts.length > 0) {
-                const qConcept = q.concept || q.topic;
-                if (qConcept && qConcept !== 'General' && !selectedConcepts.includes(qConcept)) return false;
+            // Exclude broken questions with missing diagrams or [DIAGRAM REQUIRED] tags
+            const qText = q.questionText || q.question || '';
+            const isBrokenDiagram = /\[DIAGRAM\s+REQUIRED\]/i.test(qText) || 
+                                    (/\bDiagram\s+[1-4]\b/i.test(JSON.stringify(q.options || [])) && !q.imageUrl && !q.image_url);
+            if (isBrokenDiagram && !isAlreadySelected) {
+                return false;
             }
 
             return true;
