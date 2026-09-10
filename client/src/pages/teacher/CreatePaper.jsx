@@ -104,10 +104,17 @@ export default function CreatePaper() {
     const [selectedChapters, setSelectedChapters] = useState([]);
     const [selectedConcepts, setSelectedConcepts] = useState([]);
 
-    // Chapter-wise Question Quotas (e.g. { "Electric Charges and Fields": 20, "Current Electricity": 20 })
+    // Chapter-wise Question Quotas (MCQs / Standard Questions)
     const [chapterQuotas, setChapterQuotas] = useState({});
+    // Chapter-wise Numerical Quotas for JEE (Section B)
+    const [chapterNumericalQuotas, setChapterNumericalQuotas] = useState({});
     // Chapter-wise Previous Year Questions (PYQ) Option
     const [chapterPyqOptions, setChapterPyqOptions] = useState({});
+
+    // JEE Format Detection Helper
+    const isJee = useMemo(() => {
+        return paperCategory !== 'assignment' && String(examType || '').toUpperCase().includes('JEE');
+    }, [paperCategory, examType]);
 
     // Question Source Repositories (Subject Database vs PYQ/Grand Tests qbp-control)
     const [selectedSources, setSelectedSources] = useState(['subject', 'qbp_control']);
@@ -348,11 +355,25 @@ export default function CreatePaper() {
     }, [subject, selectedClass, selectedSources]);
 
     // ── Chapter Quotas Auto-Sync & Helpers ──
+    const targetMcqLimit = useMemo(() => {
+        if (!isJee) return targetLimit;
+        // Standard JEE single subject is 20 MCQs for 25 target (ratio 20/25 = 0.8)
+        return Math.round(targetLimit * (20 / 25));
+    }, [isJee, targetLimit]);
+
+    const targetNumLimit = useMemo(() => {
+        if (!isJee) return 0;
+        return Math.max(0, targetLimit - targetMcqLimit);
+    }, [isJee, targetLimit, targetMcqLimit]);
+
     useEffect(() => {
         if (selectedChapters.length === 0) {
             setChapterQuotas({});
+            setChapterNumericalQuotas({});
             return;
         }
+
+        // Standard MCQs quota sync
         setChapterQuotas(prev => {
             const next = {};
             selectedChapters.forEach(ch => {
@@ -364,7 +385,7 @@ export default function CreatePaper() {
             const missing = selectedChapters.filter(ch => next[ch] === undefined || next[ch] === null);
             if (missing.length > 0) {
                 const currentAllocated = Object.values(next).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-                const remaining = Math.max(0, targetLimit - currentAllocated);
+                const remaining = Math.max(0, targetMcqLimit - currentAllocated);
                 const base = Math.floor(remaining / missing.length);
                 const rem = remaining % missing.length;
                 missing.forEach((ch, idx) => {
@@ -373,26 +394,84 @@ export default function CreatePaper() {
             }
             return next;
         });
-    }, [selectedChapters, targetLimit]);
 
-    const totalAllocatedQuota = useMemo(() => {
+        // Numerical quotas sync for JEE
+        if (isJee) {
+            setChapterNumericalQuotas(prev => {
+                const next = {};
+                selectedChapters.forEach(ch => {
+                    if (prev[ch] !== undefined && prev[ch] !== null) {
+                        next[ch] = prev[ch];
+                    }
+                });
+
+                const missing = selectedChapters.filter(ch => next[ch] === undefined || next[ch] === null);
+                if (missing.length > 0) {
+                    const currentAllocated = Object.values(next).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
+                    const remaining = Math.max(0, targetNumLimit - currentAllocated);
+                    const base = Math.floor(remaining / missing.length);
+                    const rem = remaining % missing.length;
+                    missing.forEach((ch, idx) => {
+                        next[ch] = base + (idx < rem ? 1 : 0);
+                    });
+                }
+                return next;
+            });
+        } else {
+            setChapterNumericalQuotas({});
+        }
+    }, [selectedChapters, targetLimit, targetMcqLimit, targetNumLimit, isJee]);
+
+    const totalAllocatedMcqs = useMemo(() => {
         return Object.values(chapterQuotas).reduce((sum, v) => sum + (parseInt(v, 10) || 0), 0);
     }, [chapterQuotas]);
 
+    const totalAllocatedNumericals = useMemo(() => {
+        if (!isJee) return 0;
+        return Object.values(chapterNumericalQuotas).reduce((sum, v) => sum + (parseInt(v, 10) || 0), 0);
+    }, [chapterNumericalQuotas, isJee]);
+
+    const totalAllocatedQuota = useMemo(() => {
+        return totalAllocatedMcqs + totalAllocatedNumericals;
+    }, [totalAllocatedMcqs, totalAllocatedNumericals]);
+
     const handleDistributeEvenly = () => {
         if (selectedChapters.length === 0) return;
-        const base = Math.floor(targetLimit / selectedChapters.length);
-        const rem = targetLimit % selectedChapters.length;
-        const next = {};
+        
+        // Distribute MCQs
+        const baseMcq = Math.floor(targetMcqLimit / selectedChapters.length);
+        const remMcq = targetMcqLimit % selectedChapters.length;
+        const nextMcq = {};
         selectedChapters.forEach((ch, idx) => {
-            next[ch] = base + (idx < rem ? 1 : 0);
+            nextMcq[ch] = baseMcq + (idx < remMcq ? 1 : 0);
         });
-        setChapterQuotas(next);
+        setChapterQuotas(nextMcq);
+
+        // Distribute Numericals if JEE
+        if (isJee) {
+            const baseNum = Math.floor(targetNumLimit / selectedChapters.length);
+            const remNum = targetNumLimit % selectedChapters.length;
+            const nextNum = {};
+            selectedChapters.forEach((ch, idx) => {
+                nextNum[ch] = baseNum + (idx < remNum ? 1 : 0);
+            });
+            setChapterNumericalQuotas(nextNum);
+        } else {
+            setChapterNumericalQuotas({});
+        }
     };
 
     const handleQuotaChange = (chapter, val) => {
         const num = Math.max(0, parseInt(val, 10) || 0);
         setChapterQuotas(prev => ({
+            ...prev,
+            [chapter]: num
+        }));
+    };
+
+    const handleNumericalQuotaChange = (chapter, val) => {
+        const num = Math.max(0, parseInt(val, 10) || 0);
+        setChapterNumericalQuotas(prev => ({
             ...prev,
             [chapter]: num
         }));
@@ -969,57 +1048,37 @@ export default function CreatePaper() {
         if (selectedChapters.length > 0 && Object.keys(chapterQuotas).length > 0) {
             const standardCombined = [];
             const numericalCombined = [];
-            const totalTarget = Object.values(chapterQuotas).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-            const userNumTarget = Math.max(0, parseInt(numericalCount, 10) || 0);
-            const desiredNumericals = Math.min(totalTarget, userNumTarget);
 
             for (const chName of selectedChapters) {
-                const qty = parseInt(chapterQuotas[chName], 10) || 0;
-                if (qty <= 0) continue;
+                const mcqQty = parseInt(chapterQuotas[chName], 10) || 0;
+                const numQty = isJeeFormat ? (parseInt(chapterNumericalQuotas[chName], 10) || 0) : 0;
 
-                const chPool = scopedQuestionPool.filter(q => q.chapter === chName && isUnused(q));
+                const chPool = scopedQuestionPool.filter(q => isChapterMatch(q.chapter, chName) && isUnused(q));
                 if (chPool.length === 0) continue;
 
-                if (isJeeFormat && desiredNumericals > 0) {
-                    // Proportionally distribute user-specified numerical target across chapters
-                    const chNumTarget = totalTarget > 0 ? Math.round(qty * (desiredNumericals / totalTarget)) : 0;
-                    const chStdTarget = Math.max(0, qty - chNumTarget);
+                const chStdPool = chPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2);
+                const chNumPool = chPool.filter(q => (q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2);
 
-                    const chStdPool = chPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2);
-                    const chNumPool = chPool.filter(q => (q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2);
+                if (mcqQty > 0) {
+                    const pickedStd = pickBalanced(chStdPool.length > 0 ? chStdPool : chPool, mcqQty);
+                    standardCombined.push(...pickedStd);
+                }
 
-                    const pickedStd = pickBalanced(chStdPool, chStdTarget);
+                if (isJeeFormat && numQty > 0) {
                     const pickedNum = [];
                     for (const q of shuffle(chNumPool)) {
-                        if (pickedNum.length >= chNumTarget) break;
-                        if (isUnused(q)) { pickedNum.push(q); markUsed(q); }
+                        if (pickedNum.length >= numQty) break;
+                        if (isUnused(q)) {
+                            pickedNum.push(q);
+                            markUsed(q);
+                        }
                     }
-
-                    standardCombined.push(...pickedStd);
                     numericalCombined.push(...pickedNum);
-                } else {
-                    // Non-JEE or 0 numericals: Strictly standard questions with options only
-                    const pickedStd = pickBalanced(chPool, qty);
-                    standardCombined.push(...pickedStd);
                 }
             }
 
-            // In JEE, if numerical count is less than user's desired target, backfill from remaining numerical pool
-            let finalSelected = [];
-            if (isJeeFormat && desiredNumericals > 0) {
-                if (numericalCombined.length < desiredNumericals) {
-                    const allNumPool = scopedQuestionPool.filter(q => ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) && isUnused(q));
-                    for (const q of shuffle(allNumPool)) {
-                        if (numericalCombined.length >= desiredNumericals) break;
-                        numericalCombined.push(q);
-                        markUsed(q);
-                    }
-                }
-                // Standard questions (Section A) first, then Numerical questions (Section B)
-                finalSelected = [...standardCombined, ...numericalCombined];
-            } else {
-                finalSelected = standardCombined;
-            }
+            // In JEE, Section A (Standard MCQs) first, followed by Section B (Numericals)
+            const finalSelected = isJeeFormat ? [...standardCombined, ...numericalCombined] : standardCombined;
 
             if (finalSelected.length === 0) {
                 return alert('No questions found matching the selected syllabus chapters.');
@@ -1407,8 +1466,8 @@ export default function CreatePaper() {
                                             const nextType = e.target.value;
                                             setExamType(nextType);
                                             if (nextType === 'JEE') {
-                                                setTargetCount(30);
-                                                setAutoQty(30);
+                                                setTargetCount(25);
+                                                setAutoQty(25);
                                             } else if (nextType === 'NEET') {
                                                 setTargetCount(45);
                                                 setAutoQty(45);
@@ -1416,21 +1475,11 @@ export default function CreatePaper() {
                                                 setTargetCount(60);
                                                 setAutoQty(60);
                                             } else if (nextType === 'BOARD') {
-                                                setTargetCount(25);
-                                                setAutoQty(25);
-                                                setNumericalCount(5);
-                                            } else if (val === 'NEET') {
-                                                setTargetCount(45);
-                                                setAutoQty(45);
-                                                setNumericalCount(0);
-                                            } else if (val === 'CET') {
-                                                setTargetCount(60);
-                                                setAutoQty(60);
-                                                setNumericalCount(0);
-                                            } else {
                                                 setTargetCount(30);
                                                 setAutoQty(30);
-                                                setNumericalCount(0);
+                                            } else {
+                                                setTargetCount(25);
+                                                setAutoQty(25);
                                             }
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
@@ -1467,9 +1516,6 @@ export default function CreatePaper() {
                                             onClick={() => {
                                                 setTargetCount(cnt);
                                                 setAutoQty(cnt);
-                                                if (examType === 'JEE') {
-                                                    setNumericalCount(Math.round(cnt * (5 / 25)));
-                                                }
                                             }}
                                             className={`px-2.5 py-3 rounded-xl text-xs font-black transition cursor-pointer ${
                                                 targetCount === cnt ? 'bg-navy text-gold' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
@@ -1480,44 +1526,6 @@ export default function CreatePaper() {
                                     ))}
                                 </div>
                             </div>
-
-                            {/* User-Customizable Numericals Count for JEE */}
-                            {examType === 'JEE' && (
-                                <div className="bg-amber-50/70 p-4 rounded-2xl border-2 border-amber-200 space-y-2 animate-fade-in">
-                                    <label className="block text-xs font-black text-navy uppercase tracking-wider">
-                                        🔢 Numericals Count (Section B)
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={targetCount}
-                                            value={numericalCount}
-                                            onChange={e => {
-                                                const v = Math.max(0, parseInt(e.target.value) || 0);
-                                                setNumericalCount(v);
-                                            }}
-                                            className="w-full border-2 border-amber-300 focus:border-navy rounded-2xl px-4 py-3 text-sm font-black text-navy outline-none bg-white"
-                                            placeholder="Enter numericals count..."
-                                        />
-                                        {[0, 5, 10, 15].map(cnt => (
-                                            <button
-                                                key={cnt}
-                                                type="button"
-                                                onClick={() => setNumericalCount(cnt)}
-                                                className={`px-3 py-3 rounded-xl text-xs font-black transition cursor-pointer ${
-                                                    numericalCount === cnt ? 'bg-amber-500 text-navy shadow-sm' : 'bg-white border border-amber-300 text-slate-700 hover:bg-amber-100'
-                                                }`}
-                                            >
-                                                {cnt}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-[11px] font-bold text-slate-700">
-                                        Distribution: <strong className="text-navy">{Math.max(0, targetCount - numericalCount)} Section A MCQs</strong> + <strong className="text-amber-800">{numericalCount} Section B Numericals</strong> (Total: {targetCount} Qs).
-                                    </p>
-                                </div>
-                            )}
 
                             {/* Class */}
                             <div>
@@ -1710,48 +1718,92 @@ export default function CreatePaper() {
                                 </div>
 
                                 {/* Quotas grid */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                                     {selectedChapters.map((ch) => {
                                         const quota = chapterQuotas[ch] !== undefined ? chapterQuotas[ch] : 0;
-                                        const availableForCh = availableQuestions.filter(q => q.chapter === ch).length;
+                                        const numQuota = chapterNumericalQuotas[ch] !== undefined ? chapterNumericalQuotas[ch] : 0;
+                                        const chPool = availableQuestions.filter(q => isChapterMatch(q.chapter, ch));
+                                        const availableForCh = chPool.length;
+                                        const availableNumForCh = chPool.filter(q => (q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2).length;
+                                        const availableMcqForCh = Math.max(0, availableForCh - availableNumForCh);
+
                                         return (
                                             <div
                                                 key={ch}
-                                                className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs flex flex-col justify-between gap-2"
+                                                className="bg-white p-3.5 rounded-2xl border border-gray-200 shadow-2xs flex flex-col justify-between gap-2.5 transition hover:shadow-xs hover:border-navy/30"
                                             >
                                                 <div className="min-w-0">
-                                                    <span className="text-xs font-bold text-navy block truncate" title={ch}>
+                                                    <span className="text-xs font-black text-navy block truncate" title={ch}>
                                                         {ch}
                                                     </span>
-                                                    <span className="text-[10px] text-gray-400 font-medium">
-                                                        {availableForCh} in pool
+                                                    <span className="text-[10px] text-gray-400 font-semibold block mt-0.5">
+                                                        {availableForCh} in pool {isJee ? `(${availableMcqForCh} MCQs, ${availableNumForCh} Num)` : ''}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Questions:</span>
-                                                    <div className="flex items-center gap-1.5">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleQuotaChange(ch, Math.max(0, quota - 1))}
-                                                            className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
-                                                        >
-                                                            -
-                                                        </button>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            value={quota}
-                                                            onChange={e => handleQuotaChange(ch, e.target.value)}
-                                                            className="w-12 text-center font-black text-xs text-navy border border-gray-300 rounded-lg py-1 outline-none focus:border-navy"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleQuotaChange(ch, quota + 1)}
-                                                            className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
-                                                        >
-                                                            +
-                                                        </button>
+
+                                                {/* Quota inputs */}
+                                                <div className="space-y-2 pt-1 border-t border-gray-100">
+                                                    {/* Section A / Standard Questions */}
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase">
+                                                            {isJee ? 'Sec A (MCQ):' : 'Questions:'}
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleQuotaChange(ch, Math.max(0, quota - 1))}
+                                                                className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                value={quota}
+                                                                onChange={e => handleQuotaChange(ch, e.target.value)}
+                                                                className="w-12 text-center font-black text-xs text-navy border border-gray-300 rounded-lg py-1 outline-none focus:border-navy"
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleQuotaChange(ch, quota + 1)}
+                                                                className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 text-navy font-bold text-xs flex items-center justify-center transition cursor-pointer"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
                                                     </div>
+
+                                                    {/* Section B / Numericals for JEE */}
+                                                    {isJee && (
+                                                        <div className="flex items-center justify-between gap-2 bg-amber-50/70 p-1.5 rounded-xl border border-amber-200">
+                                                            <span className="text-[10px] font-black text-amber-900 uppercase flex items-center gap-1">
+                                                                <span>🔢</span> Sec B (Num):
+                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleNumericalQuotaChange(ch, Math.max(0, numQuota - 1))}
+                                                                    className="w-6 h-6 rounded-lg bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center justify-center transition cursor-pointer border border-amber-200"
+                                                                >
+                                                                    -
+                                                                </button>
+                                                                <input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    value={numQuota}
+                                                                    onChange={e => handleNumericalQuotaChange(ch, e.target.value)}
+                                                                    className="w-12 text-center font-black text-xs text-amber-950 border border-amber-300 rounded-lg py-1 outline-none focus:border-amber-500 bg-white"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleNumericalQuotaChange(ch, numQuota + 1)}
+                                                                    className="w-6 h-6 rounded-lg bg-white hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center justify-center transition cursor-pointer border border-amber-200"
+                                                                >
+                                                                    +
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 {/* Previous Year Questions Option */}
@@ -1775,7 +1827,7 @@ export default function CreatePaper() {
                                 </div>
 
                                 {/* Quota sum status */}
-                                <div className={`p-3.5 rounded-xl border flex items-center justify-between text-xs font-bold ${
+                                <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs font-bold ${
                                     totalAllocatedQuota === targetLimit
                                         ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
                                         : totalAllocatedQuota > targetLimit
@@ -1784,15 +1836,21 @@ export default function CreatePaper() {
                                 }`}>
                                     <div className="flex items-center gap-2">
                                         <span>{totalAllocatedQuota === targetLimit ? '✓' : '⚠️'}</span>
-                                        <span>
-                                            Allocated: <strong>{totalAllocatedQuota}</strong> of <strong>{targetLimit}</strong> Questions Needed
-                                        </span>
+                                        {isJee ? (
+                                            <span>
+                                                Allocated: <strong>{totalAllocatedMcqs}</strong> Section A MCQs + <strong>{totalAllocatedNumericals}</strong> Section B Numericals = <strong>{totalAllocatedQuota}</strong> of <strong>{targetLimit}</strong> Questions Needed
+                                            </span>
+                                        ) : (
+                                            <span>
+                                                Allocated: <strong>{totalAllocatedQuota}</strong> of <strong>{targetLimit}</strong> Questions Needed
+                                            </span>
+                                        )}
                                     </div>
                                     {totalAllocatedQuota !== targetLimit && (
                                         <button
                                             type="button"
                                             onClick={handleDistributeEvenly}
-                                            className="text-[10px] font-black underline hover:no-underline cursor-pointer"
+                                            className="text-[10px] font-black underline hover:no-underline cursor-pointer flex-shrink-0"
                                         >
                                             Auto-balance to {targetLimit} Qs
                                         </button>
@@ -2160,7 +2218,9 @@ export default function CreatePaper() {
                                                     <thead>
                                                         <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-600 font-bold">
                                                             <th className="py-2.5 px-3">Chapter</th>
-                                                            <th className="py-2.5 px-3 text-center">Quota</th>
+                                                            <th className="py-2.5 px-3 text-center">{isJee ? 'Sec A (MCQ)' : 'Quota'}</th>
+                                                            {isJee && <th className="py-2.5 px-3 text-center text-amber-800">Sec B (Num)</th>}
+                                                            {isJee && <th className="py-2.5 px-3 text-center font-black">Total</th>}
                                                             <th className="py-2.5 px-3 text-center text-emerald-700">Easy (~{autoDist.easy}%)</th>
                                                             <th className="py-2.5 px-3 text-center text-amber-700">Medium (~{autoDist.medium}%)</th>
                                                             <th className="py-2.5 px-3 text-center text-rose-700">Hard (~{autoDist.hard}%)</th>
@@ -2168,14 +2228,18 @@ export default function CreatePaper() {
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100 bg-white">
                                                         {selectedChapters.map(ch => {
-                                                            const qty = parseInt(chapterQuotas[ch], 10) || 0;
-                                                            const easy = Math.round(qty * (autoDist.easy / 100));
-                                                            const med = Math.round(qty * (autoDist.medium / 100));
-                                                            const hard = Math.max(0, qty - easy - med);
+                                                            const mcqQty = parseInt(chapterQuotas[ch], 10) || 0;
+                                                            const numQty = isJee ? (parseInt(chapterNumericalQuotas[ch], 10) || 0) : 0;
+                                                            const totalQty = mcqQty + numQty;
+                                                            const easy = Math.round(mcqQty * (autoDist.easy / 100));
+                                                            const med = Math.round(mcqQty * (autoDist.medium / 100));
+                                                            const hard = Math.max(0, mcqQty - easy - med);
                                                             return (
                                                                 <tr key={ch} className="hover:bg-slate-50/70 font-medium text-slate-800">
                                                                     <td className="py-2 px-3 font-bold text-navy truncate max-w-xs" title={ch}>{ch}</td>
-                                                                    <td className="py-2 px-3 text-center font-black text-navy">{qty}</td>
+                                                                    <td className="py-2 px-3 text-center font-black text-navy">{mcqQty}</td>
+                                                                    {isJee && <td className="py-2 px-3 text-center font-black text-amber-800">{numQty}</td>}
+                                                                    {isJee && <td className="py-2 px-3 text-center font-black text-navy">{totalQty}</td>}
                                                                     <td className="py-2 px-3 text-center text-emerald-700 font-bold">{easy}</td>
                                                                     <td className="py-2 px-3 text-center text-amber-700 font-bold">{med}</td>
                                                                     <td className="py-2 px-3 text-center text-rose-700 font-bold">{hard}</td>
