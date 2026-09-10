@@ -568,6 +568,50 @@ export default function CreatePaper() {
         });
 
         const sorted = Array.from(chaptersSet).filter(Boolean).sort();
+
+        // Cross-populate concepts across chapter aliases (e.g. Thermodynamics receives all concepts from Thermal Properties of Matter & Kinetic Theory)
+        sorted.forEach(ch => {
+            const normKey = ch.toLowerCase().trim();
+            const aliases = CHAPTER_ALIASES[normKey] || [];
+            aliases.forEach(aliasCh => {
+                const canonAlias = canonicalizeChapterName(aliasCh);
+                if (canonAlias && map[canonAlias]) {
+                    map[canonAlias].forEach(c => {
+                        if (!map[ch]) map[ch] = new Set();
+                        if (c && c !== 'General' && c !== ch) {
+                            map[ch].add(c);
+                        }
+                    });
+                }
+            });
+        });
+
+        // Ensure complete standard NCERT syllabus concepts for core chapters
+        const STANDARD_SYLLABUS_CONCEPTS = {
+            'Thermodynamics': [
+                'Thermal Equilibrium and Zeroth Law',
+                'First Law of Thermodynamics & Internal Energy',
+                'Isothermal and Adiabatic Processes',
+                'Isochoric and Isobaric Processes',
+                'Work Done in Thermodynamic Processes',
+                'Heat Capacity, Specific Heat & Mayer’s Relation',
+                'Second Law of Thermodynamics (Kelvin-Planck & Clausius)',
+                'Reversible and Irreversible Processes',
+                'Heat Engines, Carnot Cycle & Refrigerators',
+                'Thermal Expansion & Calorimetry',
+                'Heat Transfer (Conduction, Convection, Radiation)',
+                'Newton’s Law of Cooling',
+                'Behaviour of Gases & Kinetic Theory of an Ideal Gas'
+            ]
+        };
+
+        Object.entries(STANDARD_SYLLABUS_CONCEPTS).forEach(([stdCh, cList]) => {
+            const canonStd = canonicalizeChapterName(stdCh);
+            if (map[canonStd]) {
+                cList.forEach(c => map[canonStd].add(c));
+            }
+        });
+
         const cleanMap = {};
         sorted.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();

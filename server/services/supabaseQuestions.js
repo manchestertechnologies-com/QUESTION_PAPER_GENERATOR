@@ -606,10 +606,55 @@ async function getSubjectMetadata(subject = '', klass = '') {
         `;
         const res = await pool.query(query, subValues);
         const row = res.rows[0] || {};
+        const rawConcepts = Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : [];
+        const expandedConcepts = [];
+        const seenConcepts = new Set();
+
+        rawConcepts.forEach(c => {
+            const chNorm = (c.chapter || '').toLowerCase().trim();
+            const aliases = CHAPTER_ALIASES[chNorm] || [c.chapter];
+            aliases.forEach(targetCh => {
+                const key = `${targetCh}:::${c.concept}`;
+                if (!seenConcepts.has(key)) {
+                    seenConcepts.add(key);
+                    expandedConcepts.push({ concept: c.concept, chapter: targetCh });
+                }
+            });
+        });
+
+        // Add standard syllabus concepts for core chapters if sparse
+        const STANDARD_CONCEPTS_MAP = {
+            'Thermodynamics': [
+                'Thermal Equilibrium and Zeroth Law',
+                'First Law of Thermodynamics & Internal Energy',
+                'Isothermal and Adiabatic Processes',
+                'Isochoric and Isobaric Processes',
+                'Work Done in Thermodynamic Processes',
+                'Heat Capacity, Specific Heat & Mayer’s Relation',
+                'Second Law of Thermodynamics (Kelvin-Planck & Clausius)',
+                'Reversible and Irreversible Processes',
+                'Heat Engines, Carnot Cycle & Refrigerators',
+                'Thermal Expansion & Calorimetry',
+                'Heat Transfer (Conduction, Convection, Radiation)',
+                'Newton’s Law of Cooling',
+                'Behaviour of Gases & Kinetic Theory of an Ideal Gas'
+            ]
+        };
+
+        Object.entries(STANDARD_CONCEPTS_MAP).forEach(([stdCh, cList]) => {
+            cList.forEach(c => {
+                const key = `${stdCh}:::${c}`;
+                if (!seenConcepts.has(key)) {
+                    seenConcepts.add(key);
+                    expandedConcepts.push({ concept: c, chapter: stdCh });
+                }
+            });
+        });
+
         const result = {
             total: parseInt(row.total) || 0,
             chapters: Array.isArray(row.chapters) ? row.chapters.filter(Boolean) : [],
-            concepts: Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : []
+            concepts: expandedConcepts
         };
 
         metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });

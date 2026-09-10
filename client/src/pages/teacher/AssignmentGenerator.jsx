@@ -121,17 +121,66 @@ const AssignmentGenerator = () => {
         const chaptersSet = new Set();
         const map = {};
 
+        const CHAPTER_ALIASES = {
+            'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Kinetic Theory of Gases', 'Heat and Thermodynamics'],
+            'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Heat and Thermodynamics'],
+            'kinetic theory': ['Kinetic Theory', 'Kinetic Theory of Gases', 'Thermodynamics'],
+            'kinetic theory of gases': ['Kinetic Theory of Gases', 'Kinetic Theory', 'Thermodynamics']
+        };
+
+        const STANDARD_SYLLABUS_CONCEPTS = {
+            'Thermodynamics': [
+                'Thermal Equilibrium and Zeroth Law',
+                'First Law of Thermodynamics & Internal Energy',
+                'Isothermal and Adiabatic Processes',
+                'Isochoric and Isobaric Processes',
+                'Work Done in Thermodynamic Processes',
+                'Heat Capacity, Specific Heat & Mayer’s Relation',
+                'Second Law of Thermodynamics (Kelvin-Planck & Clausius)',
+                'Reversible and Irreversible Processes',
+                'Heat Engines, Carnot Cycle & Refrigerators',
+                'Thermal Expansion & Calorimetry',
+                'Heat Transfer (Conduction, Convection, Radiation)',
+                'Newton’s Law of Cooling',
+                'Behaviour of Gases & Kinetic Theory of an Ideal Gas'
+            ]
+        };
+
         questionsPool.forEach(q => {
             const ch = q.chapter || 'General';
             chaptersSet.add(ch);
             if (!map[ch]) map[ch] = new Set();
             const cpt = q.concept || q.topic;
             if (cpt && cpt !== 'General' && cpt !== ch) {
-                map[ch].add(cpt);
+                map[ch].add(cpt.trim());
             }
         });
 
-        const sorted = Array.from(chaptersSet).sort();
+        const sorted = Array.from(chaptersSet).filter(Boolean).sort();
+
+        // Cross-populate concepts across chapter aliases
+        sorted.forEach(ch => {
+            const normKey = ch.toLowerCase().trim();
+            const aliases = CHAPTER_ALIASES[normKey] || [];
+            aliases.forEach(aliasCh => {
+                if (map[aliasCh]) {
+                    map[aliasCh].forEach(c => {
+                        if (!map[ch]) map[ch] = new Set();
+                        if (c && c !== 'General' && c !== ch) {
+                            map[ch].add(c);
+                        }
+                    });
+                }
+            });
+        });
+
+        // Ensure standard NCERT syllabus concepts
+        Object.entries(STANDARD_SYLLABUS_CONCEPTS).forEach(([stdCh, cList]) => {
+            if (map[stdCh]) {
+                cList.forEach(c => map[stdCh].add(c));
+            }
+        });
+
         const cleanMap = {};
         sorted.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();
