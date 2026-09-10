@@ -216,16 +216,22 @@ export default function A4SolutionKey({
                                                     </div>
                                                 )}
                                                 <div
-                                                    className="border border-slate-200 rounded-2xl p-5 bg-slate-50/40 space-y-3"
-                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                                    className="border border-slate-200 rounded-2xl p-4 bg-slate-50/40 space-y-2.5"
+                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid', fontSize: '13px' }}
                                                 >
                                                 <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                                                     <span className="font-bold text-sm text-navy">
                                                         Question {currentQNo}
                                                     </span>
-                                                    <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-md border border-emerald-200">
-                                                        Correct Answer: ({answerLabel})
-                                                    </span>
+                                                    {options.length >= 2 ? (
+                                                        <span className="bg-emerald-100 text-emerald-900 text-xs font-black px-3 py-1 rounded-md border border-emerald-300 shadow-2xs">
+                                                            Correct Answer: ({answerLabel})
+                                                        </span>
+                                                    ) : (
+                                                        <span className="bg-amber-100 text-amber-950 text-xs font-black px-3 py-1 rounded-md border border-amber-300 shadow-2xs">
+                                                            Correct Value: {answerLabel}
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 {/* Question Text */}
@@ -255,15 +261,15 @@ export default function A4SolutionKey({
                                                                     key={oi}
                                                                     className={`p-1.5 rounded flex items-start gap-1.5 ${
                                                                         isCorrect
-                                                                            ? 'bg-emerald-50 text-emerald-900 font-medium border border-emerald-200'
+                                                                            ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-300'
                                                                             : 'bg-white border border-slate-100'
                                                                     }`}
                                                                 >
-                                                                    <span className="font-semibold">({labels[oi] || String.fromCharCode(65 + oi)})</span>
+                                                                    <span className="font-bold">({labels[oi] || String.fromCharCode(65 + oi)})</span>
                                                                     <div className="flex-1 min-w-0">
                                                                         <MathRenderer inline text={typeof opt === 'object' ? (opt.text || '') : String(opt)} />
                                                                     </div>
-                                                                    {isCorrect && <span className="text-emerald-700 font-bold">✓</span>}
+                                                                    {isCorrect && <span className="text-emerald-700 font-black">✓</span>}
                                                                 </div>
                                                             );
                                                         })}
@@ -271,7 +277,7 @@ export default function A4SolutionKey({
                                                 )}
 
                                                 {/* Explanation Box with full KaTeX Math Rendering */}
-                                                <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                                                <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
                                                     <span className="font-bold text-navy block">Explanation:</span>
                                                     {explanation ? (
                                                         <div className="leading-relaxed">
@@ -279,7 +285,7 @@ export default function A4SolutionKey({
                                                         </div>
                                                     ) : (
                                                         <p className="text-slate-400 italic text-[11px]">
-                                                            Option ({answerLabel}) is the verified correct answer.
+                                                            {options.length >= 2 ? `Option (${answerLabel}) is the verified correct answer.` : `Value ${answerLabel} is the verified correct answer.`}
                                                         </p>
                                                     )}
                                                 </div>

@@ -39,6 +39,28 @@ export function safeHtml(dirty) {
 }
 
 /**
+ * Returns whether a question is a numerical answer question.
+ */
+export function isNumericalQuestion(q) {
+    if (!q) return false;
+    const typeStr = (q.type || q.q_type || '').toUpperCase();
+    if (typeStr === 'NUMERICAL') return true;
+    const opts = Array.isArray(q.options) ? q.options : [];
+    return opts.length < 2;
+}
+
+/**
+ * Returns whether a question is a fill-in-the-blank question.
+ */
+export function isFillInTheBlank(q) {
+    if (!q) return false;
+    const typeStr = (q.type || q.q_type || '').toUpperCase();
+    if (typeStr.includes('FILL') || typeStr.includes('BLANK')) return true;
+    const text = q.questionText || q.question || '';
+    return /_{3,}/.test(text);
+}
+
+/**
  * Returns the option label for a given index based on exam type.
  * JEE → A, B, C, D   |   NEET / CET → 1, 2, 3, 4
  * @param {number} idx - 0-based option index
@@ -52,6 +74,10 @@ export function optionLabel(idx, classes = []) {
 
 /**
  * Detects the exact option labels used by a question (e.g. ['A', 'B', 'C', 'D'] vs ['1', '2', '3', '4'])
+ * Guarantees:
+ * - If options are numbers (1, 2, 3, 4), label array is numbers only.
+ * - If options are alphabets (A, B, C, D), label array is alphabets only.
+ * - Never converts numerical options into alphabets or alphabets into numbers.
  */
 export function getQuestionOptionLabels(q) {
     if (!q) return ['A', 'B', 'C', 'D'];
@@ -66,7 +92,22 @@ export function getQuestionOptionLabels(q) {
         return explicitLabels;
     }
 
-    // 2. Explicit question-level format flag
+    // 2. Check if option text starts with explicit labels: "(1)", "1.", "1)", "[1]" vs "(A)", "A.", "A)", "[A]"
+    const textLabels = options.map(opt => {
+        const text = typeof opt === 'object' && opt ? (opt.text || opt.optionText || '') : String(opt || '');
+        const match = text.trim().match(/^[\(\[]?([1-4A-Da-d])[\)\]\.]\s*/);
+        return match ? match[1].toUpperCase() : null;
+    });
+    if (textLabels.filter(Boolean).length === count && count > 0) {
+        if (textLabels.every(l => /^[1-4]$/.test(l))) {
+            return Array.from({ length: count }, (_, i) => String(i + 1));
+        }
+        if (textLabels.every(l => /^[A-D]$/.test(l))) {
+            return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+        }
+    }
+
+    // 3. Explicit question-level format flag
     const fmt = String(q.optionFormat || q.optionLabelFormat || q.optionType || '').toUpperCase();
     if (fmt.includes('1234') || fmt === 'NUMERIC' || fmt === '1') {
         return Array.from({ length: count }, (_, i) => String(i + 1));
@@ -75,24 +116,7 @@ export function getQuestionOptionLabels(q) {
         return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
     }
 
-    // 3. Exam type convention (KCET/NEET/CET -> 1, 2, 3, 4; JEE -> A, B, C, D)
-    const allClasses = [
-        ...(Array.isArray(q.classes) ? q.classes : [q.classes]),
-        q.examType,
-        q.exam_type
-    ].filter(Boolean).map(c => String(c).toUpperCase());
-
-    const isExplicitJEE = allClasses.some(c => c === 'JEE');
-    const isExplicitNumericExam = allClasses.some(c => c === 'KCET' || c === 'CET' || c === 'NEET' || c === 'STATE_BOARD');
-
-    if (isExplicitJEE) {
-        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
-    }
-    if (isExplicitNumericExam) {
-        return Array.from({ length: count }, (_, i) => String(i + 1));
-    }
-
-    // 4. Detect from answer format: if answer is numeric like '1', '2', '12', '1, 2'
+    // 4. If raw answer is provided as a number or alphabet, preserve that exact format!
     const rawAns = String(q.answer ?? q.correct_option ?? q.correctAnswer ?? '').trim();
     if (/^[1-4]$/.test(rawAns) || /^[1-4]{2,4}$/.test(rawAns) || /^[1-4]([\s,;&/]+[1-4])+$/.test(rawAns) || /both.*[1-4]/i.test(rawAns)) {
         return Array.from({ length: count }, (_, i) => String(i + 1));
@@ -101,8 +125,23 @@ export function getQuestionOptionLabels(q) {
         return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
     }
 
-    // 5. Default fallback to numeric
-    return Array.from({ length: count }, (_, i) => String(i + 1));
+    // 5. Exam type convention (KCET/NEET/CET -> 1, 2, 3, 4; JEE -> A, B, C, D)
+    const allClasses = [
+        ...(Array.isArray(q.classes) ? q.classes : [q.classes]),
+        q.examType,
+        q.exam_type
+    ].filter(Boolean).map(c => String(c).toUpperCase());
+
+    const isExplicitJEE = allClasses.some(c => c === 'JEE');
+    if (isExplicitJEE) {
+        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+    }
+    const isExplicitNumericExam = allClasses.some(c => c === 'KCET' || c === 'CET' || c === 'NEET' || c === 'STATE_BOARD');
+    if (isExplicitNumericExam) {
+        return Array.from({ length: count }, (_, i) => String(i + 1));
+    }
+
+    return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
 }
 
 /**
@@ -217,14 +256,34 @@ export function parseAnswerIndices(rawAns, options = []) {
 /**
  * Returns the exact option label for a question's correct answer.
  * Seamlessly resolves single or multiple options:
- * - If question options are numeric (1, 2, 3, 4) and answer is 1 & 2 / AB / Both A and B -> returns "12" or "1, 2"
- * - If question options are alphabetic (A, B, C, D) and answer is 1 & 2 / AB / Both A and B -> returns "AB" or "A, B"
+ * - If question options are numeric (1, 2, 3, 4) -> returns number only (e.g. "1", "2", "12", "1, 2")
+ * - If question options are alphabetic (A, B, C, D) -> returns alphabet only (e.g. "A", "B", "AB", "A, B")
+ * - If question is numerical -> returns exact numerical value (e.g. "42", "3.14")
+ * - Never converts numerical option into alphabet or alphabet into number.
  */
 export function getResolvedAnswerLabel(q) {
     if (!q) return 'N/A';
     const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
+    const cleanRaw = String(rawAns).trim();
+
+    // If numerical question, return the exact numerical value
+    if (isNumericalQuestion(q)) {
+        return cleanRaw || 'N/A';
+    }
+
+    // If fill in the blank without options, return the text
+    if (isFillInTheBlank(q) && (!q.options || q.options.length === 0)) {
+        return cleanRaw || 'N/A';
+    }
+
     const options = Array.isArray(q.options) ? q.options : [];
     const labels = getQuestionOptionLabels(q);
+
+    // If cleanRaw directly matches one of the labels exactly, preserve it
+    const upperRaw = cleanRaw.toUpperCase();
+    if (labels.includes(upperRaw) || labels.includes(cleanRaw)) {
+        return labels.includes(upperRaw) ? upperRaw : cleanRaw;
+    }
 
     const indices = parseAnswerIndices(rawAns, options);
     if (indices.length > 0) {
@@ -235,7 +294,6 @@ export function getResolvedAnswerLabel(q) {
             if (mapped.length === 1) return mapped[0];
 
             // If raw input was strictly compact like "12" or "AB", return compact "12" or "AB"
-            const cleanRaw = String(rawAns).trim();
             if (/^[1-4]{2,4}$/.test(cleanRaw) || /^[A-Da-d]{2,4}$/.test(cleanRaw)) {
                 return mapped.join('');
             }
@@ -243,7 +301,6 @@ export function getResolvedAnswerLabel(q) {
         }
     }
 
-    const cleanRaw = String(rawAns).trim();
     return cleanRaw || 'N/A';
 }
 
@@ -253,6 +310,12 @@ export function getResolvedAnswerLabel(q) {
 export function getResolvedAnswerCode(q) {
     if (!q) return 'N/A';
     const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
+    const cleanRaw = String(rawAns).trim();
+
+    if (isNumericalQuestion(q) || isFillInTheBlank(q)) {
+        return cleanRaw || 'N/A';
+    }
+
     const options = Array.isArray(q.options) ? q.options : [];
     const labels = getQuestionOptionLabels(q);
     const indices = parseAnswerIndices(rawAns, options);
@@ -262,7 +325,7 @@ export function getResolvedAnswerCode(q) {
             .map(idx => labels[idx])
             .join('');
     }
-    return String(rawAns).trim() || 'N/A';
+    return cleanRaw || 'N/A';
 }
 
 /**
