@@ -933,8 +933,8 @@ export default function CreatePaper() {
                 if (chPool.length === 0) continue;
 
                 if (isJeeFormat) {
-                    // In JEE: 25 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 30 Qs
-                    const chNumTarget = Math.round(qty * (5 / 30));
+                    // In JEE: 20 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 25 Qs
+                    const chNumTarget = Math.round(qty * (5 / 25));
                     const chStdTarget = Math.max(0, qty - chNumTarget);
 
                     const chStdPool = chPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2);
@@ -960,7 +960,7 @@ export default function CreatePaper() {
             let finalSelected = [];
             if (isJeeFormat) {
                 const totalTarget = Object.values(chapterQuotas).reduce((s, v) => s + (parseInt(v, 10) || 0), 0);
-                const desiredNumericals = Math.round(totalTarget * (5 / 30));
+                const desiredNumericals = Math.round(totalTarget * (5 / 25));
                 if (numericalCombined.length < desiredNumericals) {
                     const allNumPool = scopedQuestionPool.filter(q => ((q.type || '').toUpperCase() === 'NUMERICAL' || (q.q_type || '').toLowerCase() === 'numerical' || !Array.isArray(q.options) || q.options.length < 2) && isUnused(q));
                     for (const q of shuffle(allNumPool)) {
@@ -969,7 +969,7 @@ export default function CreatePaper() {
                         markUsed(q);
                     }
                 }
-                // JEE format: Standard Questions (Q1 to Q25) first, then Numerical Questions (Q26 to Q30)
+                // JEE format: Standard Questions (Q1 to Q20) first, then Numerical Questions (Q21 to Q25)
                 finalSelected = [...standardCombined, ...numericalCombined];
             } else {
                 finalSelected = standardCombined;
@@ -994,8 +994,8 @@ export default function CreatePaper() {
         let finalSelected = [];
 
         if (isJeeFormat) {
-            // In JEE: 25 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 30 Qs
-            const numTarget = Math.min(count, Math.max(1, Math.round(count * (5 / 30))));
+            // In JEE: 20 Standard Questions (MCQ, Match, Statement, Assertion-Reason) + 5 Numericals per 25 Qs
+            const numTarget = Math.min(count, Math.max(1, Math.round(count * (5 / 25))));
             const stdTarget = Math.max(0, count - numTarget);
 
             const stdPool = scopedQuestionPool.filter(q => (q.type || '').toUpperCase() !== 'NUMERICAL' && (q.q_type || '').toLowerCase() !== 'numerical' && Array.isArray(q.options) && q.options.length >= 2 && isUnused(q));
@@ -1022,7 +1022,7 @@ export default function CreatePaper() {
                 }
             }
 
-            // JEE format: Standard questions (Q1 to Q25) first, followed by Numerical questions (Q26 to Q30)
+            // JEE format: Standard questions (Q1 to Q20) first, followed by Numerical questions (Q21 to Q25)
             finalSelected = [...pickedStd, ...pickedNum];
         } else {
             // Non-JEE: Strictly standard multiple-choice questions with options only
@@ -1373,7 +1373,7 @@ export default function CreatePaper() {
                                     >
                                         <option value="CET">CET Standard (All Multiple Choice)</option>
                                         <option value="NEET">NEET Standard (All Multiple Choice)</option>
-                                        <option value="JEE">JEE Standard (25 Standard + 5 Numericals)</option>
+                                        <option value="JEE">JEE Standard (20 Standard + 5 Numericals per 25 Qs)</option>
                                         <option value="BOARD">PUC Board Standard</option>
                                     </select>
                                 </div>
@@ -1396,7 +1396,7 @@ export default function CreatePaper() {
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white"
                                     />
-                                    {(examType === 'JEE' ? [30, 60, 90, 120] : (examType === 'NEET' ? [45, 50, 90, 180] : (examType === 'CET' ? [30, 60, 120, 180] : [25, 30, 45, 60]))).map(cnt => (
+                                    {(examType === 'JEE' ? [25, 50, 75, 100] : (examType === 'NEET' ? [45, 50, 90, 180] : (examType === 'CET' ? [30, 60, 120, 180] : [25, 30, 45, 60]))).map(cnt => (
                                         <button
                                             key={cnt}
                                             type="button"
@@ -1414,7 +1414,7 @@ export default function CreatePaper() {
                                 </div>
                                 {examType === 'JEE' && paperCategory === 'test' && (
                                     <p className="text-[11px] font-bold text-blue-700 bg-blue-50/80 border border-blue-200 rounded-xl px-2.5 py-1.5 mt-2">
-                                        ⚡ <strong>JEE Pattern:</strong> Auto-fetches <strong>25 Standard Questions</strong> (MCQ, Match, Statement, Assertion-Reason) + <strong>5 Numerical Value Questions</strong> (No Options) per 30 Qs.
+                                        ⚡ <strong>JEE Pattern:</strong> Auto-fetches <strong>20 Standard Questions</strong> (MCQ, Match, Statement, Assertion-Reason) + <strong>5 Numerical Value Questions</strong> (No Options) per 25 Qs.
                                     </p>
                                 )}
                             </div>

@@ -306,15 +306,15 @@ export default function A4AnswerKey({
                                         const currentQNo = q.setQNo || (startQNo + idx);
                                         const answerLabel = getResolvedAnswerLabel(q);
                                         const isLong = isDescriptiveAnswer(q.answer || answerLabel);
-                                        const showSecAHeader = isJeePaper && (idx % 30 === 0);
-                                        const showSecBHeader = isJeePaper && (idx % 30 === 25);
+                                        const showSecAHeader = isJeePaper && (idx % 25 === 0);
+                                        const showSecBHeader = isJeePaper && (idx % 25 === 20);
 
                                         return (
                                             <React.Fragment key={idx}>
                                                 {showSecAHeader && (
                                                     <div className="col-span-full bg-navy text-white px-3.5 py-1.5 rounded-xl flex items-center justify-between font-black text-xs uppercase tracking-wider my-1 border border-navy shadow-xs">
                                                         <span>SECTION A — MULTIPLE CHOICE QUESTIONS</span>
-                                                        <span className="text-amber-400 text-[10px]">Q.{idx + 1} TO Q.{Math.min(idx + 25, resolvedQuestions.length)}</span>
+                                                        <span className="text-amber-400 text-[10px]">Q.{idx + 1} TO Q.{Math.min(idx + 20, resolvedQuestions.length)}</span>
                                                     </div>
                                                 )}
                                                 {showSecBHeader && (

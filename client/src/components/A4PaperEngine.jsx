@@ -146,9 +146,16 @@ export default function A4PaperEngine({
                                 let sectionBanner = null;
                                 if (isJeePaper) {
                                     if (idx === 0 && !isCurrentNumerical) {
+                                        const firstNumIdx = visibleQuestions.findIndex(item => 
+                                            (item.type || '').toUpperCase() === 'NUMERICAL' || 
+                                            (item.q_type || '').toLowerCase() === 'numerical' || 
+                                            !Array.isArray(item.options) || 
+                                            item.options.length < 2
+                                        );
+                                        const secACount = firstNumIdx !== -1 ? firstNumIdx : Math.min(20, visibleQuestions.length);
                                         sectionBanner = {
                                             title: 'SECTION A',
-                                            subtitle: '(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. 1 TO 25)'
+                                            subtitle: `(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. 1 TO ${secACount})`
                                         };
                                     } else if (isCurrentNumerical && (!prevQ || !isPrevNumerical)) {
                                         sectionBanner = {

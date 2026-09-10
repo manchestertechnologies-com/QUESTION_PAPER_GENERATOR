@@ -184,8 +184,8 @@ export default function A4SolutionKey({
                                         const diagramImg = q.imageUrl || q.image_url;
                                         const explanation = q.solutionText || q.solution || q.explanation || '';
                                         const options = Array.isArray(q.options) ? q.options : [];
-                                        const showSecAHeader = isJeePaper && (idx % 30 === 0);
-                                        const showSecBHeader = isJeePaper && (idx % 30 === 25);
+                                        const showSecAHeader = isJeePaper && (idx % 25 === 0);
+                                        const showSecBHeader = isJeePaper && (idx % 25 === 20);
 
                                         return (
                                             <React.Fragment key={idx}>
@@ -198,7 +198,7 @@ export default function A4SolutionKey({
                                                             SECTION A
                                                         </span>
                                                         <span className="text-[11px] font-bold text-slate-200 uppercase">
-                                                            (MULTIPLE CHOICE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 25, resolvedQuestions.length)})
+                                                            (MULTIPLE CHOICE QUESTIONS — QUESTION NOS. {idx + 1} TO {Math.min(idx + 20, resolvedQuestions.length)})
                                                         </span>
                                                     </div>
                                                 )}

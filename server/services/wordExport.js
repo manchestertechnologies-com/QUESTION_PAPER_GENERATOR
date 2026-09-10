@@ -334,7 +334,7 @@ async function generatePaperDoc(paper, template = null) {
             const q = questions[idx];
             const qNum = idx + 1;
             
-            if (isJeePaper && idx % 30 === 0) {
+            if (isJeePaper && idx % 25 === 0) {
                 docChildren.push(
                     new Paragraph({
                         children: [
@@ -343,7 +343,7 @@ async function generatePaperDoc(paper, template = null) {
                         spacing: { before: 240, after: 120 }
                     })
                 );
-            } else if (isJeePaper && idx % 30 === 25) {
+            } else if (isJeePaper && idx % 25 === 20) {
                 docChildren.push(
                     new Paragraph({
                         children: [
