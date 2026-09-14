@@ -22,6 +22,9 @@ const PaperSchema = new mongoose.Schema({
         marks: Number
     }],
     isAssignment: { type: Boolean, default: false },
+    isMerged: { type: Boolean, default: false },
+    sections: [{ type: mongoose.Schema.Types.Mixed }],
+    onlineExamId: { type: mongoose.Schema.Types.ObjectId, ref: 'OnlineExam' },
     duration: { type: String },
     startQNo: { type: Number, default: 1 },
     endQNo: { type: Number },

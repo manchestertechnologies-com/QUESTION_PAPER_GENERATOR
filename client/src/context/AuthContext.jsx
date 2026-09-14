@@ -15,14 +15,18 @@ export const AuthProvider = ({ children }) => {
 
                 if (savedUser) {
                     try {
-                        setUser(JSON.parse(savedUser));
+                        const parsedUser = JSON.parse(savedUser);
+                        setUser(parsedUser);
+                        // Instant unblock: user is restored in 0 milliseconds!
+                        setLoading(false);
                     } catch {
                         localStorage.removeItem('user');
                     }
                 }
 
-                if (savedToken || savedUser) {
-                    const fetchMe = api.get('/api/auth/me').then(res => {
+                if (savedToken) {
+                    // Non-blocking background revalidation
+                    api.get('/api/auth/me', { skipLoader: true }).then(res => {
                         if (res.data?.user) {
                             setUser(res.data.user);
                             localStorage.setItem('user', JSON.stringify(res.data.user));
@@ -31,21 +35,21 @@ export const AuthProvider = ({ children }) => {
                         localStorage.removeItem('token');
                         localStorage.removeItem('user');
                         setUser(null);
+                    }).finally(() => {
+                        setLoading(false);
                     });
-
-                    // Max 3.5s wait so other laptops on cold-start never freeze
-                    const timeout = new Promise(resolve => setTimeout(resolve, 3500));
-                    await Promise.race([fetchMe, timeout]);
+                } else {
+                    setLoading(false);
                 }
             } catch (err) {
                 console.error('[AUTH INIT ERROR]:', err);
-            } finally {
                 setLoading(false);
             }
         };
 
         initAuth();
     }, []);
+
 
     const login = async (email, password) => {
         try {

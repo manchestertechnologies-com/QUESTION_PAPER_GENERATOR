@@ -96,6 +96,26 @@ router.post('/login', loginLimiter, async (req, res) => {
         // Set HttpOnly cookie
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
+        const now = new Date();
+        let trialStatus = user.trialStatus || (user.isTrial ? 'active' : 'none');
+        let isTrialActive = false;
+        let trialDaysRemaining = 0;
+
+        if (trialStatus === 'active' && user.trialExpiryDate) {
+            const expiry = new Date(user.trialExpiryDate);
+            if (expiry.getTime() < now.getTime()) {
+                trialStatus = 'expired';
+                trialDaysRemaining = 0;
+                isTrialActive = false;
+            } else {
+                trialDaysRemaining = Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+                isTrialActive = true;
+            }
+        } else if (trialStatus === 'active' && !user.trialExpiryDate) {
+            isTrialActive = true;
+            trialDaysRemaining = 15;
+        }
+
         return res.json({
             token,
             user: {
@@ -107,7 +127,13 @@ router.post('/login', loginLimiter, async (req, res) => {
                 institutionName: user.institutionName || 'Manchester College',
                 institutionEmail: user.institutionEmail || '',
                 status: user.status || 'active',
-                isTrial: user.isTrial !== undefined ? user.isTrial : true,
+                isTrial: user.isTrial || false,
+                trialStatus,
+                isTrialActive,
+                trialDaysRemaining,
+                trialStartDate: user.trialStartDate,
+                trialExpiryDate: user.trialExpiryDate,
+                trialDurationDays: user.trialDurationDays || 0,
                 quotas: user.quotas || {
                     assessment: { used: 0, max: 2, maxQuestions: 60 },
                     jee: { used: 0, max: 2, maxQuestions: 240 },
@@ -156,7 +182,9 @@ router.get('/me', auth, async (req, res) => {
                     email: 'manchestertechnologies@gmail.com', 
                     role: 'admin',
                     institutionName: 'Manchester Technologies',
-                    isTrial: false
+                    isTrial: false,
+                    trialStatus: 'none',
+                    isTrialActive: true
                 }
             });
         }
@@ -166,6 +194,26 @@ router.get('/me', auth, async (req, res) => {
 
         if (user.status === 'disabled') {
             return res.status(403).json({ msg: 'Account disabled.' });
+        }
+
+        const now = new Date();
+        let trialStatus = user.trialStatus || (user.isTrial ? 'active' : 'none');
+        let isTrialActive = false;
+        let trialDaysRemaining = 0;
+
+        if (trialStatus === 'active' && user.trialExpiryDate) {
+            const expiry = new Date(user.trialExpiryDate);
+            if (expiry.getTime() < now.getTime()) {
+                trialStatus = 'expired';
+                trialDaysRemaining = 0;
+                isTrialActive = false;
+            } else {
+                trialDaysRemaining = Math.max(0, Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+                isTrialActive = true;
+            }
+        } else if (trialStatus === 'active' && !user.trialExpiryDate) {
+            isTrialActive = true;
+            trialDaysRemaining = 15;
         }
 
         return res.json({
@@ -178,7 +226,13 @@ router.get('/me', auth, async (req, res) => {
                 institutionName: user.institutionName || 'Manchester College',
                 institutionEmail: user.institutionEmail || '',
                 status: user.status || 'active',
-                isTrial: user.isTrial !== undefined ? user.isTrial : true,
+                isTrial: user.isTrial || false,
+                trialStatus,
+                isTrialActive,
+                trialDaysRemaining,
+                trialStartDate: user.trialStartDate,
+                trialExpiryDate: user.trialExpiryDate,
+                trialDurationDays: user.trialDurationDays || 0,
                 quotas: user.quotas || {
                     assessment: { used: 0, max: 2, maxQuestions: 60 },
                     jee: { used: 0, max: 2, maxQuestions: 240 },
@@ -193,9 +247,7 @@ router.get('/me', auth, async (req, res) => {
         return res.status(500).json({ msg: 'Server error.' });
     }
 });
-        console.error('[AUTH] /me error:', err.message);
-        return res.status(500).json({ msg: 'Server error.' });
-    }
-});
+
 
 module.exports = router;
+

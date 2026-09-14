@@ -15,13 +15,27 @@ const CreateTeacher = () => {
         institutionName: 'Manchester PU College',
         institutionEmail: '',
         status: 'active',
-        isTrial: true
+        grantTrial: false,
+        trialDurationDays: 15
     });
 
     const [teachers, setTeachers] = useState([]);
     const [loadingTeachers, setLoadingTeachers] = useState(true);
     const [activeTab, setActiveTab] = useState('create'); // 'create' | 'manage'
     const [searchQuery, setSearchQuery] = useState('');
+
+    // Trial Management Modal State
+    const [trialModal, setTrialModal] = useState({
+        isOpen: false,
+        mode: 'grant', // 'grant' | 'extend'
+        teacher: null,
+        durationDays: 15,
+        customDays: 15,
+        startDate: new Date().toISOString().split('T')[0],
+        expiryDate: '',
+        resetQuotas: true,
+        reason: ''
+    });
 
     const subjects = [
         'Physics',
@@ -71,7 +85,7 @@ const CreateTeacher = () => {
                 institutionEmail: formData.institutionEmail || institutionEmail || ''
             };
             await api.post('/api/admin/teachers', payload);
-            alert(`Teacher account created successfully for ${formData.name} (${formData.email}) under ${payload.institutionName}!`);
+            alert(`Teacher account created successfully for ${formData.name} (${formData.email})!`);
             setFormData({
                 name: '',
                 email: '',
@@ -80,7 +94,8 @@ const CreateTeacher = () => {
                 institutionName: institutionName || 'Manchester PU College',
                 institutionEmail: institutionEmail || '',
                 status: 'active',
-                isTrial: true
+                grantTrial: false,
+                trialDurationDays: 15
             });
             setActiveTab('manage');
             fetchTeachers();
@@ -107,6 +122,86 @@ const CreateTeacher = () => {
         }
     };
 
+    // Open Grant Trial Modal
+    const openGrantTrialModal = (teacher) => {
+        const today = new Date();
+        const defaultExpiry = new Date(today.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setTrialModal({
+            isOpen: true,
+            mode: 'grant',
+            teacher,
+            durationDays: 15,
+            customDays: 15,
+            startDate: today.toISOString().split('T')[0],
+            expiryDate: defaultExpiry,
+            resetQuotas: true,
+            reason: ''
+        });
+    };
+
+    // Open Extend Trial Modal
+    const openExtendTrialModal = (teacher) => {
+        const baseDate = teacher.trialExpiryDate ? new Date(teacher.trialExpiryDate) : new Date();
+        const defaultExpiry = new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        setTrialModal({
+            isOpen: true,
+            mode: 'extend',
+            teacher,
+            durationDays: 7,
+            customDays: 7,
+            startDate: new Date().toISOString().split('T')[0],
+            expiryDate: defaultExpiry,
+            resetQuotas: false,
+            reason: ''
+        });
+    };
+
+    const handleTrialModalSubmit = async (e) => {
+        e.preventDefault();
+        const teacherId = trialModal.teacher?._id || trialModal.teacher?.id;
+        if (!teacherId) return;
+
+        try {
+            if (trialModal.mode === 'grant') {
+                const effectiveDays = trialModal.durationDays === 'custom' ? Number(trialModal.customDays) : Number(trialModal.durationDays);
+                const res = await api.post(`/api/admin/teachers/${teacherId}/trial`, {
+                    durationDays: effectiveDays,
+                    startDate: trialModal.startDate,
+                    expiryDate: trialModal.expiryDate,
+                    resetQuotas: trialModal.resetQuotas,
+                    reason: trialModal.reason
+                });
+                alert(res.data?.msg || 'Trial access granted successfully!');
+            } else {
+                const effectiveDays = trialModal.durationDays === 'custom' ? Number(trialModal.customDays) : Number(trialModal.durationDays);
+                const res = await api.patch(`/api/admin/teachers/${teacherId}/trial/extend`, {
+                    extendDays: effectiveDays,
+                    newExpiryDate: trialModal.expiryDate,
+                    resetQuotas: trialModal.resetQuotas
+                });
+                alert(res.data?.msg || 'Trial access extended successfully!');
+            }
+
+            setTrialModal(prev => ({ ...prev, isOpen: false }));
+            fetchTeachers();
+        } catch (err) {
+            alert(err.response?.data?.msg || 'Failed to update trial access.');
+        }
+    };
+
+    const handleRevokeTrial = async (teacher) => {
+        const teacherId = teacher._id || teacher.id;
+        if (!window.confirm(`Revoke trial access immediately for ${teacher.name}? They will no longer be able to generate new papers.`)) return;
+
+        try {
+            const res = await api.patch(`/api/admin/teachers/${teacherId}/trial/revoke`);
+            alert(res.data?.msg || 'Trial access revoked.');
+            fetchTeachers();
+        } catch (err) {
+            alert(err.response?.data?.msg || 'Failed to revoke trial access.');
+        }
+    };
+
     const handleResetQuotas = async (teacher) => {
         const teacherId = teacher._id || teacher.id;
         if (!window.confirm(`Reset trial generation quotas for ${teacher.name}? This will reset Assessment, JEE, NEET, and CET paper usage back to 0/2.`)) return;
@@ -126,7 +221,8 @@ const CreateTeacher = () => {
         const teacherId = teacher._id || teacher.id;
         try {
             await api.put(`/api/admin/teachers/${teacherId}/password`, { newPassword: newPass.trim() });
-            alert(`Password updated successfully for ${teacher.name}!\nNew password: ${newPass.trim()}`);
+            alert(`Password updated successfully for ${teacher.name}!
+New password: ${newPass.trim()}`);
         } catch (err) {
             alert(err.response?.data?.msg || 'Error resetting password');
         }
@@ -183,10 +279,10 @@ const CreateTeacher = () => {
                         <span className="text-white/60 text-xs font-bold">Manchester Technologies Portal</span>
                     </div>
                     <h2 className="font-black text-2xl md:text-3xl uppercase tracking-tight text-white">
-                        Institution &amp; Teacher Management
+                        Institution &amp; Trial Access Management
                     </h2>
                     <p className="text-xs text-white/70 font-medium mt-1">
-                        Create institution profiles, manage trial quotas, and configure teacher access credentials.
+                        Control individual trial durations (7, 15, 30 days, Custom), manage teacher permissions, and configure institution profiles.
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -210,7 +306,7 @@ const CreateTeacher = () => {
                     }`}
                 >
                     <span>➕</span>
-                    <span>Onboard Teacher &amp; Institution</span>
+                    <span>Onboard Faculty Account</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('manage')}
@@ -221,7 +317,7 @@ const CreateTeacher = () => {
                     }`}
                 >
                     <span>👥</span>
-                    <span>Manage Teachers &amp; Quotas ({teachers.length})</span>
+                    <span>Manage Faculty &amp; Trial Access (${teachers.length})</span>
                 </button>
             </div>
 
@@ -291,7 +387,7 @@ const CreateTeacher = () => {
                                 Teacher Account Credentials &amp; Department
                             </h3>
                             <p className="text-xs text-gray-500 font-medium mt-1">
-                                Create a new faculty account with automatic trial quotas (2 Assessments, 2 JEE, 2 NEET, 2 CET).
+                                Create a faculty account. Trial access is not assigned automatically and can be enabled below or assigned individually by Admin.
                             </p>
                         </div>
 
@@ -300,8 +396,8 @@ const CreateTeacher = () => {
                                 <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Teacher Full Name <span className="text-red-500">*</span></label>
                                 <input
                                     type="text"
-                                    placeholder="e.g. Prof. Ramesh Sharma"
                                     required
+                                    placeholder="e.g. Dr. Ramesh Kumar"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
                                     className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs"
@@ -309,11 +405,11 @@ const CreateTeacher = () => {
                             </div>
 
                             <div>
-                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Teacher Email ID (Login Username) <span className="text-red-500">*</span></label>
+                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Teacher Email Address <span className="text-red-500">*</span></label>
                                 <input
                                     type="email"
-                                    placeholder="e.g. physics.faculty@institution.com"
                                     required
+                                    placeholder="e.g. ramesh.physics@manchestercollege.edu.in"
                                     value={formData.email}
                                     onChange={e => setFormData({ ...formData, email: e.target.value })}
                                     className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs"
@@ -321,11 +417,11 @@ const CreateTeacher = () => {
                             </div>
 
                             <div>
-                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Teacher Password <span className="text-red-500">*</span></label>
+                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Login Password <span className="text-red-500">*</span></label>
                                 <input
                                     type="password"
-                                    placeholder="••••••••"
                                     required
+                                    placeholder="Enter secure initial password"
                                     value={formData.password}
                                     onChange={e => setFormData({ ...formData, password: e.target.value })}
                                     className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs"
@@ -333,48 +429,51 @@ const CreateTeacher = () => {
                             </div>
 
                             <div>
-                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Academic Department / Subject <span className="text-red-500">*</span></label>
+                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Subject Department <span className="text-red-500">*</span></label>
                                 <select
-                                    required
                                     value={formData.subject}
                                     onChange={e => setFormData({ ...formData, subject: e.target.value })}
-                                    className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs cursor-pointer"
+                                    className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs"
                                 >
-                                    {subjects.map(sub => (
-                                        <option key={sub} value={sub}>{sub}</option>
+                                    {subjects.map(s => (
+                                        <option key={s} value={s}>{s}</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div>
-                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Assigned College / Institution</label>
-                                <input
-                                    type="text"
-                                    value={formData.institutionName || institutionName}
-                                    onChange={e => setFormData({ ...formData, institutionName: e.target.value })}
-                                    className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2">Initial Account Status</label>
-                                <select
-                                    value={formData.status}
-                                    onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                    className="w-full border-2 border-gray-200 p-3.5 rounded-2xl focus:border-navy bg-white font-bold text-navy outline-none text-sm shadow-xs cursor-pointer"
-                                >
-                                    <option value="active">Active (Access Enabled)</option>
-                                    <option value="disabled">Disabled (Access Blocked)</option>
-                                </select>
-                            </div>
-
-                            {/* Trial Quota Notice */}
-                            <div className="col-span-1 md:col-span-2 p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-                                <span className="text-xl">ℹ️</span>
-                                <div className="text-xs text-amber-900 leading-relaxed font-medium">
-                                    <strong>Default Trial Quotas Assigned:</strong> 2 Assessments (max 60 Qs), 2 JEE Papers (max 240 Qs), 2 NEET Papers (max 240 Qs), 2 CET Papers (max 240 Qs).
-                                    Export is restricted to PDF only (Word/DOCX export disabled for trial). All usage is tracked persistently in the database.
+                            {/* Trial Access Opt-in */}
+                            <div className="col-span-1 md:col-span-2 p-5 bg-amber-50/50 rounded-2xl border border-amber-200 space-y-3">
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="checkbox"
+                                        id="grantTrialCheck"
+                                        checked={formData.grantTrial}
+                                        onChange={e => setFormData({ ...formData, grantTrial: e.target.checked })}
+                                        className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                    />
+                                    <label htmlFor="grantTrialCheck" className="text-xs font-black text-navy uppercase tracking-wider cursor-pointer">
+                                        Grant Initial Trial Access on Creation
+                                    </label>
                                 </div>
+                                {formData.grantTrial && (
+                                    <div className="flex items-center gap-3 pt-2">
+                                        <span className="text-[11px] font-bold text-slate-700">Trial Duration:</span>
+                                        {[7, 15, 30].map(days => (
+                                            <button
+                                                key={days}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, trialDurationDays: days })}
+                                                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
+                                                    formData.trialDurationDays === days
+                                                        ? 'bg-navy text-gold shadow-xs'
+                                                        : 'bg-white text-slate-700 border border-slate-300'
+                                                }`}
+                                            >
+                                                ${days} Days
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-span-1 md:col-span-2">
@@ -390,16 +489,16 @@ const CreateTeacher = () => {
                 </div>
             )}
 
-            {/* TAB 2: MANAGE & MONITOR QUOTAS */}
+            {/* TAB 2: MANAGE & MONITOR TRIAL ACCESS */}
             {activeTab === 'manage' && (
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 space-y-6 animate-fade-in">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
                         <div>
                             <h3 className="text-base font-black text-navy uppercase tracking-tight flex items-center gap-2">
-                                <span>👥</span> Registered Faculty Accounts &amp; Trial Status
+                                <span>👥</span> Registered Faculty Accounts &amp; Admin Trial Controls
                             </h3>
                             <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                Enable/disable accounts, inspect live generation quota usage, and reset quotas.
+                                Grant, extend, or revoke trial access for individual teachers. Monitor days remaining and paper generation quotas.
                             </p>
                         </div>
                         <div className="w-full md:w-72">
@@ -422,6 +521,9 @@ const CreateTeacher = () => {
                             {filteredTeachers.map(teacher => {
                                 const tId = teacher._id || teacher.id;
                                 const isActive = (teacher.status || 'active') === 'active';
+                                const trialStatus = teacher.trialStatus || (teacher.isTrial ? 'active' : 'none');
+                                const isTrialActive = teacher.isTrialActive || (trialStatus === 'active');
+                                const daysRemaining = teacher.trialDaysRemaining !== undefined ? teacher.trialDaysRemaining : 0;
                                 const quotas = teacher.quotas || {
                                     assessment: { used: 0, max: 2 },
                                     jee: { used: 0, max: 2 },
@@ -447,28 +549,86 @@ const CreateTeacher = () => {
                                                     {(teacher.name || 'T').charAt(0).toUpperCase()}
                                                 </div>
                                                 <div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <h4 className="font-black text-base text-navy">{teacher.name}</h4>
+                                                        
+                                                        {/* Status */}
                                                         <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${
                                                             isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                                                         }`}>
                                                             {isActive ? '● Active' : '✕ Disabled'}
                                                         </span>
+
+                                                        {/* Trial Status Badge */}
+                                                        {isTrialActive ? (
+                                                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 flex items-center gap-1">
+                                                                <span>⚡ Trial Active:</span>
+                                                                <strong>{daysRemaining} Days Left</strong>
+                                                            </span>
+                                                        ) : trialStatus === 'expired' ? (
+                                                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                                                ⚠️ Trial Expired
+                                                            </span>
+                                                        ) : trialStatus === 'revoked' ? (
+                                                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                                                                ✕ Trial Revoked
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                                                No Trial Access
+                                                            </span>
+                                                        )}
+
                                                         <span className="text-[10px] font-black bg-gold/20 text-navy px-2.5 py-0.5 rounded-full uppercase">
                                                             {teacher.subject || 'General'}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center gap-3 text-xs text-gray-500 font-medium mt-0.5">
+                                                    <div className="flex items-center gap-3 text-xs text-gray-500 font-medium mt-0.5 flex-wrap">
                                                         <span>📧 {teacher.email}</span>
                                                         <span>•</span>
                                                         <span>🏛️ <strong>{teacher.institutionName || 'Manchester College'}</strong></span>
+                                                        {teacher.trialExpiryDate && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span>Expiry: <strong>{new Date(teacher.trialExpiryDate).toLocaleDateString()}</strong></span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            {/* Action Buttons */}
+                                            {/* Action Buttons: Trial Controls + Admin Controls */}
                                             <div className="flex flex-wrap items-center gap-2">
-                                                {/* Enable / Disable Button */}
+                                                
+                                                {/* Grant / Extend Trial */}
+                                                {!isTrialActive ? (
+                                                    <button
+                                                        onClick={() => openGrantTrialModal(teacher)}
+                                                        className="bg-navy text-gold hover:bg-slate-900 border border-gold px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-xs flex items-center gap-1"
+                                                    >
+                                                        <span>🎁</span> Grant Trial
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => openExtendTrialModal(teacher)}
+                                                        className="bg-blue-600 text-white hover:bg-blue-700 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer shadow-xs flex items-center gap-1"
+                                                    >
+                                                        <span>⏳</span> Extend Trial
+                                                    </button>
+                                                )}
+
+                                                {/* Revoke Trial (if active) */}
+                                                {isTrialActive && (
+                                                    <button
+                                                        onClick={() => handleRevokeTrial(teacher)}
+                                                        className="bg-rose-50 border border-rose-300 text-rose-800 hover:bg-rose-100 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
+                                                        title="Revoke trial access immediately"
+                                                    >
+                                                        Revoke Trial
+                                                    </button>
+                                                )}
+
+                                                {/* Enable / Disable Account */}
                                                 <button
                                                     onClick={() => handleToggleStatus(teacher)}
                                                     className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer border ${
@@ -477,36 +637,24 @@ const CreateTeacher = () => {
                                                             : 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
                                                     }`}
                                                 >
-                                                    {isActive ? '⏸ Disable Access' : '▶ Enable Access'}
+                                                    {isActive ? '⏸ Disable' : '▶ Enable'}
                                                 </button>
 
-                                                {/* Reset Trial Quotas */}
+                                                {/* Reset Quotas */}
                                                 <button
                                                     onClick={() => handleResetQuotas(teacher)}
-                                                    className="bg-blue-50 border border-blue-200 text-blue-800 hover:bg-blue-100 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer"
-                                                    title="Reset all 4 paper quotas back to 0/2"
+                                                    className="bg-slate-100 border border-slate-300 text-slate-700 hover:bg-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
+                                                    title="Reset quotas to 0/2"
                                                 >
-                                                    🔄 Reset Quotas
+                                                    🔄 Quotas
                                                 </button>
 
-                                                {/* Reset Password */}
+                                                {/* Password */}
                                                 <button
                                                     onClick={() => handleResetPassword(teacher)}
                                                     className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
                                                 >
-                                                    🔑 Password
-                                                </button>
-
-                                                {/* OMR Permission */}
-                                                <button
-                                                    onClick={() => handleToggleOmrAccess(teacher)}
-                                                    className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border ${
-                                                        teacher.omrAccess !== false
-                                                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
-                                                            : 'bg-gray-100 border-gray-200 text-gray-500'
-                                                    }`}
-                                                >
-                                                    OMR {teacher.omrAccess !== false ? '✓' : '✕'}
+                                                    🔑
                                                 </button>
 
                                                 {/* Delete */}
@@ -514,7 +662,7 @@ const CreateTeacher = () => {
                                                     onClick={() => handleRevoke(teacher)}
                                                     className="bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer"
                                                 >
-                                                    ✕ Delete
+                                                    ✕
                                                 </button>
                                             </div>
                                         </div>
@@ -578,6 +726,127 @@ const CreateTeacher = () => {
                             })}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* TRIAL ACCESS MODAL (GRANT / EXTEND) */}
+            {trialModal.isOpen && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200 animate-fade-in">
+                        <div className="p-6 bg-navy text-white flex justify-between items-center border-b-2 border-gold">
+                            <div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-gold bg-white/10 px-2 py-0.5 rounded-md">
+                                    Admin Access Portal
+                                </span>
+                                <h3 className="text-lg font-black uppercase tracking-tight mt-1">
+                                    {trialModal.mode === 'grant' ? '🎁 Grant Trial Access' : '⏳ Extend Trial Access'}
+                                </h3>
+                                <p className="text-xs text-white/70">
+                                    Target Faculty: <strong>{trialModal.teacher?.name}</strong> ({trialModal.teacher?.email})
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setTrialModal(prev => ({ ...prev, isOpen: false }))}
+                                className="text-white/60 hover:text-white bg-white/10 w-8 h-8 rounded-full flex items-center justify-center font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleTrialModalSubmit} className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-1.5">
+                                    Select Duration
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[7, 15, 30, 'custom'].map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => setTrialModal(prev => ({ ...prev, durationDays: d }))}
+                                            className={`py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                                                trialModal.durationDays === d
+                                                    ? 'bg-navy text-gold border-2 border-gold shadow-xs'
+                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            {d === 'custom' ? 'Custom' : `${d} Days`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {trialModal.durationDays === 'custom' && (
+                                <div>
+                                    <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-1">
+                                        Custom Number of Days
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="365"
+                                        value={trialModal.customDays}
+                                        onChange={e => setTrialModal(prev => ({ ...prev, customDays: e.target.value }))}
+                                        className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-xs font-bold text-navy outline-none focus:border-navy"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-1">
+                                        Start Date
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={trialModal.startDate}
+                                        onChange={e => setTrialModal(prev => ({ ...prev, startDate: e.target.value }))}
+                                        className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-xs font-bold text-navy outline-none focus:border-navy"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-1">
+                                        Expiry Date (Optional Override)
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={trialModal.expiryDate}
+                                        onChange={e => setTrialModal(prev => ({ ...prev, expiryDate: e.target.value }))}
+                                        className="w-full border-2 border-slate-200 p-2.5 rounded-xl text-xs font-bold text-navy outline-none focus:border-navy"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-2">
+                                <input
+                                    type="checkbox"
+                                    id="modalResetQuotas"
+                                    checked={trialModal.resetQuotas}
+                                    onChange={e => setTrialModal(prev => ({ ...prev, resetQuotas: e.target.checked }))}
+                                    className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                />
+                                <label htmlFor="modalResetQuotas" className="text-xs font-bold text-slate-700 cursor-pointer">
+                                    Reset paper generation quotas to 0/2
+                                </label>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-200 flex justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setTrialModal(prev => ({ ...prev, isOpen: false }))}
+                                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="bg-navy text-gold hover:bg-slate-900 border-2 border-gold px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md cursor-pointer"
+                                >
+                                    {trialModal.mode === 'grant' ? 'Confirm & Grant Trial' : 'Confirm & Extend Trial'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>

@@ -3,6 +3,8 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Paper = require('../models/Paper');
 const Question = require('../models/Question');
+const User = require('../models/User');
+const OnlineExam = require('../models/OnlineExam');
 const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const supabaseQuestions = require('../services/supabaseQuestions');
@@ -50,73 +52,114 @@ async function handlePaperFinalization(paper, user, exam = null) {
 
 // Helper to populate paper questions from Supabase & MongoDB if stored as IDs
 async function populatePaperQuestions(paper) {
-    const pObj = paper.toObject ? paper.toObject() : paper;
+    const pObj = paper.toObject ? paper.toObject() : (paper ? JSON.parse(JSON.stringify(paper)) : {});
     if (Array.isArray(pObj.questions) && pObj.questions.length > 0) {
         // If questions are already full question objects with questionText or question
-        if (typeof pObj.questions[0] === 'object' && (pObj.questions[0].questionText || pObj.questions[0].question)) {
+        if (typeof pObj.questions[0] === 'object' && pObj.questions[0] !== null && (pObj.questions[0].questionText || pObj.questions[0].question)) {
             return pObj;
         }
-        const stringIds = pObj.questions.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(Boolean);
-        if (stringIds.length > 0 && typeof pObj.questions[0] === 'string') {
+
+        const stringIds = pObj.questions.map(q => {
+            if (!q) return null;
+            if (typeof q === 'string') return q;
+            if (q._id) return q._id.toString();
+            if (q.id) return q.id.toString();
+            if (typeof q.toString === 'function') return q.toString();
+            return String(q);
+        }).filter(Boolean);
+
+        if (stringIds.length > 0) {
             try {
                 const fetchedMap = new Map();
                 
                 // 1. Try Primary Supabase (Question Bank)
-                const fetchedSupa = await supabaseQuestions.getQuestionsByIds(stringIds);
-                (fetchedSupa || []).forEach(q => fetchedMap.set((q._id || q.id).toString(), q));
+                try {
+                    const fetchedSupa = await supabaseQuestions.getQuestionsByIds(stringIds);
+                    (fetchedSupa || []).forEach(q => fetchedMap.set((q._id || q.id || q.questionId).toString(), q));
+                } catch (e) {
+                    console.error('Error fetching from Supabase primary:', e.message);
+                }
 
                 // 2. Try Secondary Supabase (GT & PYQ Question DB) for missing UUIDs
                 const missingUuidIds = stringIds.filter(id => !fetchedMap.has(id.toString()));
                 if (missingUuidIds.length > 0) {
-                    const fetchedGtPyq = await supabaseGtPyqQuestions.getQuestionsByIds(missingUuidIds);
-                    (fetchedGtPyq || []).forEach(q => fetchedMap.set((q._id || q.id).toString(), q));
+                    try {
+                        const fetchedGtPyq = await supabaseGtPyqQuestions.getQuestionsByIds(missingUuidIds);
+                        (fetchedGtPyq || []).forEach(q => fetchedMap.set((q._id || q.id || q.questionId).toString(), q));
+                    } catch (e) {
+                        console.error('Error fetching from Supabase GT/PYQ:', e.message);
+                    }
                 }
 
                 // 3. For any IDs still missing, try MongoDB Question model
                 const missingIds = stringIds.filter(id => !fetchedMap.has(id.toString()) && mongoose.Types.ObjectId.isValid(id));
                 if (missingIds.length > 0) {
-                    const mongoDocs = await Question.find({ _id: { $in: missingIds } }).lean();
-                    (mongoDocs || []).forEach(mq => {
-                        fetchedMap.set(mq._id.toString(), {
-                            _id: mq._id.toString(),
-                            id: mq._id.toString(),
-                            questionId: mq.questionId || mq._id.toString(),
-                            subject: mq.subject,
-                            classes: Array.isArray(mq.classes) ? mq.classes : [mq.classes || '12'],
-                            chapter: mq.chapter || 'General',
-                            concept: mq.concept || mq.chapter || 'General',
-                            subConcept: mq.subConcept || '',
-                            level: mq.level || 'medium',
-                            type: mq.type || 'MCQ',
-                            questionText: mq.questionText,
-                            imageUrl: mq.imageUrl || null,
-                            solutionImageUrl: mq.solutionImageUrl || null,
-                            options: Array.isArray(mq.options) ? mq.options : [],
-                            matchPairs: Array.isArray(mq.matchPairs) ? mq.matchPairs : [],
-                            answer: mq.answer || '',
-                            solutionText: mq.solutionText || '',
-                            sourceType: mq.sourceType || 'REGULAR',
-                            sourceExam: mq.sourceExam || '',
-                            sourceYear: mq.sourceYear || null,
-                            sourcePaperName: mq.sourcePaperName || '',
+                    try {
+                        const mongoDocs = await Question.find({ _id: { $in: missingIds } }).lean();
+                        (mongoDocs || []).forEach(mq => {
+                            fetchedMap.set(mq._id.toString(), {
+                                _id: mq._id.toString(),
+                                id: mq._id.toString(),
+                                questionId: mq.questionId || mq._id.toString(),
+                                subject: mq.subject,
+                                classes: Array.isArray(mq.classes) ? mq.classes : [mq.classes || '12'],
+                                chapter: mq.chapter || 'General',
+                                concept: mq.concept || mq.chapter || 'General',
+                                subConcept: mq.subConcept || '',
+                                level: mq.level || 'medium',
+                                type: mq.type || 'MCQ',
+                                questionText: mq.questionText || mq.question,
+                                imageUrl: mq.imageUrl || null,
+                                solutionImageUrl: mq.solutionImageUrl || null,
+                                options: Array.isArray(mq.options) ? mq.options : [],
+                                matchPairs: Array.isArray(mq.matchPairs) ? mq.matchPairs : [],
+                                statements: Array.isArray(mq.statements) ? mq.statements : [],
+                                assertion: mq.assertion || '',
+                                reason: mq.reason || '',
+                                answer: mq.answer || '',
+                                solutionText: mq.solutionText || '',
+                                sourceType: mq.sourceType || 'REGULAR',
+                                sourceExam: mq.sourceExam || '',
+                                sourceYear: mq.sourceYear || null,
+                                sourcePaperName: mq.sourcePaperName || '',
+                            });
                         });
-                    });
+                    } catch (e) {
+                        console.error('Error fetching from MongoDB Question:', e.message);
+                    }
                 }
 
                 if (fetchedMap.size > 0) {
-                    const ordered = stringIds.map(id => fetchedMap.get(id.toString())).filter(Boolean);
-                    pObj.questions = ordered.length > 0 ? ordered : (pObj.questionObjects || []);
-                } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                    const ordered = stringIds.map((id, idx) => {
+                        const fetched = fetchedMap.get(id.toString());
+                        const snap = (pObj.questionObjects && pObj.questionObjects[idx]) || {};
+                        if (!fetched) {
+                            if (snap && (snap.questionText || snap.question)) return snap;
+                            return null;
+                        }
+                        return {
+                            ...fetched,
+                            sectionName: snap.sectionName || fetched.sectionName,
+                            subject: snap.subject || fetched.subject
+                        };
+                    }).filter(Boolean);
+
+                    if (ordered.length > 0) {
+                        pObj.questions = ordered;
+                    } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0 && pObj.questionObjects[0]?.questionText) {
+                        pObj.questions = pObj.questionObjects;
+                    }
+                } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0 && pObj.questionObjects[0]?.questionText) {
                     pObj.questions = pObj.questionObjects;
                 }
             } catch (fetchErr) {
                 console.error('Error populating paper questions:', fetchErr.message);
-                if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+                if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0 && pObj.questionObjects[0]?.questionText) {
                     pObj.questions = pObj.questionObjects;
                 }
             }
         }
-    } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0) {
+    } else if (Array.isArray(pObj.questionObjects) && pObj.questionObjects.length > 0 && pObj.questionObjects[0]?.questionText) {
         pObj.questions = pObj.questionObjects;
     }
     return pObj;
@@ -187,7 +230,7 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         const resolvedQuestions = Array.isArray(questions) ? questions : (Array.isArray(questionObjects) ? questionObjects.map(q => q._id || q.id) : []);
         const totalQuestionCount = resolvedQuestions.length;
 
-        // ── Teacher Quota Check & Enforcement ──
+        // ── Teacher Quota & Trial Check & Enforcement ──
         let dbUser = null;
         if (req.user.role === 'teacher' && req.user.id) {
             dbUser = await User.findById(req.user.id);
@@ -196,7 +239,35 @@ router.post('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
                     return res.status(403).json({ msg: 'Your teacher account is disabled. Please contact the administrator.' });
                 }
 
-                if (dbUser.isTrial !== false) {
+                const now = new Date();
+                const isTrial = dbUser.isTrial !== false;
+                const trialStatus = dbUser.trialStatus || (isTrial ? 'active' : 'none');
+
+                // If teacher has no trial or trial is expired/revoked, block paper creation
+                if (trialStatus === 'none') {
+                    return res.status(403).json({
+                        msg: 'Your account does not have trial access. Please contact administrator to activate trial access.',
+                        trialRequired: true
+                    });
+                }
+
+                if (trialStatus === 'revoked') {
+                    return res.status(403).json({
+                        msg: 'Your trial access has been revoked by administrator. Please contact administrator.',
+                        trialRevoked: true
+                    });
+                }
+
+                if (trialStatus === 'expired' || (dbUser.trialExpiryDate && new Date(dbUser.trialExpiryDate) < now)) {
+                    dbUser.trialStatus = 'expired';
+                    await dbUser.save();
+                    return res.status(403).json({
+                        msg: 'Your trial access has expired. Please contact administrator to renew your trial.',
+                        trialExpired: true
+                    });
+                }
+
+                if (isTrial) {
                     const currentQuota = dbUser.quotas?.[quotaKey] || { used: 0, max: 2, maxQuestions: quotaKey === 'assessment' ? 60 : 240 };
                     if (currentQuota.used >= currentQuota.max) {
                         return res.status(403).json({ 
@@ -537,4 +608,176 @@ router.delete('/:id', [auth, checkRole(['teacher', 'admin'])], async (req, res) 
     }
 });
 
+// @route   POST /api/papers/merge
+// @desc    Merge multiple subject papers (e.g. PCMB, NEET, JEE, CET) into a new independent Paper and OnlineExam
+// @access  Teacher, Admin
+router.post('/merge', [auth, checkRole(['teacher', 'admin'])], async (req, res) => {
+    try {
+        const {
+            sourcePaperIds,
+            sections,
+            title,
+            examType = 'PCMB',
+            classes = ['12'],
+            duration = '180 Minutes',
+            instructions = '',
+            customSections,
+            customQuestions
+        } = req.body;
+
+        let paperIds = Array.isArray(sourcePaperIds) ? sourcePaperIds : [];
+        if (paperIds.length === 0 && Array.isArray(sections)) {
+            paperIds = sections.map(s => s.paperId || s.id || s._id).filter(Boolean);
+        }
+
+        if (paperIds.length === 0) {
+            return res.status(400).json({ msg: 'Please provide an array of sourcePaperIds or sections to merge.' });
+        }
+
+        // 1. Fetch all source papers without mutating them
+        const sourcePapers = await Paper.find({ _id: { $in: paperIds } });
+        if (sourcePapers.length === 0) {
+            return res.status(404).json({ msg: 'No valid source papers found for the provided IDs.' });
+        }
+
+        // Maintain order requested in paperIds
+        const orderedPapers = paperIds
+            .map(id => sourcePapers.find(p => p._id.toString() === id.toString()))
+            .filter(Boolean);
+
+        // Populate questions for each source paper
+        const populatedPapers = await Promise.all(orderedPapers.map(populatePaperQuestions));
+
+        // 2. Build merged questions list and section patterns
+        let mergedQuestions = [];
+        let mergedQuestionObjects = [];
+        let mergedPattern = [];
+
+        if (Array.isArray(customQuestions) && customQuestions.length > 0) {
+            // User provided an explicit reordered/customized list
+            mergedQuestionObjects = customQuestions;
+            mergedQuestions = customQuestions.map(q => (typeof q === 'object' ? (q._id || q.id) : q)).filter(Boolean);
+            if (Array.isArray(customSections) && customSections.length > 0) {
+                mergedPattern = customSections;
+            }
+        } else {
+            populatedPapers.forEach((paper, pIdx) => {
+                const reqSection = Array.isArray(sections) ? sections.find(s => (s.paperId || s.id || s._id)?.toString() === paper._id.toString()) : null;
+                const pSub = reqSection?.subject || paper.subject || `Subject ${pIdx + 1}`;
+                const pQs = Array.isArray(paper.questions) ? paper.questions : (paper.questionObjects || []);
+                
+                const sectionLetter = String.fromCharCode(65 + pIdx);
+                const sectionName = reqSection?.title || `Section ${sectionLetter}: ${pSub}`;
+                mergedPattern.push({
+                    sectionName,
+                    numQuestions: pQs.length,
+                    type: 'MCQ',
+                    description: `${pSub} Section`,
+                    marks: paper.pattern?.[0]?.marks || 4
+                });
+
+                pQs.forEach(q => {
+                    const rawQ = (typeof q === 'object' && q !== null) ? q : { id: q };
+                    const qObj = { ...rawQ, sectionName, subject: rawQ.subject || pSub };
+                    mergedQuestionObjects.push(qObj);
+                    mergedQuestions.push(rawQ._id || rawQ.id || q);
+                });
+            });
+        }
+
+        // 3. Create the new independent merged Paper record (100% leaving source papers untouched)
+        const durationMinutesVal = parseInt(duration) || 180;
+        const mergedPaper = new Paper({
+            title: title || `${examType} Unified Grand Examination`,
+            subject: examType || 'PCMB',
+            classes: Array.isArray(classes) ? classes : [classes || '12'],
+            teacherId: (req.user.id || req.user._id || 'admin').toString(),
+            questions: mergedQuestions,
+            questionObjects: mergedQuestionObjects,
+            pattern: mergedPattern,
+            sections: mergedPattern,
+            isMerged: true,
+            duration: duration || '180 Minutes',
+            startQNo: 1,
+            endQNo: mergedQuestions.length,
+            status: 'Approved'
+        });
+
+        await mergedPaper.save();
+
+        // 4. Create linked OnlineExam so the merged paper is immediately available for CBT Online Exam mode
+        let onlineExamDoc = null;
+        try {
+            const examQuestions = mergedQuestionObjects.map(q => ({
+                questionId: q._id || q.id,
+                subject: q.subject || 'General',
+                chapter: q.chapter || 'General',
+                concept: q.concept || '',
+                level: q.level || 'medium',
+                questionText: q.questionText || q.question || '',
+                options: q.options || [],
+                answer: q.answer || q.correct_option || '',
+                solutionText: q.solutionText || '',
+                statements: q.statements || [],
+                assertion: q.assertion || '',
+                reason: q.reason || '',
+                matchPairs: q.matchPairs || [],
+                imageUrl: q.imageUrl || null,
+                marks: q.marks || 4,
+                negativeMarks: q.negativeMarks !== undefined ? q.negativeMarks : 1,
+                type: q.type || 'MCQ',
+                sectionName: q.sectionName || 'Section A'
+            }));
+
+            const examSections = mergedPattern.map(p => ({
+                sectionName: p.sectionName,
+                numQuestions: p.numQuestions,
+                allowedToAnswer: p.numQuestions,
+                markingRules: { correct: p.marks || 4, incorrect: -1, unattempted: 0 }
+            }));
+
+            onlineExamDoc = new OnlineExam({
+                title: mergedPaper.title,
+                examType: ['JEE', 'NEET', 'CET'].includes(examType) ? examType : 'CET',
+                sourcePapers: paperIds,
+                mergedPaperId: mergedPaper._id,
+                questions: examQuestions,
+                sections: examSections,
+                instructions: instructions || 'Read questions carefully. Answer all sections within allotted time.',
+                duration_minutes: durationMinutesVal,
+                durationMinutes: durationMinutesVal,
+                status: 'draft',
+                classes: mergedPaper.classes,
+                createdBy: req.user.id
+            });
+
+            await onlineExamDoc.save();
+            mergedPaper.examId = onlineExamDoc._id;
+            mergedPaper.onlineExamId = onlineExamDoc._id;
+            await mergedPaper.save();
+        } catch (onlineErr) {
+            console.error('Error linking OnlineExam to merged paper:', onlineErr.message);
+        }
+
+        const populatedMerged = await populatePaperQuestions(mergedPaper);
+        const resultPaper = {
+            ...(populatedMerged.toObject ? populatedMerged.toObject() : populatedMerged),
+            isMerged: true,
+            sections: mergedPattern,
+            onlineExamId: onlineExamDoc ? onlineExamDoc._id : mergedPaper.examId
+        };
+
+        res.status(201).json({
+            success: true,
+            msg: 'Papers merged successfully into a new independent Examination record.',
+            paper: resultPaper
+        });
+    } catch (err) {
+        console.error('Merge papers error:', err);
+        res.status(500).json({ msg: 'Server error merging papers.', error: err.message });
+    }
+});
+
+
 module.exports = router;
+

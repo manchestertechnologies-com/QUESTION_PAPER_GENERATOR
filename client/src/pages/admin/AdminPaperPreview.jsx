@@ -93,9 +93,21 @@ const AdminPaperPreview = () => {
     // Ensure questions are valid objects before PQRS generation
     const validPaper = useMemo(() => {
         if (!selectedPaper) return null;
-        const rawQs = Array.isArray(selectedPaper.questions) ? selectedPaper.questions : [];
+        const rawQs = (Array.isArray(selectedPaper.questions) && selectedPaper.questions.length > 0)
+            ? selectedPaper.questions
+            : (Array.isArray(selectedPaper.questionObjects) ? selectedPaper.questionObjects : []);
+
         const cleanQs = rawQs.map((q, idx) => {
-            if (typeof q === 'object' && q !== null) return q;
+            if (typeof q === 'object' && q !== null && (q.questionText || q.question)) {
+                return q;
+            }
+            const snap = selectedPaper.questionObjects?.[idx];
+            if (snap && typeof snap === 'object' && (snap.questionText || snap.question)) {
+                return snap;
+            }
+            if (typeof q === 'object' && q !== null) {
+                return q;
+            }
             return {
                 _id: String(q || idx),
                 questionText: `Question #${idx + 1}`,

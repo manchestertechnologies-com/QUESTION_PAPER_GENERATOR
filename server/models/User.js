@@ -10,7 +10,12 @@ const UserSchema = new mongoose.Schema({
     institutionName: { type: String, default: 'Manchester College' },
     institutionEmail: { type: String },
     status: { type: String, enum: ['active', 'disabled'], default: 'active' },
-    isTrial: { type: Boolean, default: true },
+    isTrial: { type: Boolean, default: false },
+    trialStatus: { type: String, enum: ['none', 'active', 'expired', 'revoked'], default: 'none' },
+    trialStartDate: { type: Date },
+    trialExpiryDate: { type: Date },
+    trialDurationDays: { type: Number, default: 0 },
+    trialReason: { type: String, default: '' },
     omrAccess: { type: Boolean, default: true },
     quotas: {
         assessment: {

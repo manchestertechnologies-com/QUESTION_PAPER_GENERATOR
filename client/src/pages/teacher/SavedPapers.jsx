@@ -7,6 +7,7 @@ import PaperRenderer, { DEFAULT_SETTINGS, SettingsPanel, formatMarks, calcTotal 
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
+import MergePapersModal from '../../components/MergePapersModal';
 
 /* ─── Inline styles ─── */
 const S = {
@@ -386,6 +387,7 @@ const SavedPapers = () => {
     const [selectedPaper, setSelectedPaper] = useState(null);
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [hoveredRow, setHoveredRow] = useState(null);
+    const [showMergeModal, setShowMergeModal] = useState(false);
 
     /* ── Filter state ── */
     const [filterClass, setFilterClass] = useState('');
@@ -468,6 +470,27 @@ const SavedPapers = () => {
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Managed Institutional Paper Repository</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button
+                        onClick={() => setShowMergeModal(true)}
+                        style={{
+                            background: '#001f6d',
+                            color: '#c5a059',
+                            border: '2px solid #c5a059',
+                            borderRadius: '10px',
+                            padding: '8px 18px',
+                            fontSize: '11px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.1em',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 4px 12px rgba(0,31,109,0.2)'
+                        }}
+                    >
+                        <span>🔗</span> Merge Papers (PCMB / NEET / JEE)
+                    </button>
                     <div style={{
                         fontSize: '11px', color: '#c5a059',
                         background: '#001f6d', border: 'none',
@@ -667,6 +690,29 @@ const SavedPapers = () => {
                     </table>
                 )}
             </div>
+
+            {/* Merge Papers Modal */}
+            {showMergeModal && (
+                <MergePapersModal
+                    papers={papers}
+                    onClose={() => setShowMergeModal(false)}
+                    onMergeSuccess={(newPaper) => {
+                        setPapers(prev => [newPaper, ...prev]);
+                        setSelectedPaper(newPaper);
+                        setShowMergeModal(false);
+                    }}
+                    onOpenPrint={(newPaper) => {
+                        setPapers(prev => [newPaper, ...prev]);
+                        setSelectedPaper(newPaper);
+                        setShowMergeModal(false);
+                    }}
+                    onOpenOnlineExam={(newPaper) => {
+                        setPapers(prev => [newPaper, ...prev]);
+                        setShowMergeModal(false);
+                        navigate('/teacher/cbt-exams');
+                    }}
+                />
+            )}
         </div>
     );
 };

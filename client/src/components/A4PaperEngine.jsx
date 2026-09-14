@@ -137,7 +137,7 @@ export default function A4PaperEngine({
                             {visibleQuestions.map((q, idx) => {
                                 const displayNum = startQNo + idx;
 
-                                // ── JEE Section Headers Detection ──
+                                // ── Universal Section Headers Detection (Merged Papers, Pattern Sections, Subject Transitions, JEE) ──
                                 const isCurrentNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
                                                            (q.q_type || '').toLowerCase() === 'numerical' || 
                                                            !Array.isArray(q.options) || 
@@ -152,7 +152,54 @@ export default function A4PaperEngine({
                                 ) : false;
 
                                 let sectionBanner = null;
-                                if (isJeePaper) {
+                                const currentSecName = (q.sectionName || '').trim();
+                                const prevSecName = (prevQ?.sectionName || '').trim();
+                                const currentSub = (q.subject || '').trim();
+                                const prevSub = (prevQ?.subject || '').trim();
+
+                                // 1. Explicit sectionName on question (e.g. from merged papers or section assignments)
+                                if (currentSecName && currentSecName !== prevSecName) {
+                                    const secQuestions = visibleQuestions.filter(item => (item.sectionName || '').trim() === currentSecName);
+                                    const startRange = startQNo + idx;
+                                    const endRange = startRange + secQuestions.length - 1;
+                                    const rangeText = secQuestions.length > 1 ? `(QUESTION NOS. ${startRange} TO ${endRange})` : `(QUESTION NO. ${startRange})`;
+
+                                    sectionBanner = {
+                                        title: currentSecName.toUpperCase(),
+                                        subtitle: rangeText
+                                    };
+                                }
+                                // 2. Paper pattern sections matching
+                                else if (!currentSecName && Array.isArray(paper?.pattern) && paper.pattern.length > 1) {
+                                    let offset = 0;
+                                    for (let sIdx = 0; sIdx < paper.pattern.length; sIdx++) {
+                                        const pSec = paper.pattern[sIdx];
+                                        const secLen = Number(pSec.numQuestions || pSec.count || 0);
+                                        if (idx === offset && secLen > 0) {
+                                            const startRange = startQNo + offset;
+                                            const endRange = startRange + secLen - 1;
+                                            const secTitle = pSec.sectionName || pSec.title || `SECTION ${String.fromCharCode(65 + sIdx)}: ${(pSec.subject || pSec.type || '').toUpperCase()}`;
+                                            sectionBanner = {
+                                                title: secTitle.toUpperCase(),
+                                                subtitle: secLen > 1 ? `(QUESTION NOS. ${startRange} TO ${endRange})` : `(QUESTION NO. ${startRange})`
+                                            };
+                                            break;
+                                        }
+                                        offset += secLen;
+                                    }
+                                }
+                                // 3. Multi-subject or Merged paper subject boundary transition
+                                else if (!currentSecName && (paper?.isMerged || (paper?.subject && ['PCMB', 'NEET', 'CET'].includes(paper.subject))) && currentSub && (!prevQ || currentSub.toLowerCase() !== prevSub.toLowerCase())) {
+                                    const subQuestions = visibleQuestions.filter(item => (item.subject || '').trim().toLowerCase() === currentSub.toLowerCase());
+                                    const startRange = startQNo + idx;
+                                    const endRange = startRange + subQuestions.length - 1;
+                                    sectionBanner = {
+                                        title: `SECTION: ${currentSub.toUpperCase()}`,
+                                        subtitle: `(QUESTION NOS. ${startRange} TO ${endRange})`
+                                    };
+                                }
+                                // 4. JEE Section Transitions (Section A MCQ vs Section B Numerical)
+                                else if (isJeePaper) {
                                     if (idx === 0 && !isCurrentNumerical) {
                                         const firstNumIdx = visibleQuestions.findIndex(item => 
                                             (item.type || '').toUpperCase() === 'NUMERICAL' || 
@@ -163,7 +210,7 @@ export default function A4PaperEngine({
                                         const secACount = firstNumIdx !== -1 ? firstNumIdx : Math.min(20, visibleQuestions.length);
                                         sectionBanner = {
                                             title: 'SECTION A',
-                                            subtitle: `(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. 1 TO ${secACount})`
+                                            subtitle: `(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. ${startQNo} TO ${startQNo + secACount - 1})`
                                         };
                                     } else if (isCurrentNumerical && (!prevQ || !isPrevNumerical)) {
                                         sectionBanner = {

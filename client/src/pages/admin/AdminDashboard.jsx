@@ -15,6 +15,7 @@ import AssignmentGenerator from '../teacher/AssignmentGenerator';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import MathRenderer from '../../components/MathRenderer';
 import TeacherOmr from '../teacher/omr/TeacherOmr';
+import MergePapersModal from '../../components/MergePapersModal';
 import api from '../../api';
 
 const DashboardHome = () => {
@@ -41,6 +42,7 @@ const DashboardHome = () => {
 
     // Commission Exam Modal state
     const [showCommissionModal, setShowCommissionModal] = useState(false);
+    const [showMergeModal, setShowMergeModal] = useState(false);
     const [commissionForm, setCommissionForm] = useState({
         title: '',
         examType: 'CET',
@@ -249,6 +251,14 @@ const DashboardHome = () => {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowMergeModal(true)}
+                        className="bg-navy text-gold hover:bg-slate-900 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md flex items-center gap-2 border-2 border-gold cursor-pointer"
+                        title="Merge multiple subject papers (e.g. PCMB / NEET / JEE / CET) into a unified common examination"
+                    >
+                        <span className="text-base">🔗</span>
+                        <span>Merge Papers (PCMB / NEET / JEE)</span>
+                    </button>
                     <button
                         id="admin-quick-commission-btn"
                         onClick={() => setShowCommissionModal(true)}
@@ -809,6 +819,29 @@ const DashboardHome = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* ── MODAL: MERGE PAPERS INTO COMMON EXAM ── */}
+            {showMergeModal && (
+                <MergePapersModal
+                    papers={allPapers}
+                    onClose={() => setShowMergeModal(false)}
+                    onMergeSuccess={(newPaper) => {
+                        fetchData();
+                        setShowMergeModal(false);
+                        alert(`✓ Successfully created merged exam: "${newPaper.title}"!`);
+                    }}
+                    onOpenPrint={(newPaper) => {
+                        fetchData();
+                        setShowMergeModal(false);
+                        navigate(`/admin/dashboard/preview/${newPaper._id || newPaper.id}`);
+                    }}
+                    onOpenOnlineExam={(newPaper) => {
+                        fetchData();
+                        setShowMergeModal(false);
+                        navigate('/admin/dashboard/cbt-exams');
+                    }}
+                />
             )}
 
             {/* ── MODAL: VIEW FULL EXAM PAPER (PREVIEW QUESTIONS) ── */}

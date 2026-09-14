@@ -131,6 +131,8 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
+        const combinedQuestions = [];
+        let totalCount = 0;
 
         const getQuestionSignature = (q) => {
             if (!q) return '';

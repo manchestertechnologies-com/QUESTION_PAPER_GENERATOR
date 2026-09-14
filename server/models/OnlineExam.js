@@ -33,6 +33,8 @@ const OnlineExamSchema = new mongoose.Schema({
     start_time: { type: Date },
     end_time: { type: Date },
     duration_minutes: { type: Number, default: 180 },
+    durationMinutes: { type: Number, default: 180 },
+    accessCode: { type: String, default: () => Math.random().toString(36).substring(2, 8).toUpperCase() },
     status: { type: String, enum: ['draft', 'scheduled', 'live', 'ended'], default: 'draft' },
     shuffleQuestions: { type: Boolean, default: false },
     examMode: { type: String, enum: ['ONLINE', 'OFFLINE'], default: 'ONLINE' },

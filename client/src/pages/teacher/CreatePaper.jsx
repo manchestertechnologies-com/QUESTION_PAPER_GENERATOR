@@ -135,6 +135,19 @@ export default function CreatePaper() {
 
     const isQuotaExceeded = Boolean(user?.isTrial !== false && user?.role === 'teacher' && (currentQuotaInfo.used >= currentQuotaInfo.max));
 
+    const isTrialRestricted = useMemo(() => {
+        if (user?.role !== 'teacher') return false;
+        const status = user?.trialStatus || (user?.isTrial ? 'active' : 'none');
+        if (status === 'none' || status === 'revoked' || status === 'expired') return true;
+        if (user?.isTrialActive === false) return true;
+        return false;
+    }, [user]);
+
+    // Teacher-Controlled Question Repeat Timing
+    const [repeatInterval, setRepeatInterval] = useState('30'); // '1', '7', '15', '30', '60', '90', '180', '365', '730', 'custom'
+    const [customRepeatDays, setCustomRepeatDays] = useState(45);
+    const [hideRepeatQuestions, setHideRepeatQuestions] = useState(false);
+
     // Fast Meta state (loaded in < 50ms)
     const [metaData, setMetaData] = useState({ total: 0, chapters: [], concepts: [] });
     const [loadingMeta, setLoadingMeta] = useState(false);
@@ -159,6 +172,7 @@ export default function CreatePaper() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterDifficulty, setFilterDifficulty] = useState('');
     const [filterType, setFilterType] = useState('');
+    const [filterRepeatStatus, setFilterRepeatStatus] = useState('');
     const [singleFilterChapter, setSingleFilterChapter] = useState('');
     const [singleFilterConcept, setSingleFilterConcept] = useState('');
     const [pageNumber, setPageNumber] = useState(1);
@@ -321,14 +335,14 @@ export default function CreatePaper() {
 
         setLoadingQuestions(true);
         try {
-            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=20000`;
+            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=5000`;
             if (cleanClass) {
                 url += `&classes=${encodeURIComponent(cleanClass)}`;
             }
             if (forceSources && forceSources.length > 0) {
                 url += `&source=${encodeURIComponent(forceSources.join(','))}`;
             }
-            const res = await api.get(url);
+            const res = await api.get(url, { skipLoader: true });
             const rawQs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             const qs = rawQs.filter(q => {
                 if (!q) return false;
@@ -347,7 +361,7 @@ export default function CreatePaper() {
         }
     };
 
-    // Fetch questions pool immediately when subject, selectedClass, or selectedSources changes
+    // Fetch questions pool in background when subject, selectedClass, or selectedSources changes
     useEffect(() => {
         if (subject) {
             fetchQuestionsPool(subject, selectedClass, selectedSources);
@@ -372,7 +386,6 @@ export default function CreatePaper() {
             setChapterNumericalQuotas({});
             return;
         }
-
         // Standard MCQs quota sync
         setChapterQuotas(prev => {
             const next = {};
@@ -1335,6 +1348,81 @@ export default function CreatePaper() {
                                             {isQuotaExceeded && <span className="text-red-400 block text-[9px] font-bold">Quota Limit Reached</span>}
                                         </div>
                                     </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Trial Access Restriction Banner */}
+                        {isTrialRestricted && (
+                            <div className="p-5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 flex items-start gap-4">
+                                <span className="text-2xl">🔒</span>
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-black uppercase tracking-wide text-rose-900">Trial Access Inactive or Expired</h4>
+                                    <p className="text-xs font-semibold text-rose-800 leading-relaxed">
+                                        Trial access is managed directly by your Institution Administrator. Your account currently does not have active trial permissions. Please contact your administrator to grant or renew your access.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── QUESTION REPEAT TIMING SETTINGS ── */}
+                        <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-200/80 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">⏱️</span>
+                                    <div>
+                                        <h4 className="text-xs font-black text-navy uppercase tracking-wide">Question Repeat Interval Setting</h4>
+                                        <p className="text-[11px] text-gray-500 font-medium">Prevent recently used questions from repeating too soon across your papers.</p>
+                                    </div>
+                                </div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-amber-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={hideRepeatQuestions}
+                                        onChange={(e) => setHideRepeatQuestions(e.target.checked)}
+                                        className="w-4 h-4 rounded text-navy focus:ring-navy cursor-pointer"
+                                    />
+                                    <span>Auto-hide questions in repeat period</span>
+                                </label>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-10 gap-1.5 pt-1">
+                                {[
+                                    { label: '1 Day', val: '1' },
+                                    { label: '7 Days', val: '7' },
+                                    { label: '15 Days', val: '15' },
+                                    { label: '1 Month', val: '30' },
+                                    { label: '2 Months', val: '60' },
+                                    { label: '3 Months', val: '90' },
+                                    { label: '6 Months', val: '180' },
+                                    { label: '1 Year', val: '365' },
+                                    { label: '2 Years', val: '730' },
+                                    { label: 'Custom', val: 'custom' },
+                                ].map(item => (
+                                    <button
+                                        key={item.val}
+                                        type="button"
+                                        onClick={() => setRepeatInterval(item.val)}
+                                        className={`py-2 px-1 text-[11px] font-black rounded-xl border transition cursor-pointer text-center ${
+                                            repeatInterval === item.val
+                                                ? 'bg-navy text-gold border-navy shadow-xs font-black scale-102'
+                                                : 'bg-white text-slate-600 border-gray-200 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        {item.label}
+                                    </button>
+                                ))}
+                            </div>
+                            {repeatInterval === 'custom' && (
+                                <div className="flex items-center gap-3 pt-2">
+                                    <label className="text-xs font-bold text-navy">Custom Interval (Days):</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="3650"
+                                        value={customRepeatDays}
+                                        onChange={(e) => setCustomRepeatDays(Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="w-24 p-2 text-xs font-bold border border-gray-300 rounded-xl bg-white outline-none focus:ring-2 focus:ring-navy"
+                                    />
                                 </div>
                             )}
                         </div>
@@ -2418,7 +2506,7 @@ export default function CreatePaper() {
                                 )}
 
                                 {/* Quick Filters & Search */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
                                     <input
                                         type="text"
                                         placeholder="🔍 Search in pool..."

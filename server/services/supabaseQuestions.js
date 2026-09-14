@@ -197,6 +197,32 @@ function mapSupabaseToQuestion(row, usageMap = null) {
     const qIdStr = (row.id || '').toString();
     const usage = (usageMap && usageMap.get(qIdStr)) || null;
 
+    const usedCount = usage ? parseInt(usage.used_count) || 0 : (row.used_count || row.usedCount || row.timesUsed || 0);
+    const lastUsedAt = usage ? usage.last_used_at : (row.last_used_at || row.lastUsedAt || null);
+    const firstUsedAt = usage ? (usage.first_used_at || usage.last_used_at) : (row.first_used_at || row.firstUsedAt || null);
+    const lastUsedExam = usage ? usage.last_exam_name : (row.last_exam_name || row.lastUsedExam || '');
+    const lastUsedTeacher = usage ? usage.last_teacher_name : (row.last_teacher_name || row.lastUsedTeacher || '');
+    const lastUsedDate = usage ? usage.last_exam_date : (row.last_exam_date || row.lastUsedDate || null);
+    const usageHistory = usage && Array.isArray(usage.usage_history) ? usage.usage_history : (Array.isArray(row.usage_history) ? row.usage_history : []);
+
+    // Calculate repeat interval status (Default 30 days if not customized)
+    const repeatDays = Number(row.repeatDays || row.repeat_days) || 30;
+    let repeatStatus = 'AVAILABLE';
+    let nextEligibleDate = null;
+
+    if (lastUsedAt) {
+        const lastTime = new Date(lastUsedAt).getTime();
+        const repeatMs = repeatDays * 24 * 60 * 60 * 1000;
+        const nextTime = new Date(lastTime + repeatMs);
+        if (nextTime.getTime() > Date.now()) {
+            repeatStatus = 'IN REPEAT PERIOD';
+            nextEligibleDate = nextTime.toISOString().split('T')[0];
+        } else {
+            repeatStatus = 'AVAILABLE';
+            nextEligibleDate = nextTime.toISOString().split('T')[0];
+        }
+    }
+
     return {
         _id: row.id,
         id: row.id,
@@ -231,12 +257,18 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         createdByName: row.created_by_name || 'Admin',
         createdAt: row.created_at || new Date().toISOString(),
         // Usage history attributes
-        usedCount: usage ? parseInt(usage.used_count) || 0 : 0,
-        lastUsedAt: usage ? usage.last_used_at : null,
-        lastUsedTeacher: usage ? usage.last_teacher_name : '',
-        lastUsedExam: usage ? usage.last_exam_name : '',
-        lastUsedDate: usage ? usage.last_exam_date : null,
-        usageHistory: usage && Array.isArray(usage.usage_history) ? usage.usage_history : []
+        usedCount: usedCount,
+        timesUsed: usedCount,
+        firstUsedAt: firstUsedAt,
+        lastUsedAt: lastUsedAt,
+        lastUsedTeacher: lastUsedTeacher,
+        lastUsedExam: lastUsedExam,
+        lastUsedDate: lastUsedDate,
+        usageHistory: usageHistory,
+        // Teacher configurable repeat timing
+        repeatDays: repeatDays,
+        repeatStatus: repeatStatus,
+        nextEligibleDate: nextEligibleDate
     };
 }
 
@@ -481,37 +513,28 @@ async function getQuestions(filters = {}, page = 1, limit = 50) {
                 ${whereSql}
                 ORDER BY q.created_at DESC
                 LIMIT ${limitParam} OFFSET ${offsetParam}
-            )
-            SELECT 
-                f.*,
-                qu_agg.used_count,
-                qu_agg.last_used_at,
-                qu_agg.last_teacher_name,
-                qu_agg.last_exam_name,
-                qu_agg.last_exam_date,
-                qu_agg.usage_history
-            FROM filtered f
-            LEFT JOIN LATERAL (
+            ),
+            usage_agg AS (
                 SELECT 
+                    qu.question_id,
                     count(*)::bigint AS used_count,
                     max(qu.used_at) AS last_used_at,
                     (array_agg(qu.teacher_name ORDER BY qu.used_at DESC))[1] AS last_teacher_name,
                     (array_agg(qu.exam_name ORDER BY qu.used_at DESC))[1] AS last_exam_name,
-                    (array_agg(qu.exam_date ORDER BY qu.used_at DESC))[1] AS last_exam_date,
-                    jsonb_agg(
-                        jsonb_build_object(
-                            'id', qu.id,
-                            'paper_id', qu.paper_id,
-                            'teacher_id', qu.teacher_id,
-                            'teacher_name', qu.teacher_name,
-                            'exam_name', qu.exam_name,
-                            'exam_date', qu.exam_date,
-                            'used_at', qu.used_at
-                        ) ORDER BY qu.used_at DESC
-                    ) AS usage_history
+                    (array_agg(qu.exam_date ORDER BY qu.used_at DESC))[1] AS last_exam_date
                 FROM public.question_usage qu
-                WHERE qu.question_id = f.id
-            ) qu_agg ON true;
+                WHERE qu.question_id IN (SELECT id FROM filtered)
+                GROUP BY qu.question_id
+            )
+            SELECT 
+                f.*,
+                COALESCE(u.used_count, 0) AS used_count,
+                u.last_used_at,
+                u.last_teacher_name,
+                u.last_exam_name,
+                u.last_exam_date
+            FROM filtered f
+            LEFT JOIN usage_agg u ON u.question_id = f.id;
         `;
 
         const res = await pool.query(unifiedSql, queryValues);
@@ -736,6 +759,38 @@ async function getQuestionsByIds(ids) {
  */
 async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName, examName, examDate) {
     if (!Array.isArray(questionIds) || questionIds.length === 0) return;
+
+    if (isTest) {
+        const nowIso = new Date().toISOString();
+        const dateStr = examDate || nowIso.split('T')[0];
+        questionIds.forEach(rawId => {
+            const id = typeof rawId === 'string' ? rawId : (rawId._id || rawId.id);
+            if (memoryTestQuestions.has(id)) {
+                const q = memoryTestQuestions.get(id);
+                const prevCount = q.usedCount || q.timesUsed || 0;
+                const newCount = prevCount + 1;
+                const history = Array.isArray(q.usageHistory) ? [...q.usageHistory] : [];
+                history.push({
+                    paper_id: paperId ? paperId.toString() : 'paper_test',
+                    teacher_id: teacherId ? teacherId.toString() : 'teacher_test',
+                    teacher_name: teacherName || 'Faculty',
+                    exam_name: examName || 'Assessment',
+                    exam_date: dateStr,
+                    used_at: nowIso
+                });
+                q.usedCount = newCount;
+                q.timesUsed = newCount;
+                q.lastUsedAt = nowIso;
+                q.lastUsedExam = examName || 'Assessment';
+                q.lastUsedTeacher = teacherName || 'Faculty';
+                q.lastUsedDate = dateStr;
+                q.usageHistory = history;
+                if (!q.firstUsedAt) q.firstUsedAt = nowIso;
+                memoryTestQuestions.set(id, q);
+            }
+        });
+        return;
+    }
 
     const validUuids = questionIds.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(isUuid);
     if (validUuids.length === 0) return;
