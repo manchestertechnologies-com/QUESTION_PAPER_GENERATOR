@@ -9,7 +9,36 @@ const memoryTestQuestions = new Map();
 const metadataCache = new Map();
 const METADATA_TTL_MS = 5 * 60 * 1000;
 
+function clearMetadataCache() {
+    metadataCache.clear();
+}
+
 const CHAPTER_ALIASES = {
+    // Physics Units & Measurements
+    'units and measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Units, Dimensions and Measurement', 'Physical World'],
+    'units & measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+    'units and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+    'physical world and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+    'physical world': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+
+    // Physics Mechanics & Kinematics
+    'work, energy and power': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY', 'Work Power Energy'],
+    'work, power and energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
+    'work, power & energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
+    'laws of motion': ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion', 'Force and Laws of Motion'],
+    "newton's laws of motion": ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion'],
+    'motion in a plane': ['Motion in a Plane', 'Motion in a Plane (Vectors)', 'Vectors'],
+    'motion in a straight line': ['Motion in a Straight Line', 'Motion in a Straight Line (1D)', 'Kinematics', 'Rectilinear Motion'],
+
+    // Physics Electromagnetism
+    'electric charges and fields': ['Electric Charges and Fields', 'ELECTRIC CHARGES AND FIELDS', 'Electric Charges & Fields', 'Electrostatics'],
+    'electrostatic potential and capacitance': ['Electrostatic Potential and Capacitance', 'Electrostatic Potential & Capacitance', 'Capacitance', 'Electrostatics'],
+    'electromagnetic induction': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
+    'emi': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
+    'magnetism and matter': ['Magnetism and Matter', 'Magnetism & Matter', 'Moving Charges and Magnetism'],
+    'moving charges and magnetism': ['Moving Charges and Magnetism', 'Moving Charges & Magnetism', 'Magnetic Effects of Current'],
+    'electromagnetic waves': ['Electromagnetic Waves', 'EM Waves'],
+
     // Physics Thermal Physics / Thermodynamics
     'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
     'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
@@ -17,43 +46,70 @@ const CHAPTER_ALIASES = {
     'kinetic theory of gases': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
     
     // Physics Solids & Fluids
-    'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
-    'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
+    'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids', 'Elasticity'],
+    'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids', 'Fluid Mechanics', 'Hydrodynamics'],
 
     // Physics Rotational
     'system of particles and rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion', 'Laws of Motion', 'Motion in a Plane'],
+    'rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion'],
     
     // Physics Semiconductors
     'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)', 'Semiconductor Electronics'],
     'semiconductor electronics: materials, devices and simple circuits': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
 
-    // Chemistry p-Block
+    // Chemistry
+    'some basic concepts of chemistry': ['Some Basic Concepts of Chemistry', 'SOME BASIC CONCEPTS OF CHEMISTRY', 'Basic Concepts of Chemistry', 'Mole Concept'],
+    'structure of atom': ['Structure of Atom', 'Atomic Structure'],
+    'chemical bonding and molecular structure': ['Chemical Bonding and Molecular Structure', 'Chemical Bonding & Molecular Structure', 'Chemical Bonding'],
     'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
     'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-
-    // Chemistry Redox
+    'the d- and f- block elements': ['The d- and f- block Elements', 'd- and f- Block Elements', 'd and f block elements'],
     'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
-
-    // Chemistry Electrochemistry
     'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
-
-    // Chemistry Kinetics
     'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
-
-    // Chemistry Principles & Techniques
-    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques'],
+    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques', 'General Organic Chemistry (GOC)', 'GOC'],
+    'hydrocarbons': ['Hydrocarbons', 'Hydrocarbons (Alkanes, Alkenes, Alkynes)'],
 
     // Mathematics
+    'permutations and combinations': ['Permutations and Combinations', 'Permutations & Combinations'],
+    'straight lines': ['Straight Lines', 'Straight Lines & Pair of Straight Lines'],
     'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
-    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)'],
-    'probability': ['Probability', 'Probability (Legacy / Removed Syllabus)'],
-    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
+    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)', 'Indefinite Integrals', 'Definite Integrals'],
+    'probability': ['Probability', 'Probability & Relations', 'Probability (Legacy / Removed Syllabus)'],
+    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity & Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
     'matrices': ['Matrices', 'Matrices (Legacy / Removed Syllabus)'],
-    'relations and functions': ['Relations and Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
-    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)'],
+    'determinants': ['Determinants', 'Determinants and Matrices'],
+    'relations and functions': ['Relations and Functions', 'Relations & Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
+    'sets': ['Sets', 'Sets and Relations'],
+    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)', 'Complex Numbers'],
     'application of integrals': ['Application of Integrals', 'Application of Integrals (Legacy / Removed Syllabus)'],
-    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)']
+    'application of derivatives': ['Application of Derivatives', 'Application of Derivatives (Legacy / Removed Syllabus)'],
+    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)', 'ITF'],
+
+    // Biology
+    'biological classification': ['Biological Classification', 'Biological Classification '],
+    'the living world': ['The Living World', 'The Living World '],
+    'plant kingdom': ['Plant Kingdom', 'Plant Kingdom '],
+    'animal kingdom': ['Animal Kingdom', 'Animal Kingdom '],
+    'cell: the unit of life': ['Cell: The Unit of Life', 'Cell - The Unit of Life', 'Cell Structure and Function']
 };
+
+/**
+ * Retrieves the count of questions created today (from 00:00:00 UTC/Local of today).
+ */
+async function getDailyQuestionsCount() {
+    try {
+        const res = await pool.query(`
+            SELECT count(*)::bigint as added_today
+            FROM public.questions
+            WHERE created_at >= CURRENT_DATE
+        `);
+        return parseInt(res.rows[0]?.added_today || 0, 10);
+    } catch (err) {
+        console.error('[POSTGRES] getDailyQuestionsCount error:', err.message);
+        return 0;
+    }
+}
 
 /**
  * Universal tag cleaner to strip all internal difficulty and QPV/QBP metadata tags.
@@ -892,6 +948,7 @@ async function updateQuestion(id, dto, userId = null, userName = 'Admin') {
         throw new Error(error.message);
     }
 
+    metadataCache.clear();
     return mapSupabaseToQuestion(data);
 }
 
@@ -901,7 +958,7 @@ async function deleteQuestion(id) {
         return true;
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
         .from('questions')
         .delete()
         .eq('id', id);
@@ -911,6 +968,7 @@ async function deleteQuestion(id) {
         throw new Error(error.message);
     }
 
+    clearMetadataCache();
     return true;
 }
 
@@ -919,11 +977,14 @@ module.exports = {
     getQuestionById,
     getQuestionsByIds,
     getSubjectMetadata,
+    getDailyQuestionsCount,
+    clearMetadataCache,
     recordQuestionUsage,
     createQuestion,
     updateQuestion,
     deleteQuestion,
     mapSupabaseToQuestion,
     mapQuestionToSupabase,
-    cleanDifficultyTags
+    cleanDifficultyTags,
+    extractDifficulty
 };

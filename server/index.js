@@ -44,7 +44,16 @@ const app = express();
 // ─────────────────────────────────────────────────────────────────────────────
 app.use(helmet({
     crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: false
+    contentSecurityPolicy: process.env.NODE_ENV === 'test' ? {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
+            styleSrc: ["'self'", "'unsafe-inline'", "*"],
+            imgSrc: ["'self'", "data:", "blob:", "*"],
+            connectSrc: ["'self'", "*"],
+            fontSrc: ["'self'", "data:", "*"]
+        }
+    } : false
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────

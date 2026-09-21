@@ -90,6 +90,36 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
     }
 });
 
+// @route   GET /api/questions/daily-stats
+// @desc    Get live count of questions added today across Supabase and MongoDB
+// @access  Teacher / Admin
+router.get('/daily-stats', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const supaToday = await supabaseQuestions.getDailyQuestionsCount();
+        
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const mongoToday = await Question.countDocuments({
+            createdAt: { $gte: todayStart }
+        });
+
+        const totalAddedToday = (supaToday || 0) + (mongoToday || 0);
+
+        res.json({
+            success: true,
+            addedToday: totalAddedToday,
+            date: new Date().toISOString()
+        });
+    } catch (err) {
+        console.error('[DAILY STATS] error:', err.message);
+        res.json({
+            success: true,
+            addedToday: 0,
+            date: new Date().toISOString()
+        });
+    }
+});
+
 // @route   GET /api/questions
 // @desc    Get questions filtered by subject, chapter, type, class, and source types from Supabase & MongoDB
 // @access  Teacher / Admin
@@ -220,7 +250,16 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
                 if (filters.chapter) {
                     const chs = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
                     if (chs.length > 0) {
-                        mongoQuery.chapter = { $in: chs.map(c => new RegExp(`^${c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i')) };
+                        const expandedChs = [];
+                        chs.forEach(c => {
+                            expandedChs.push(c);
+                            expandedChs.push(c.replace(/and/gi, '&'));
+                            expandedChs.push(c.replace(/&/gi, 'and'));
+                            expandedChs.push(c.replace(/:/gi, ' -'));
+                            expandedChs.push(c.replace(/:/gi, ''));
+                            expandedChs.push(c.replace(/[\s\-_]+/g, ' '));
+                        });
+                        mongoQuery.chapter = { $in: [...new Set(expandedChs)].map(c => new RegExp(`^\\s*${c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\s*')}\\s*$`, 'i')) };
                     }
                 }
 

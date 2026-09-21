@@ -16,6 +16,7 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import MathRenderer from '../../components/MathRenderer';
 import TeacherOmr from '../teacher/omr/TeacherOmr';
 import MergePapersModal from '../../components/MergePapersModal';
+import DailyQuestionsBadge from '../../components/DailyQuestionsBadge';
 import api from '../../api';
 
 const DashboardHome = () => {
@@ -1167,6 +1168,9 @@ const AdminDashboard = () => {
 
                         {/* Navigation Options List */}
                         <div className="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-140px)]">
+                            {/* Live Questions Added Today Widget */}
+                            <DailyQuestionsBadge variant="sidebar" />
+
                             {navItems.map((group, gIdx) => (
                                 <div key={gIdx}>
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400/70 px-3 block mb-2">
@@ -1264,6 +1268,11 @@ const AdminDashboard = () => {
                                 {getCurrentPageTitle()}
                             </p>
                         </div>
+                    </div>
+
+                    {/* LIVE CORNER BADGE: Questions Added Today */}
+                    <div className="hidden md:flex ml-2">
+                        <DailyQuestionsBadge variant="header" />
                     </div>
                 </div>
 

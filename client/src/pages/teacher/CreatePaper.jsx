@@ -26,6 +26,7 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
 import FourDotLoader from '../../components/FourDotLoader';
+import DailyQuestionsBadge from '../../components/DailyQuestionsBadge';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 import { optionLabel, getResolvedAnswerLabel, getQuestionOptionLabels } from '../../utils/sanitize';
 
@@ -335,7 +336,7 @@ export default function CreatePaper() {
 
         setLoadingQuestions(true);
         try {
-            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=5000`;
+            let url = `/api/questions?subject=${encodeURIComponent(forceSubject)}&limit=25000`;
             if (cleanClass) {
                 url += `&classes=${encodeURIComponent(cleanClass)}`;
             }
@@ -502,6 +503,31 @@ export default function CreatePaper() {
     };
 
     const CHAPTER_ALIASES = {
+        // Physics Units & Measurements
+        'units and measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Units, Dimensions and Measurement', 'Physical World'],
+        'units & measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+        'units and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+        'physical world and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+        'physical world': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
+
+        // Physics Mechanics & Kinematics
+        'work, energy and power': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY', 'Work Power Energy'],
+        'work, power and energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
+        'work, power & energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
+        'laws of motion': ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion', 'Force and Laws of Motion'],
+        "newton's laws of motion": ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion'],
+        'motion in a plane': ['Motion in a Plane', 'Motion in a Plane (Vectors)', 'Vectors'],
+        'motion in a straight line': ['Motion in a Straight Line', 'Motion in a Straight Line (1D)', 'Kinematics', 'Rectilinear Motion'],
+
+        // Physics Electromagnetism
+        'electric charges and fields': ['Electric Charges and Fields', 'ELECTRIC CHARGES AND FIELDS', 'Electric Charges & Fields', 'Electrostatics'],
+        'electrostatic potential and capacitance': ['Electrostatic Potential and Capacitance', 'Electrostatic Potential & Capacitance', 'Capacitance', 'Electrostatics'],
+        'electromagnetic induction': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
+        'emi': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
+        'magnetism and matter': ['Magnetism and Matter', 'Magnetism & Matter', 'Moving Charges and Magnetism'],
+        'moving charges and magnetism': ['Moving Charges and Magnetism', 'Moving Charges & Magnetism', 'Magnetic Effects of Current'],
+        'electromagnetic waves': ['Electromagnetic Waves', 'EM Waves'],
+
         // Physics Thermal Physics / Thermodynamics
         'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
         'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
@@ -509,31 +535,27 @@ export default function CreatePaper() {
         'kinetic theory of gases': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
         
         // Physics Solids & Fluids
-        'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
-        'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
+        'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids', 'Elasticity'],
+        'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids', 'Fluid Mechanics', 'Hydrodynamics'],
 
         // Physics Rotational
         'system of particles and rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion', 'Laws of Motion', 'Motion in a Plane'],
+        'rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion'],
         
         // Physics Semiconductors
         'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)', 'Semiconductor Electronics'],
         'semiconductor electronics: materials, devices and simple circuits': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
 
-        // Chemistry p-Block
+        // Chemistry
+        'some basic concepts of chemistry': ['Some Basic Concepts of Chemistry', 'SOME BASIC CONCEPTS OF CHEMISTRY', 'Basic Concepts of Chemistry', 'Mole Concept'],
+        'structure of atom': ['Structure of Atom', 'Atomic Structure'],
+        'chemical bonding and molecular structure': ['Chemical Bonding and Molecular Structure', 'Chemical Bonding & Molecular Structure', 'Chemical Bonding'],
         'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
         'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-
-        // Chemistry Redox
         'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
-
-        // Chemistry Electrochemistry
         'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
-
-        // Chemistry Kinetics
         'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
-
-        // Chemistry Principles & Techniques
-        'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques'],
+        'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques', 'General Organic Chemistry'],
 
         // Mathematics
         'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
@@ -594,14 +616,24 @@ export default function CreatePaper() {
         return clean;
     };
 
-    // Helper to test if a question matches a selected chapter (considering aliases and casing)
+    // Helper to test if a question matches a selected chapter (considering aliases, regex and casing)
     const isChapterMatch = (questionChapter, targetChapter) => {
         if (!questionChapter || !targetChapter) return false;
         const qClean = questionChapter.trim().toLowerCase();
         const tClean = targetChapter.trim().toLowerCase();
         if (qClean === tClean) return true;
-        const aliases = CHAPTER_ALIASES[tClean] || [];
-        return aliases.some(a => a.toLowerCase().trim() === qClean);
+
+        const qNorm = qClean.replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+        const tNorm = tClean.replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+        if (qNorm === tNorm) return true;
+        if (qNorm.length > 5 && tNorm.length > 5 && (qNorm.startsWith(tNorm) || tNorm.startsWith(qNorm))) return true;
+
+        const aliases = CHAPTER_ALIASES[tClean] || CHAPTER_ALIASES[tNorm] || [];
+        return aliases.some(a => {
+            const aClean = a.toLowerCase().trim();
+            const aNorm = aClean.replace(/&/g, 'and').replace(/[^a-z0-9]/g, '');
+            return aClean === qClean || aNorm === qNorm || (aNorm.length > 5 && (qNorm.startsWith(aNorm) || aNorm.startsWith(qNorm)));
+        });
     };
 
     // Count of selected questions per canonical chapter
@@ -1249,22 +1281,18 @@ export default function CreatePaper() {
 
     // Prepared paper object for preview renderer
     const currentPaperObject = useMemo(() => {
-        const effectiveEnd = endQNo || (startQNo + selectedQuestions.length - 1);
-        const requiredCount = Math.max(0, effectiveEnd - startQNo + 1);
-        const displayQuestions = selectedQuestions.slice(0, requiredCount || selectedQuestions.length);
-
         return {
             _id: paperId || 'new-paper',
             title: title || (paperCategory === 'assignment' ? `${subject} Assignment` : `${subject} Assessment`),
             subject,
             classes: [selectedClass],
             duration: duration || null,
-            questions: displayQuestions,
+            questions: selectedQuestions,
             examType: paperCategory === 'assignment' ? 'ASSIGNMENT' : examType,
             isAssignment: paperCategory === 'assignment',
             institutionName: user?.institutionName || 'Manchester College',
         };
-    }, [paperId, title, paperCategory, subject, selectedClass, duration, selectedQuestions, examType, startQNo, endQNo, user]);
+    }, [paperId, title, paperCategory, subject, selectedClass, duration, selectedQuestions, examType, user]);
 
     return (
         <div className="min-h-screen bg-background flex flex-col font-sans">
@@ -1287,6 +1315,9 @@ export default function CreatePaper() {
                         </span>
                     </div>
                 </div>
+                    <div className="hidden lg:flex ml-2">
+                        <DailyQuestionsBadge variant="header" />
+                    </div>
 
                 {/* Step Indicators - Always freely clickable */}
                 <div className="hidden md:flex items-center gap-2 mr-4">

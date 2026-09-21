@@ -816,7 +816,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
         
         const isPreview = req.query.preview === 'true';
-        if (!isPreview && !['live', 'scheduled', 'draft'].includes(exam.status)) {
+        if (!isPreview && !['live', 'scheduled'].includes(exam.status)) {
             return res.status(403).json({ msg: 'Exam is not currently available.' });
         }
 
