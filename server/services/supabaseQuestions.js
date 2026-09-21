@@ -1,5 +1,13 @@
-const pool = require('../config/postgres');
-const supabase = require('../config/supabase');
+const primaryPool = require('../config/postgres');
+const {
+    DB_CONFIGS,
+    pools,
+    normalizeSubject,
+    normalizeClass,
+    getPoolForTarget,
+    getPoolsForQuery,
+    getAllPools
+} = require('../config/subjectDatabases');
 const { sanitizeHtml } = require('../utils/sanitize');
 
 const isTest = process.env.NODE_ENV === 'test';
@@ -8,6 +16,23 @@ const memoryTestQuestions = new Map();
 // In-memory cache for subject metadata (5 min TTL)
 const metadataCache = new Map();
 const METADATA_TTL_MS = 5 * 60 * 1000;
+
+// UUID to database key routing cache (e.g. 'uuid-123' -> 'phy_11')
+const MAX_UUID_CACHE_SIZE = 100000;
+const uuidToDbKey = new Map();
+
+function cacheQuestionDb(id, dbKey) {
+    if (!id || !dbKey) return;
+    if (uuidToDbKey.size >= MAX_UUID_CACHE_SIZE) {
+        const iter = uuidToDbKey.keys();
+        for (let i = 0; i < 10000; i++) {
+            const k = iter.next().value;
+            if (k) uuidToDbKey.delete(k);
+            else break;
+        }
+    }
+    uuidToDbKey.set(String(id), dbKey);
+}
 
 function clearMetadataCache() {
     metadataCache.clear();
@@ -63,64 +88,31 @@ const CHAPTER_ALIASES = {
     'chemical bonding and molecular structure': ['Chemical Bonding and Molecular Structure', 'Chemical Bonding & Molecular Structure', 'Chemical Bonding'],
     'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
     'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-    'the d- and f- block elements': ['The d- and f- block Elements', 'd- and f- Block Elements', 'd and f block elements'],
     'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
     'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
     'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
-    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques', 'General Organic Chemistry (GOC)', 'GOC'],
-    'hydrocarbons': ['Hydrocarbons', 'Hydrocarbons (Alkanes, Alkenes, Alkynes)'],
+    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques', 'General Organic Chemistry'],
 
     // Mathematics
-    'permutations and combinations': ['Permutations and Combinations', 'Permutations & Combinations'],
-    'straight lines': ['Straight Lines', 'Straight Lines & Pair of Straight Lines'],
     'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
-    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)', 'Indefinite Integrals', 'Definite Integrals'],
-    'probability': ['Probability', 'Probability & Relations', 'Probability (Legacy / Removed Syllabus)'],
-    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity & Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
+    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)'],
+    'probability': ['Probability', 'Probability (Legacy / Removed Syllabus)'],
+    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
     'matrices': ['Matrices', 'Matrices (Legacy / Removed Syllabus)'],
-    'determinants': ['Determinants', 'Determinants and Matrices'],
-    'relations and functions': ['Relations and Functions', 'Relations & Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
-    'sets': ['Sets', 'Sets and Relations'],
-    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)', 'Complex Numbers'],
+    'relations and functions': ['Relations and Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
+    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)'],
     'application of integrals': ['Application of Integrals', 'Application of Integrals (Legacy / Removed Syllabus)'],
-    'application of derivatives': ['Application of Derivatives', 'Application of Derivatives (Legacy / Removed Syllabus)'],
-    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)', 'ITF'],
-
-    // Biology
-    'biological classification': ['Biological Classification', 'Biological Classification '],
-    'the living world': ['The Living World', 'The Living World '],
-    'plant kingdom': ['Plant Kingdom', 'Plant Kingdom '],
-    'animal kingdom': ['Animal Kingdom', 'Animal Kingdom '],
-    'cell: the unit of life': ['Cell: The Unit of Life', 'Cell - The Unit of Life', 'Cell Structure and Function']
+    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)']
 };
-
-/**
- * Retrieves the count of questions created today (from 00:00:00 UTC/Local of today).
- */
-async function getDailyQuestionsCount() {
-    try {
-        const res = await pool.query(`
-            SELECT count(*)::bigint as added_today
-            FROM public.questions
-            WHERE created_at >= CURRENT_DATE
-        `);
-        return parseInt(res.rows[0]?.added_today || 0, 10);
-    } catch (err) {
-        console.error('[POSTGRES] getDailyQuestionsCount error:', err.message);
-        return 0;
-    }
-}
 
 /**
  * Universal tag cleaner to strip all internal difficulty and QPV/QBP metadata tags.
  */
 function cleanDifficultyTags(text) {
     if (!text || typeof text !== 'string') return '';
-    // Matches [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], [QPV_...:...], [DIAGRAM REQUIRED]
     return text
         .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
-        .replace(/\[DIAGRAM\s+REQUIRED\]/gi, '')
         .trim();
 }
 
@@ -136,13 +128,16 @@ function extractDifficulty(solutionText, questionText) {
     return 'medium';
 }
 
+function isUuid(str) {
+    return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 /**
  * Maps a Supabase/Postgres `questions` table record to the frontend/system Question DTO.
  */
 function mapSupabaseToQuestion(row, usageMap = null) {
     if (!row) return null;
 
-    // Map q_type format: 'mcq_single' / 'mcq' -> 'MCQ', 'numerical' -> 'NUMERICAL', etc.
     let type = 'MCQ';
     const qTypeLower = (row.q_type || '').toLowerCase();
     if (qTypeLower.includes('numerical')) {
@@ -157,7 +152,6 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         type = 'TRUE_FALSE';
     }
 
-    // Build options array from all possible column variations
     const rawOptions = [];
     if (row.opt_a) rawOptions.push(row.opt_a);
     if (row.opt_b) rawOptions.push(row.opt_b);
@@ -189,49 +183,16 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         } catch (e) {}
     }
 
-    // Extract options from match_options if options are still empty
-    if (rawOptions.length === 0 && row.match_options) {
-        try {
-            const mOpts = typeof row.match_options === 'string' ? JSON.parse(row.match_options) : row.match_options;
-            if (mOpts && typeof mOpts === 'object') {
-                ['A', 'B', 'C', 'D'].forEach(k => {
-                    if (mOpts[k]) rawOptions.push(mOpts[k]);
-                });
-                if (rawOptions.length === 0) {
-                    rawOptions.push(...Object.values(mOpts));
-                }
-            }
-        } catch (e) {}
-    }
-
-    // Sanitize option texts
     const options = rawOptions.map(cleanDifficultyTags).filter(Boolean);
 
-    // Build structured matchPairs from column_a and column_b
-    const matchPairs = [];
-    if (Array.isArray(row.matchPairs) && row.matchPairs.length > 0) {
-        matchPairs.push(...row.matchPairs);
-    } else if (Array.isArray(row.column_a) && row.column_a.length > 0) {
-        const colB = Array.isArray(row.column_b) ? row.column_b : [];
-        const maxLen = Math.max(row.column_a.length, colB.length);
-        for (let i = 0; i < maxLen; i++) {
-            matchPairs.push({
-                left: row.column_a[i] || '',
-                right: colB[i] || ''
-            });
-        }
-    }
-
-    // Map answer
-    let answer = row.correct_option || row.num_answer || '';
+    let answer = row.correct_option || row.num_answer || row.answer || '';
     if (row.correct_option && options.length > 0) {
-        const idx = parseInt(row.correct_option) - 1;
+        const idx = parseInt(row.correct_option, 10) - 1;
         if (idx >= 0 && idx < options.length) {
             answer = options[idx];
         }
     }
 
-    // Map exams to classes array (e.g. ['JEE'], ['12'])
     const classesList = [];
     if (Array.isArray(row.exams) && row.exams.length > 0) {
         classesList.push(...row.exams);
@@ -241,27 +202,21 @@ function mapSupabaseToQuestion(row, usageMap = null) {
     }
     if (classesList.length === 0) classesList.push('JEE', 'NEET');
 
-    // Extract difficulty level and clean markers
     const level = extractDifficulty(row.solution_text, row.question);
     const cleanSolution = cleanDifficultyTags(row.solution_text || '');
-    let cleanQuestion = cleanDifficultyTags(row.question || '');
-    if (!cleanQuestion && type === 'MATCH_FOLLOWING') {
-        cleanQuestion = 'Match the statements/terms in Column A with Column B:';
-    }
+    const cleanQuestion = cleanDifficultyTags(row.question || row.questionText || row.question_text || '');
 
-    // Resolve usage information if available
     const qIdStr = (row.id || '').toString();
     const usage = (usageMap && usageMap.get(qIdStr)) || null;
 
-    const usedCount = usage ? parseInt(usage.used_count) || 0 : (row.used_count || row.usedCount || row.timesUsed || 0);
-    const lastUsedAt = usage ? usage.last_used_at : (row.last_used_at || row.lastUsedAt || null);
-    const firstUsedAt = usage ? (usage.first_used_at || usage.last_used_at) : (row.first_used_at || row.firstUsedAt || null);
-    const lastUsedExam = usage ? usage.last_exam_name : (row.last_exam_name || row.lastUsedExam || '');
-    const lastUsedTeacher = usage ? usage.last_teacher_name : (row.last_teacher_name || row.lastUsedTeacher || '');
-    const lastUsedDate = usage ? usage.last_exam_date : (row.last_exam_date || row.lastUsedDate || null);
-    const usageHistory = usage && Array.isArray(usage.usage_history) ? usage.usage_history : (Array.isArray(row.usage_history) ? row.usage_history : []);
+    const usedCount = usage ? (parseInt(usage.used_count) || parseInt(usage.useCount) || 0) : (row.used_count || row.usedCount || row.timesUsed || row.useCount || 0);
+    const lastUsedAt = usage ? (usage.last_used_at || usage.lastUsedAt) : (row.last_used_at || row.lastUsedAt || null);
+    const firstUsedAt = usage ? (usage.first_used_at || usage.firstUsedAt || usage.last_used_at) : (row.first_used_at || row.firstUsedAt || null);
+    const lastUsedExam = usage ? (usage.last_exam_name || usage.lastUsedExam) : (row.last_exam_name || row.lastUsedExam || '');
+    const lastUsedTeacher = usage ? (usage.last_teacher_name || usage.lastUsedTeacher) : (row.last_teacher_name || row.lastUsedTeacher || '');
+    const lastUsedDate = usage ? (usage.last_exam_date || usage.lastUsedDate) : (row.last_exam_date || row.lastUsedDate || null);
+    const usageHistory = usage && Array.isArray(usage.usage_history) ? usage.usage_history : (Array.isArray(row.usage_history) ? row.usage_history : (Array.isArray(usage?.usageHistory) ? usage.usageHistory : []));
 
-    // Calculate repeat interval status (Default 30 days if not customized)
     const repeatDays = Number(row.repeatDays || row.repeat_days) || 30;
     let repeatStatus = 'AVAILABLE';
     let nextEligibleDate = null;
@@ -295,24 +250,17 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         imageUrl: row.image_url || row.imageUrl || null,
         solutionImageUrl: row.solution_image_url || row.solutionImageUrl || null,
         options: options,
-        matchPairs: matchPairs,
         answer: answer,
         correct_option: row.correct_option,
         num_answer: row.num_answer,
-        solutionText: cleanSolution,
-        questionTextTranslation: cleanDifficultyTags(row.question_text_translation || ''),
-        optionsTranslation: Array.isArray(row.options_translation) ? row.options_translation.map(cleanDifficultyTags) : [],
-        assertion: cleanDifficultyTags(row.assertion || ''),
-        reason: cleanDifficultyTags(row.reason || ''),
+        assertion: row.assertion || '',
+        reason: row.reason || '',
+        predef_options: row.predef_options || '',
         column_a: row.column_a || [],
         column_b: row.column_b || [],
-        match_options: row.match_options || {},
-        sourceType: 'REGULAR',
-        sourceExam: Array.isArray(row.exams) ? row.exams.join(', ') : '',
-        createdBy: row.created_by,
-        createdByName: row.created_by_name || 'Admin',
-        createdAt: row.created_at || new Date().toISOString(),
-        // Usage history attributes
+        match_options: row.match_options || null,
+        solutionText: cleanSolution,
+        solution_text: cleanSolution,
         usedCount: usedCount,
         timesUsed: usedCount,
         firstUsedAt: firstUsedAt,
@@ -321,497 +269,527 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         lastUsedExam: lastUsedExam,
         lastUsedDate: lastUsedDate,
         usageHistory: usageHistory,
-        // Teacher configurable repeat timing
+        useCount: usedCount,
         repeatDays: repeatDays,
         repeatStatus: repeatStatus,
-        nextEligibleDate: nextEligibleDate
+        nextEligibleDate: nextEligibleDate,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        created_by_name: row.created_by_name || 'Academic Faculty'
     };
 }
 
-function isUuid(str) {
-    return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-}
-
 /**
- * Maps a system/frontend question object to Supabase database row format.
+ * Maps incoming Question DTO into Postgres row format for INSERT/UPDATE.
  */
 function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
-    const qType = (dto.type || 'MCQ').toLowerCase();
-    const isNumerical = qType === 'numerical';
+    let q_type = 'mcq_single';
+    const typeUpper = (dto.type || '').toUpperCase();
+    if (typeUpper === 'NUMERICAL') q_type = 'numerical';
+    else if (typeUpper === 'ASSERTION_REASON') q_type = 'assertion_reason';
+    else if (typeUpper === 'MATCH_FOLLOWING') q_type = 'match_the_following';
+    else if (typeUpper === 'STATEMENT_BASED') q_type = 'statement_based';
+    else if (typeUpper === 'TRUE_FALSE') q_type = 'true_false';
 
-    let optionsArr = Array.isArray(dto.options) ? dto.options : [];
-    if (typeof dto.options === 'string') {
-        try { optionsArr = JSON.parse(dto.options); } catch(e) { optionsArr = []; }
-    }
-    if (!Array.isArray(optionsArr)) optionsArr = [];
-
-    const optA = cleanDifficultyTags(optionsArr[0] || '');
-    const optB = cleanDifficultyTags(optionsArr[1] || '');
-    const optC = cleanDifficultyTags(optionsArr[2] || '');
-    const optD = cleanDifficultyTags(optionsArr[3] || '');
-
-    let correctOpt = '';
-    if (optionsArr.length > 0 && dto.answer) {
-        const idx = optionsArr.findIndex(opt => opt === dto.answer);
-        if (idx !== -1) correctOpt = String(idx + 1);
+    let opt_a = null, opt_b = null, opt_c = null, opt_d = null;
+    if (Array.isArray(dto.options) && dto.options.length > 0) {
+        opt_a = dto.options[0] || null;
+        opt_b = dto.options[1] || null;
+        opt_c = dto.options[2] || null;
+        opt_d = dto.options[3] || null;
     }
 
-    const klassVal = Array.isArray(dto.classes)
-        ? (dto.classes.find(c => c.includes('11') || c.includes('12')) || '12').replace(/Class\s*/i, '')
-        : '12';
+    let klass = '12';
+    if (dto.classes) {
+        if (Array.isArray(dto.classes) && dto.classes.length > 0) {
+            const has11 = dto.classes.some(c => String(c).includes('11'));
+            klass = has11 ? '11' : '12';
+        } else {
+            klass = String(dto.classes).includes('11') ? '11' : '12';
+        }
+    }
 
-    const examsList = Array.isArray(dto.classes)
-        ? dto.classes.filter(c => ['JEE', 'NEET', 'CET', 'JEE Main', 'JEE Advanced'].includes(c))
-        : ['JEE'];
+    let correct_option = null;
+    let num_answer = null;
 
-    if (examsList.length === 0) examsList.push('JEE');
+    if (q_type === 'numerical') {
+        num_answer = dto.answer ? String(dto.answer).trim() : null;
+    } else {
+        if (dto.answer && typeof dto.answer === 'string') {
+            const trimmed = dto.answer.trim();
+            if (/^[1-4]$/.test(trimmed)) {
+                correct_option = trimmed;
+            } else if (/^[A-D]$/i.test(trimmed)) {
+                const map = { A: '1', B: '2', C: '3', D: '4' };
+                correct_option = map[trimmed.toUpperCase()];
+            } else if (Array.isArray(dto.options)) {
+                const idx = dto.options.findIndex(o => (o || '').trim().toLowerCase() === trimmed.toLowerCase());
+                if (idx !== -1) correct_option = String(idx + 1);
+            }
+        }
+    }
 
-    const validUserId = isUuid(userId) ? userId : null;
-
-    // Append difficulty tag to solution text for database storage preservation
-    const levelTag = dto.level ? `[QBP_DIFFICULTY:${dto.level.charAt(0).toUpperCase() + dto.level.slice(1)}]` : '';
-    const cleanSolution = cleanDifficultyTags(dto.solutionText || '');
-    const solutionWithTag = levelTag ? `${cleanSolution}\n${levelTag}` : cleanSolution;
+    let levelTag = '';
+    if (dto.level && ['easy', 'medium', 'hard'].includes(dto.level.toLowerCase())) {
+        levelTag = ` [DIFFICULTY: ${dto.level.toLowerCase()}]`;
+    }
+    const finalSolution = dto.solutionText ? `${cleanDifficultyTags(dto.solutionText)}${levelTag}` : (levelTag ? levelTag.trim() : null);
 
     return {
         subject: dto.subject || 'Physics',
-        klass: klassVal,
+        klass: klass,
         chapter: dto.chapter || 'General',
-        topic: dto.concept || dto.subConcept || 'General',
-        exams: examsList,
-        q_type: isNumerical ? 'numerical' : 'mcq_single',
-        question: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
-        opt_a: sanitizeHtml(optA),
-        opt_b: sanitizeHtml(optB),
-        opt_c: sanitizeHtml(optC),
-        opt_d: sanitizeHtml(optD),
-        assertion: sanitizeHtml(cleanDifficultyTags(dto.assertion || '')),
-        reason: sanitizeHtml(cleanDifficultyTags(dto.reason || '')),
-        num_answer: isNumerical ? (dto.answer || '') : '',
-        correct_option: correctOpt,
-        solution_text: sanitizeHtml(solutionWithTag),
-        created_by: validUserId,
-        created_by_name: userName,
-        updated_by: validUserId,
-        updated_by_name: userName,
+        topic: dto.concept || dto.topic || dto.chapter || 'General',
+        exams: Array.isArray(dto.classes) ? dto.classes : ['JEE', 'NEET'],
+        q_type: q_type,
+        question: cleanDifficultyTags(dto.questionText || dto.question || ''),
+        opt_a: opt_a ? cleanDifficultyTags(opt_a) : null,
+        opt_b: opt_b ? cleanDifficultyTags(opt_b) : null,
+        opt_c: opt_c ? cleanDifficultyTags(opt_c) : null,
+        opt_d: opt_d ? cleanDifficultyTags(opt_d) : null,
+        assertion: dto.assertion || null,
+        reason: dto.reason || null,
+        num_answer: num_answer,
+        correct_option: correct_option,
+        solution_text: finalSolution,
+        created_by: userId && isUuid(userId) ? userId : null,
+        created_by_name: userName || 'Academic Faculty',
+        updated_by: userId && isUuid(userId) ? userId : null,
+        updated_by_name: userName || 'Academic Faculty',
         updated_at: new Date().toISOString()
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Queries & API Methods
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Fetch usage history for a list of question UUIDs from primary database.
+ */
+async function fetchUsageMap(questionIds) {
+    const usageMap = new Map();
+    const validUuids = (questionIds || []).filter(isUuid);
+    if (validUuids.length === 0) return usageMap;
+
+    try {
+        const query = `
+            SELECT question_id, paper_id, teacher_name, exam_name, exam_date, used_at
+            FROM public.question_usage
+            WHERE question_id = ANY($1::uuid[])
+            ORDER BY used_at DESC;
+        `;
+        const res = await primaryPool.query(query, [validUuids]);
+        for (const row of res.rows) {
+            const qIdStr = row.question_id.toString();
+            if (!usageMap.has(qIdStr)) {
+                usageMap.set(qIdStr, {
+                    lastUsedAt: row.used_at,
+                    useCount: 0,
+                    usageHistory: []
+                });
+            }
+            const record = usageMap.get(qIdStr);
+            record.useCount++;
+            record.usageHistory.push({
+                paperId: row.paper_id,
+                teacherName: row.teacher_name,
+                examName: row.exam_name,
+                examDate: row.exam_date,
+                usedAt: row.used_at
+            });
+        }
+    } catch (err) {
+        // Soft fail if usage table is unavailable
+    }
+    return usageMap;
+}
 
 /**
- * Query questions with indexed filters, pagination, and batch usage lookup.
+ * Build dynamic SQL where conditions for PostgreSQL based on filter DTO.
  */
-async function getQuestions(filters = {}, page = 1, limit = 50) {
-    if (isTest && memoryTestQuestions.size > 0) {
-        let list = Array.from(memoryTestQuestions.values());
-        if (filters.subject) list = list.filter(q => q.subject.toLowerCase() === filters.subject.toLowerCase());
-        return {
-            questions: list,
-            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
-        };
-    }
-
-    const requestedLimit = Math.max(1, Math.min(20000, Number(limit) || 50));
-    const requestedPage = Math.max(1, Number(page) || 1);
-    const offset = (requestedPage - 1) * requestedLimit;
-
-    const whereClauses = [];
+function buildWhereClause(filters) {
+    const conditions = [];
     const values = [];
     let paramIndex = 1;
 
-    // 1. Subject filter
     if (filters.subject) {
-        const sub = (filters.subject || '').trim().toLowerCase();
-        if (sub.includes('math')) {
-            whereClauses.push(`q.subject IN ('Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS')`);
-        } else if (sub.includes('physic')) {
-            whereClauses.push(`q.subject IN ('Physics', 'PHYSICS')`);
-        } else if (sub.includes('chem')) {
-            whereClauses.push(`q.subject IN ('Chemistry', 'CHEMISTRY')`);
-        } else if (sub.includes('botan')) {
-            whereClauses.push(`(q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Biology%' OR q.subject = 'BOTANY' OR q.subject = 'BIOLOGY')`);
-        } else if (sub.includes('zool')) {
-            whereClauses.push(`(q.subject ILIKE '%Zoology%' OR q.subject ILIKE '%Biology%' OR q.subject = 'ZOOLOGY' OR q.subject = 'BIOLOGY')`);
-        } else if (sub.includes('bio')) {
-            whereClauses.push(`(q.subject ILIKE '%Biology%' OR q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Zoology%' OR q.subject IN ('Biology', 'Botany', 'Zoology', 'BIOLOGY', 'BOTANY', 'ZOOLOGY'))`);
-        } else {
-            whereClauses.push(`q.subject ILIKE $${paramIndex++}`);
-            values.push(`%${filters.subject}%`);
+        const sub = normalizeSubject(filters.subject);
+        if (sub) {
+            conditions.push(`subject ILIKE $${paramIndex}`);
+            values.push(`%${sub}%`);
+            paramIndex++;
         }
     }
 
-    // 2. Class filter
-    if (filters.classes) {
-        const classesArr = Array.isArray(filters.classes) ? filters.classes : filters.classes.split(',');
-        const klassVals = [];
-        const examVals = [];
-        classesArr.forEach(c => {
-            const clean = c.replace(/Class\s*/i, '').trim();
-            if (['11', '12'].includes(clean)) {
-                klassVals.push(clean);
-            } else if (clean) {
-                examVals.push(clean);
-            }
-        });
-
-        if (klassVals.length > 0) {
-            whereClauses.push(`q.klass = ANY($${paramIndex++}::text[])`);
-            values.push(klassVals);
-        }
-        if (examVals.length > 0) {
-            whereClauses.push(`q.exams && $${paramIndex++}::text[]`);
-            values.push(examVals);
+    if (filters.classes || filters.class) {
+        const klass = normalizeClass(filters.classes || filters.class);
+        if (klass && klass !== 'both') {
+            conditions.push(`klass = $${paramIndex}`);
+            values.push(klass);
+            paramIndex++;
         }
     }
 
-    // 3. Chapter filter
     if (filters.chapter) {
-        const rawChapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
-        if (rawChapters.length > 0) {
-            const chVariants = [];
-            const sub = (filters.subject || '').toLowerCase();
+        const ch = filters.chapter.trim();
+        const chLower = ch.toLowerCase();
+        const aliases = CHAPTER_ALIASES[chLower] || [ch];
 
-            rawChapters.forEach(rawCh => {
-                const normKey = rawCh.toLowerCase().trim();
-                const aliases = CHAPTER_ALIASES[normKey] || [rawCh];
-                aliases.forEach(ch => {
-                    chVariants.push(ch);
-                    chVariants.push(ch.replace(/:/g, ' -'));
-                    chVariants.push(ch.replace(/:/g, ''));
-                    chVariants.push(ch.replace(/\s+and\s+/gi, ' and '));
-                    chVariants.push(ch.replace(/\s+and\s+/gi, ' And '));
-                    chVariants.push(ch.replace(/\s+their\s+/gi, ' their '));
-                    chVariants.push(ch.replace(/\s+their\s+/gi, ' Their '));
-                    chVariants.push(ch.replace(/\s+its\s+/gi, ' its '));
-                    chVariants.push(ch.replace(/\s+its\s+/gi, ' Its '));
-                });
-            });
-            whereClauses.push(`(q.chapter = ANY($${paramIndex}::text[]) OR q.chapter ILIKE ANY($${paramIndex++}::text[]))`);
-            values.push([...new Set(chVariants)]);
-        }
-    }
-
-    // 4. Topic / Concept filter
-    if (filters.concept) {
-        const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
-        if (concepts.length > 0) {
-            whereClauses.push(`q.topic = ANY($${paramIndex++}::text[])`);
-            values.push(concepts);
-        }
-    }
-
-    // 5. Question Type filter
-    if (filters.type) {
-        const typeArr = Array.isArray(filters.type) ? filters.type : filters.type.split(',').map(t => t.trim().toLowerCase());
-        const qTypes = [];
-        typeArr.forEach(t => {
-            if (t.includes('numerical')) qTypes.push('numerical');
-            else if (t.includes('assertion')) qTypes.push('assertion_reason', 'assertion');
-            else if (t.includes('match')) qTypes.push('match', 'match_following');
-            else if (t.includes('mcq')) qTypes.push('mcq_single', 'mcq', 'mcq_multiple');
+        const aliasConditions = aliases.map(() => {
+            const idx = paramIndex++;
+            return `chapter ILIKE $${idx}`;
         });
-        if (qTypes.length > 0) {
-            whereClauses.push(`q.q_type = ANY($${paramIndex++}::text[])`);
-            values.push([...new Set(qTypes)]);
+        aliases.forEach(a => values.push(`%${a}%`));
+        conditions.push(`(${aliasConditions.join(' OR ')})`);
+    }
+
+    if (filters.concept || filters.topic) {
+        const conceptVal = (filters.concept || filters.topic).trim();
+        conditions.push(`topic ILIKE $${paramIndex}`);
+        values.push(`%${conceptVal}%`);
+        paramIndex++;
+    }
+
+    if (filters.type) {
+        const typeUpper = filters.type.toUpperCase();
+        if (typeUpper === 'NUMERICAL') {
+            conditions.push(`(q_type = 'numerical' OR num_answer IS NOT NULL)`);
+        } else if (typeUpper === 'MCQ') {
+            conditions.push(`(q_type = 'mcq_single' OR q_type = 'mcq' OR (opt_a IS NOT NULL AND q_type != 'numerical'))`);
+        } else if (typeUpper === 'ASSERTION_REASON') {
+            conditions.push(`q_type = 'assertion_reason'`);
+        } else if (typeUpper === 'MATCH_FOLLOWING') {
+            conditions.push(`q_type = 'match_the_following'`);
+        } else if (typeUpper === 'STATEMENT_BASED') {
+            conditions.push(`q_type = 'statement_based'`);
         }
     }
 
-    // 6. Level / Difficulty filter
-    if (filters.level) {
-        const levelArr = Array.isArray(filters.level) ? filters.level : filters.level.split(',').map(l => l.trim().toLowerCase()).filter(Boolean);
-        if (levelArr.length > 0) {
-            const levelPatterns = levelArr.map(lvl => {
-                const cap = lvl.charAt(0).toUpperCase() + lvl.slice(1).toLowerCase();
-                return `%DIFFICULTY:${cap}%`;
-            });
-            whereClauses.push(`(q.solution_text ILIKE ANY($${paramIndex}::text[]) OR q.question ILIKE ANY($${paramIndex++}::text[]))`);
-            values.push(levelPatterns);
+    if (filters.search) {
+        const s = filters.search.trim();
+        const idx = paramIndex++;
+        conditions.push(`(question ILIKE $${idx} OR chapter ILIKE $${idx} OR topic ILIKE $${idx})`);
+        values.push(`%${s}%`);
+    }
+
+    const whereString = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    return { whereString, values };
+}
+
+/**
+ * Query questions across the targeted subject pools (all 8 databases).
+ */
+async function getQuestions(filters = {}, page = 1, limit = 50) {
+    if (isTest) {
+        const allTest = Array.from(memoryTestQuestions.values());
+        let filtered = allTest;
+        if (filters.subject) {
+            filtered = filtered.filter(q => (q.subject || '').toLowerCase().includes(filters.subject.toLowerCase()));
         }
-    }
-
-    // 7. Search text filter (uses full text search index or ILIKE)
-    if (filters.search && filters.search.trim()) {
-        const searchStr = filters.search.trim();
-        whereClauses.push(`(q.question ILIKE $${paramIndex} OR q.chapter ILIKE $${paramIndex} OR q.topic ILIKE $${paramIndex++})`);
-        values.push(`%${searchStr}%`);
-    }
-
-    // 8. Usage filter (All, Never Used, Used Before)
-    if (filters.usage) {
-        const u = filters.usage.toString().toLowerCase().trim();
-        if (u === 'never_used' || u === 'never') {
-            whereClauses.push(`NOT EXISTS (SELECT 1 FROM public.question_usage qu WHERE qu.question_id = q.id)`);
-        } else if (u === 'used_before' || u === 'used') {
-            whereClauses.push(`EXISTS (SELECT 1 FROM public.question_usage qu WHERE qu.question_id = q.id)`);
+        if (filters.chapter) {
+            filtered = filtered.filter(q => (q.chapter || '').toLowerCase().includes(filters.chapter.toLowerCase()));
         }
+        return {
+            questions: filtered.slice((page - 1) * limit, page * limit),
+            pagination: { page, limit, total: filtered.length, totalPages: Math.ceil(filtered.length / limit) }
+        };
     }
 
-    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const targetPools = getPoolsForQuery(filters.subject, filters.classes || filters.class);
+    const offset = (page - 1) * limit;
 
     try {
-        const queryValues = [...values, requestedLimit, offset];
-        const limitParam = `$${queryValues.length - 1}`;
-        const offsetParam = `$${queryValues.length}`;
+        const { whereString, values } = buildWhereClause(filters);
 
-        const unifiedSql = `
-            WITH filtered AS (
-                SELECT 
-                    q.id, q.subject, q.klass, q.chapter, q.topic, q.exams,
-                    q.q_type, q.question, q.opt_a, q.opt_b, q.opt_c, q.opt_d,
-                    q.assertion, q.reason, q.correct_option, q.num_answer,
-                    q.solution_text, q.created_by, q.created_by_name, q.created_at,
-                    count(*) OVER() AS full_count
-                FROM public.questions q
-                ${whereSql}
-                ORDER BY q.created_at DESC
-                LIMIT ${limitParam} OFFSET ${offsetParam}
-            ),
-            usage_agg AS (
-                SELECT 
-                    qu.question_id,
-                    count(*)::bigint AS used_count,
-                    max(qu.used_at) AS last_used_at,
-                    (array_agg(qu.teacher_name ORDER BY qu.used_at DESC))[1] AS last_teacher_name,
-                    (array_agg(qu.exam_name ORDER BY qu.used_at DESC))[1] AS last_exam_name,
-                    (array_agg(qu.exam_date ORDER BY qu.used_at DESC))[1] AS last_exam_date
-                FROM public.question_usage qu
-                WHERE qu.question_id IN (SELECT id FROM filtered)
-                GROUP BY qu.question_id
-            )
-            SELECT 
-                f.*,
-                COALESCE(u.used_count, 0) AS used_count,
-                u.last_used_at,
-                u.last_teacher_name,
-                u.last_exam_name,
-                u.last_exam_date
-            FROM filtered f
-            LEFT JOIN usage_agg u ON u.question_id = f.id;
-        `;
+        // Fetch counts from targeted pools in parallel
+        const countPromises = targetPools.map(entry => {
+            return entry.pool.query(`SELECT count(*)::int as total FROM public.questions ${whereString}`, values)
+                .then(res => res.rows[0]?.total || 0)
+                .catch(() => 0);
+        });
 
-        const res = await pool.query(unifiedSql, queryValues);
-        const rows = res.rows;
+        const counts = await Promise.all(countPromises);
+        const totalCount = counts.reduce((acc, c) => acc + c, 0);
 
-        if (rows.length === 0) {
-            // Check if there are truly 0 or just beyond offset
-            const countCheck = await pool.query(`SELECT count(*)::bigint as total FROM public.questions q ${whereSql};`, values);
-            const total = parseInt(countCheck.rows[0]?.total || 0, 10);
+        if (totalCount === 0) {
             return {
                 questions: [],
-                pagination: { page: requestedPage, limit: requestedLimit, total: total, pages: Math.ceil(total / requestedLimit) }
+                pagination: { page, limit, total: 0, totalPages: 0 }
             };
         }
 
-        const total = parseInt(rows[0].full_count, 10);
+        // Fetch questions from pools
+        let questionsToFetch = limit;
+        let skipRemaining = offset;
+        const allFoundRows = [];
 
-        const mappedQuestions = rows.map(r => {
-            const usage = {
-                used_count: r.used_count || 0,
-                last_used_at: r.last_used_at,
-                last_teacher_name: r.last_teacher_name,
-                last_exam_name: r.last_exam_name,
-                last_exam_date: r.last_exam_date,
-                usage_history: r.usage_history || []
-            };
-            const uMap = new Map([[r.id.toString(), usage]]);
-            return mapSupabaseToQuestion(r, uMap);
-        });
+        for (let i = 0; i < targetPools.length; i++) {
+            const entry = targetPools[i];
+            const poolTotal = counts[i];
+
+            if (poolTotal === 0) continue;
+
+            if (skipRemaining >= poolTotal) {
+                skipRemaining -= poolTotal;
+                continue;
+            }
+
+            const poolOffset = skipRemaining;
+            skipRemaining = 0;
+            const poolLimit = questionsToFetch;
+
+            const dataQuery = `
+                SELECT * FROM public.questions
+                ${whereString}
+                ORDER BY created_at DESC NULLS LAST, id DESC
+                LIMIT ${poolLimit} OFFSET ${poolOffset};
+            `;
+
+            try {
+                const res = await entry.pool.query(dataQuery, values);
+                for (const row of res.rows) {
+                    cacheQuestionDb(row.id, entry.key);
+                    allFoundRows.push(row);
+                }
+                questionsToFetch -= res.rows.length;
+                if (questionsToFetch <= 0) break;
+            } catch (err) {
+                console.error(`[Query error on ${entry.name}]:`, err.message);
+            }
+        }
+
+        // Fetch usage history
+        const questionIds = allFoundRows.map(r => r.id);
+        const usageMap = await fetchUsageMap(questionIds);
+
+        const dtos = allFoundRows.map(r => mapSupabaseToQuestion(r, usageMap));
 
         return {
-            questions: mappedQuestions,
+            questions: dtos,
             pagination: {
-                page: requestedPage,
-                limit: requestedLimit,
-                total: total,
-                pages: Math.ceil(total / requestedLimit)
+                page,
+                limit,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limit)
             }
         };
     } catch (err) {
-        console.error('[POSTGRES] getQuestions error:', err.message);
-        return { questions: [], pagination: { page: requestedPage, limit: requestedLimit, total: 0, pages: 0 } };
+        console.error('[DATABASE] getQuestions error:', err.message);
+        throw new Error(err.message);
     }
 }
 
 /**
- * High-speed cached metadata query (filtered by subject and class).
+ * Fast aggregate metadata query for a subject across databases.
  */
-async function getSubjectMetadata(subject = '', klass = '') {
-    const cleanClass = klass ? klass.toString().replace(/[^0-9]/g, '').trim() : '';
-    const cacheKey = `${(subject || 'ALL').trim().toLowerCase()}_${cleanClass || 'ALL'}`;
+async function getSubjectMetadata(subject, cleanClass = '') {
+    const normSub = normalizeSubject(subject) || 'Physics';
+    const normKlass = normalizeClass(cleanClass);
+    const cacheKey = `${normSub.toLowerCase()}_${normKlass || 'all'}`;
+
     const cached = metadataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < METADATA_TTL_MS)) {
         return cached.data;
     }
 
+    const targetPools = getPoolsForQuery(normSub, normKlass);
+
     try {
-        const sub = (subject || '').trim().toLowerCase();
-        let subWhere = '';
-        let subValues = [];
-        let pIdx = 1;
+        const metadataPromises = targetPools.map(async (entry) => {
+            const whereParts = [`subject ILIKE '${normSub}%'`];
+            if (normKlass && normKlass !== 'both') {
+                whereParts.push(`klass = '${normKlass}'`);
+            }
+            const whereClause = `WHERE ${whereParts.join(' AND ')}`;
 
-        if (sub.includes('math')) {
-            subWhere = `q.subject IN ('Maths', 'Mathematics', 'Math', 'MATHEMATICS', 'MATHS')`;
-        } else if (sub.includes('physic')) {
-            subWhere = `q.subject IN ('Physics', 'PHYSICS')`;
-        } else if (sub.includes('chem')) {
-            subWhere = `q.subject IN ('Chemistry', 'CHEMISTRY')`;
-        } else if (sub.includes('botan')) {
-            subWhere = `(q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Biology%' OR q.subject = 'BOTANY' OR q.subject = 'BIOLOGY')`;
-        } else if (sub.includes('zool')) {
-            subWhere = `(q.subject ILIKE '%Zoology%' OR q.subject ILIKE '%Biology%' OR q.subject = 'ZOOLOGY' OR q.subject = 'BIOLOGY')`;
-        } else if (sub.includes('bio')) {
-            subWhere = `(q.subject ILIKE '%Biology%' OR q.subject ILIKE '%Botany%' OR q.subject ILIKE '%Zoology%' OR q.subject IN ('Biology', 'Botany', 'Zoology', 'BIOLOGY', 'BOTANY', 'ZOOLOGY'))`;
-        } else if (subject) {
-            subWhere = `q.subject ILIKE $${pIdx++}`;
-            subValues.push(`%${subject.trim()}%`);
-        }
+            const totalQuery = `SELECT count(*)::int as total FROM public.questions ${whereClause};`;
+            const chaptersQuery = `
+                SELECT chapter, count(*)::int as count 
+                FROM public.questions 
+                ${whereClause} 
+                GROUP BY chapter 
+                ORDER BY chapter ASC;
+            `;
+            const conceptsQuery = `
+                SELECT chapter, topic as name, count(*)::int as count 
+                FROM public.questions 
+                ${whereClause} AND topic IS NOT NULL AND topic != '' 
+                GROUP BY chapter, topic 
+                ORDER BY chapter, count DESC;
+            `;
 
-        let wherePart = subWhere ? `WHERE ${subWhere}` : '';
-        if (cleanClass) {
-            wherePart += `${wherePart ? ' AND ' : 'WHERE '} q.klass = $${pIdx++}`;
-            subValues.push(cleanClass);
-        }
+            const [totRes, chapRes, cptRes] = await Promise.all([
+                entry.pool.query(totalQuery).catch(() => ({ rows: [{ total: 0 }] })),
+                entry.pool.query(chaptersQuery).catch(() => ({ rows: [] })),
+                entry.pool.query(conceptsQuery).catch(() => ({ rows: [] }))
+            ]);
 
-        const query = `
-            SELECT 
-                count(*)::bigint as total,
-                array_agg(DISTINCT q.chapter ORDER BY q.chapter) as chapters,
-                jsonb_agg(DISTINCT jsonb_build_object('concept', q.topic, 'chapter', q.chapter)) as concepts
-            FROM public.questions q
-            ${wherePart};
-        `;
-        const res = await pool.query(query, subValues);
-        const row = res.rows[0] || {};
-        const rawConcepts = Array.isArray(row.concepts) ? row.concepts.filter(c => c && c.concept) : [];
-        const expandedConcepts = [];
-        const seenConcepts = new Set();
-
-        rawConcepts.forEach(c => {
-            const chNorm = (c.chapter || '').toLowerCase().trim();
-            const aliases = CHAPTER_ALIASES[chNorm] || [c.chapter];
-            aliases.forEach(targetCh => {
-                const key = `${targetCh}:::${c.concept}`;
-                if (!seenConcepts.has(key)) {
-                    seenConcepts.add(key);
-                    expandedConcepts.push({ concept: c.concept, chapter: targetCh });
-                }
-            });
+            return {
+                total: totRes.rows[0]?.total || 0,
+                chapters: chapRes.rows || [],
+                concepts: cptRes.rows || []
+            };
         });
 
-        // Add standard syllabus concepts for core chapters if sparse
-        const STANDARD_CONCEPTS_MAP = {
-            'Thermodynamics': [
-                'Thermal Equilibrium and Zeroth Law',
-                'First Law of Thermodynamics & Internal Energy',
-                'Isothermal and Adiabatic Processes',
-                'Isochoric and Isobaric Processes',
-                'Work Done in Thermodynamic Processes',
-                'Heat Capacity, Specific Heat & Mayer’s Relation',
-                'Second Law of Thermodynamics (Kelvin-Planck & Clausius)',
-                'Reversible and Irreversible Processes',
-                'Heat Engines, Carnot Cycle & Refrigerators',
-                'Thermal Expansion & Calorimetry',
-                'Heat Transfer (Conduction, Convection, Radiation)',
-                'Newton’s Law of Cooling',
-                'Behaviour of Gases & Kinetic Theory of an Ideal Gas'
-            ]
-        };
+        const results = await Promise.all(metadataPromises);
 
-        Object.entries(STANDARD_CONCEPTS_MAP).forEach(([stdCh, cList]) => {
-            cList.forEach(c => {
-                const key = `${stdCh}:::${c}`;
-                if (!seenConcepts.has(key)) {
-                    seenConcepts.add(key);
-                    expandedConcepts.push({ concept: c, chapter: stdCh });
+        let grandTotal = 0;
+        const chapterMap = new Map();
+        const conceptMap = new Map();
+
+        for (const res of results) {
+            grandTotal += res.total;
+            for (const ch of res.chapters) {
+                if (ch.chapter) {
+                    chapterMap.set(ch.chapter, (chapterMap.get(ch.chapter) || 0) + ch.count);
                 }
-            });
-        });
+            }
+            for (const cpt of res.concepts) {
+                if (cpt.name && cpt.chapter) {
+                    const key = `${cpt.chapter}:::${cpt.name}`;
+                    if (!conceptMap.has(key)) {
+                        conceptMap.set(key, { chapter: cpt.chapter, name: cpt.name, count: 0 });
+                    }
+                    conceptMap.get(key).count += cpt.count;
+                }
+            }
+        }
 
-        const result = {
-            total: parseInt(row.total) || 0,
-            chapters: Array.isArray(row.chapters) ? row.chapters.filter(Boolean) : [],
-            concepts: expandedConcepts
+        const chaptersList = Array.from(chapterMap.keys()).sort();
+        const conceptsList = Array.from(conceptMap.values()).sort((a, b) => a.chapter.localeCompare(b.chapter));
+
+        const resultData = {
+            total: grandTotal,
+            chapters: chaptersList,
+            concepts: conceptsList
         };
 
-        metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });
-        return result;
+        metadataCache.set(cacheKey, { timestamp: Date.now(), data: resultData });
+        return resultData;
     } catch (err) {
-        console.error('[POSTGRES] getSubjectMetadata error:', err.message);
+        console.error('[DATABASE] getSubjectMetadata error:', err.message);
         return { total: 0, chapters: [], concepts: [] };
     }
 }
 
 /**
- * Get a single question by UUID with usage history attached.
+ * Get daily question creation count across all subject databases.
+ */
+async function getDailyQuestionsCount() {
+    try {
+        const allPools = getAllPools();
+        const countPromises = allPools.map(entry => {
+            return entry.pool.query("SELECT count(*)::int as count FROM public.questions WHERE created_at >= CURRENT_DATE")
+                .then(res => res.rows[0]?.count || 0)
+                .catch(() => 0);
+        });
+
+        const counts = await Promise.all(countPromises);
+        return counts.reduce((acc, c) => acc + c, 0);
+    } catch (err) {
+        console.error('[DATABASE] getDailyQuestionsCount error:', err.message);
+        return 0;
+    }
+}
+
+/**
+ * Fetch a single question by UUID across subject databases.
  */
 async function getQuestionById(id) {
     if (isTest && memoryTestQuestions.has(id)) {
         return memoryTestQuestions.get(id);
     }
+
     if (!isUuid(id)) return null;
 
-    try {
-        const res = await pool.query(
-            `SELECT * FROM public.questions WHERE id = $1 LIMIT 1;`,
-            [id]
-        );
-        if (res.rows.length === 0) return null;
+    let targetDbKey = uuidToDbKey.get(String(id));
+    let targetPoolEntry = targetDbKey ? pools.get(targetDbKey) : null;
 
-        const usageRes = await pool.query(
-            `SELECT * FROM public.get_questions_usage($1::uuid[]);`,
-            [[id]]
-        );
-        const usageMap = new Map();
-        if (usageRes.rows.length > 0) {
-            usageMap.set(id.toString(), usageRes.rows[0]);
-        }
-
-        return mapSupabaseToQuestion(res.rows[0], usageMap);
-    } catch (err) {
-        console.error('[POSTGRES] getQuestionById error:', err.message);
-        return null;
+    if (targetPoolEntry) {
+        try {
+            const res = await targetPoolEntry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+            if (res.rows.length > 0) {
+                const usageMap = await fetchUsageMap([id]);
+                return mapSupabaseToQuestion(res.rows[0], usageMap);
+            }
+        } catch (e) {}
     }
+
+    // Search across all pools
+    for (const entry of getAllPools()) {
+        try {
+            const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+            if (res.rows.length > 0) {
+                cacheQuestionDb(id, entry.key);
+                const usageMap = await fetchUsageMap([id]);
+                return mapSupabaseToQuestion(res.rows[0], usageMap);
+            }
+        } catch (e) {}
+    }
+
+    return null;
 }
 
 /**
- * Batch lookup questions by UUIDs with usage history.
+ * Fetch multiple questions by an array of UUIDs across databases.
  */
-async function getQuestionsByIds(ids) {
-    if (!Array.isArray(ids) || ids.length === 0) return [];
-
-    if (isTest) {
-        return ids.map(id => memoryTestQuestions.get(id)).filter(Boolean);
-    }
-
+async function getQuestionsByIds(ids = []) {
     const validUuids = ids.filter(isUuid);
     if (validUuids.length === 0) return [];
 
     try {
-        const res = await pool.query(
-            `SELECT * FROM public.questions WHERE id = ANY($1::uuid[]);`,
-            [validUuids]
-        );
+        const foundRowsMap = new Map();
+        const uncachedUuids = [];
 
-        const usageRes = await pool.query(
-            `SELECT * FROM public.get_questions_usage($1::uuid[]);`,
-            [validUuids]
-        );
-        const usageMap = new Map();
-        usageRes.rows.forEach(u => usageMap.set(u.question_id.toString(), u));
+        // 1. Group cached IDs by pool
+        const poolToIds = new Map();
+        for (const id of validUuids) {
+            const idStr = id.toString();
+            const dbKey = uuidToDbKey.get(idStr);
+            if (dbKey && pools.has(dbKey)) {
+                if (!poolToIds.has(dbKey)) poolToIds.set(dbKey, []);
+                poolToIds.get(dbKey).push(id);
+            } else {
+                uncachedUuids.push(id);
+            }
+        }
 
-        return res.rows.map(r => mapSupabaseToQuestion(r, usageMap));
+        // 2. Query known pools
+        const knownPromises = Array.from(poolToIds.entries()).map(async ([dbKey, poolIds]) => {
+            const entry = pools.get(dbKey);
+            try {
+                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[])', [poolIds]);
+                res.rows.forEach(r => foundRowsMap.set(r.id.toString(), r));
+            } catch (e) {}
+        });
+
+        // 3. Search uncached IDs across all pools
+        const uncachedPromises = uncachedUuids.length > 0 ? getAllPools().map(async (entry) => {
+            try {
+                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[])', [uncachedUuids]);
+                res.rows.forEach(r => {
+                    foundRowsMap.set(r.id.toString(), r);
+                    cacheQuestionDb(r.id, entry.key);
+                });
+            } catch (e) {}
+        }) : [];
+
+        await Promise.all([...knownPromises, ...uncachedPromises]);
+
+        // 4. Fetch usage
+        const foundUuids = Array.from(foundRowsMap.keys());
+        const usageMap = await fetchUsageMap(foundUuids);
+
+        // 5. Return ordered according to requested IDs
+        return validUuids
+            .map(id => foundRowsMap.get(id.toString()))
+            .filter(Boolean)
+            .map(r => mapSupabaseToQuestion(r, usageMap));
     } catch (err) {
-        console.error('[POSTGRES] getQuestionsByIds error:', err.message);
+        console.error('[DATABASE] getQuestionsByIds error:', err.message);
         return [];
     }
 }
 
 /**
- * Record usage of questions in a paper / exam.
+ * Record usage of questions in a paper / exam into primary database.
  */
 async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName, examName, examDate) {
     if (!Array.isArray(questionIds) || questionIds.length === 0) return;
@@ -848,84 +826,101 @@ async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName,
         return;
     }
 
-    const validUuids = questionIds.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(isUuid);
+    const validUuids = questionIds.filter(isUuid);
     if (validUuids.length === 0) return;
 
     try {
-        const client = await pool.connect();
+        const client = await primaryPool.connect();
         try {
             await client.query('BEGIN');
             const insertQuery = `
-                INSERT INTO public.question_usage (
-                    question_id, paper_id, teacher_id, teacher_name, exam_name, exam_date, used_at
-                ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), NOW());
+                INSERT INTO public.question_usage (question_id, paper_id, teacher_id, teacher_name, exam_name, exam_date, used_at)
+                VALUES ($1, $2, $3, $4, $5, $6, NOW());
             `;
             for (const qId of validUuids) {
                 await client.query(insertQuery, [
                     qId,
-                    paperId.toString(),
+                    paperId ? paperId.toString() : null,
                     teacherId ? teacherId.toString() : null,
                     teacherName || 'Faculty',
                     examName || 'Assessment',
-                    examDate || null
+                    examDate || new Date().toISOString().split('T')[0]
                 ]);
             }
             await client.query('COMMIT');
-        } catch (txErr) {
+        } catch (err) {
             await client.query('ROLLBACK');
-            throw txErr;
+            throw err;
         } finally {
             client.release();
         }
     } catch (err) {
-        console.error('[POSTGRES] recordQuestionUsage error:', err.message);
+        console.error('[PRIMARY DB] recordQuestionUsage error:', err.message);
     }
 }
 
+/**
+ * Create a question in the appropriate subject/class database.
+ */
 async function createQuestion(dto, userId = null, userName = 'Admin') {
     const payload = mapQuestionToSupabase(dto, userId, userName);
-    payload.created_at = new Date().toISOString();
 
     if (isTest) {
         const fakeId = `q_test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const mapped = {
-            _id: fakeId,
+        const testRow = {
             id: fakeId,
-            questionId: fakeId,
-            subject: dto.subject || 'Physics',
-            classes: dto.classes || ['JEE'],
-            chapter: dto.chapter || 'General',
-            concept: dto.concept || 'General',
-            type: dto.type || 'MCQ',
-            questionText: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
-            options: (dto.options || []).map(cleanDifficultyTags),
+            ...payload,
             answer: dto.answer || '',
-            solutionText: sanitizeHtml(cleanDifficultyTags(dto.solutionText || '')),
-            questionTextTranslation: dto.questionTextTranslation || '',
-            optionsTranslation: dto.optionsTranslation || [],
-            createdBy: userId,
-            createdAt: payload.created_at
+            opt_a: payload.opt_a,
+            opt_b: payload.opt_b,
+            opt_c: payload.opt_c,
+            opt_d: payload.opt_d,
+            options: (dto.options || [payload.opt_a, payload.opt_b, payload.opt_c, payload.opt_d]).filter(Boolean),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
         };
+        const mapped = mapSupabaseToQuestion(testRow);
+        if (dto.answer) mapped.answer = dto.answer;
         memoryTestQuestions.set(fakeId, mapped);
         return mapped;
     }
 
-    const { data, error } = await supabase
-        .from('questions')
-        .insert([payload])
-        .select()
-        .single();
+    const targetPoolEntry = getPoolForTarget(payload.subject, payload.klass);
 
-    if (error) {
-        console.error('[SUPABASE] createQuestion error:', error.message);
-        throw new Error(error.message);
-    }
+    const insertSql = `
+        INSERT INTO public.questions (
+            subject, klass, chapter, topic, exams, q_type,
+            question, opt_a, opt_b, opt_c, opt_d, assertion, reason,
+            num_answer, correct_option, solution_text,
+            created_by, created_by_name, updated_by, updated_by_name, updated_at
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10, $11, $12, $13,
+            $14, $15, $16,
+            $17, $18, $19, $20, $21
+        )
+        RETURNING *;
+    `;
 
-    // Invalidate cache
+    const values = [
+        payload.subject, payload.klass, payload.chapter, payload.topic, payload.exams, payload.q_type,
+        payload.question, payload.opt_a, payload.opt_b, payload.opt_c, payload.opt_d, payload.assertion, payload.reason,
+        payload.num_answer, payload.correct_option, payload.solution_text,
+        payload.created_by, payload.created_by_name, payload.updated_by, payload.updated_by_name, payload.updated_at
+    ];
+
+    const res = await targetPoolEntry.pool.query(insertSql, values);
+    const row = res.rows[0];
+
+    cacheQuestionDb(row.id, targetPoolEntry.key);
     metadataCache.clear();
-    return mapSupabaseToQuestion(data);
+
+    return mapSupabaseToQuestion(row);
 }
 
+/**
+ * Update an existing question in its database.
+ */
 async function updateQuestion(id, dto, userId = null, userName = 'Admin') {
     if (isTest && memoryTestQuestions.has(id)) {
         const existing = memoryTestQuestions.get(id);
@@ -934,41 +929,80 @@ async function updateQuestion(id, dto, userId = null, userName = 'Admin') {
         return updated;
     }
 
-    const payload = mapQuestionToSupabase(dto, userId, userName);
+    let targetDbKey = uuidToDbKey.get(String(id));
+    let targetPoolEntry = targetDbKey ? pools.get(targetDbKey) : null;
 
-    const { data, error } = await supabase
-        .from('questions')
-        .update(payload)
-        .eq('id', id)
-        .select()
-        .single();
-
-    if (error) {
-        console.error('[SUPABASE] updateQuestion error:', error.message);
-        throw new Error(error.message);
+    if (!targetPoolEntry) {
+        for (const entry of getAllPools()) {
+            const check = await entry.pool.query('SELECT id FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+            if (check.rows.length > 0) {
+                targetPoolEntry = entry;
+                cacheQuestionDb(id, entry.key);
+                break;
+            }
+        }
     }
 
+    if (!targetPoolEntry) {
+        throw new Error(`Question ${id} not found in any database.`);
+    }
+
+    const payload = mapQuestionToSupabase(dto, userId, userName);
+
+    const updateSql = `
+        UPDATE public.questions SET
+            subject = $1, klass = $2, chapter = $3, topic = $4, exams = $5, q_type = $6,
+            question = $7, opt_a = $8, opt_b = $9, opt_c = $10, opt_d = $11,
+            assertion = $12, reason = $13, num_answer = $14, correct_option = $15,
+            solution_text = $16, updated_by = $17, updated_by_name = $18, updated_at = $19
+        WHERE id = $20
+        RETURNING *;
+    `;
+
+    const values = [
+        payload.subject, payload.klass, payload.chapter, payload.topic, payload.exams, payload.q_type,
+        payload.question, payload.opt_a, payload.opt_b, payload.opt_c, payload.opt_d,
+        payload.assertion, payload.reason, payload.num_answer, payload.correct_option,
+        payload.solution_text, payload.updated_by, payload.updated_by_name, payload.updated_at,
+        id
+    ];
+
+    const res = await targetPoolEntry.pool.query(updateSql, values);
     metadataCache.clear();
-    return mapSupabaseToQuestion(data);
+
+    return mapSupabaseToQuestion(res.rows[0]);
 }
 
+/**
+ * Delete a question from its database.
+ */
 async function deleteQuestion(id) {
     if (isTest) {
         memoryTestQuestions.delete(id);
         return true;
     }
 
-    const { data, error } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', id);
+    let targetDbKey = uuidToDbKey.get(String(id));
+    let targetPoolEntry = targetDbKey ? pools.get(targetDbKey) : null;
 
-    if (error) {
-        console.error('[SUPABASE] deleteQuestion error:', error.message);
-        throw new Error(error.message);
+    if (!targetPoolEntry) {
+        for (const entry of getAllPools()) {
+            const check = await entry.pool.query('SELECT id FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+            if (check.rows.length > 0) {
+                targetPoolEntry = entry;
+                break;
+            }
+        }
     }
 
-    clearMetadataCache();
+    if (!targetPoolEntry) {
+        throw new Error(`Question ${id} not found.`);
+    }
+
+    await targetPoolEntry.pool.query('DELETE FROM public.questions WHERE id = $1;', [id]);
+    uuidToDbKey.delete(String(id));
+    metadataCache.clear();
+
     return true;
 }
 
