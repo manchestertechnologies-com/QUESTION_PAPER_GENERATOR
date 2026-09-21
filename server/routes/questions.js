@@ -125,7 +125,7 @@ router.get('/daily-stats', [auth, checkRole(['admin', 'teacher'])], async (req, 
 // @access  Teacher / Admin
 router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { classes, chapter, concept, type, subject, search, level, usage, sourceType, sources } = req.query;
+        const { classes, chapter, concept, type, subject, search, level, usage, sourceType, sources, source } = req.query;
         let filters = {};
 
         // Subject-level access control — allow Biology/Botany/Zoology faculty to query between Botany/Zoology/Biology
@@ -152,11 +152,11 @@ router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
         if (level) filters.level = level;
         if (usage) filters.usage = usage;
 
-        // Parse requested sources (REGULAR/BANK, PYQ, GT)
-        const rawSources = (sources || sourceType || 'ALL').toUpperCase();
-        const includeBank = rawSources === 'ALL' || rawSources.includes('REGULAR') || rawSources.includes('BANK');
-        const includePYQ = rawSources === 'ALL' || rawSources.includes('PYQ');
-        const includeGT = rawSources === 'ALL' || rawSources.includes('GT');
+        // Parse requested sources (REGULAR/BANK/SUBJECT, PYQ, GT, QBP_CONTROL)
+        const rawSources = (source || sources || sourceType || 'ALL').toUpperCase();
+        const includeBank = rawSources === 'ALL' || rawSources.includes('REGULAR') || rawSources.includes('BANK') || rawSources.includes('SUBJECT');
+        const includePYQ = rawSources === 'ALL' || rawSources.includes('PYQ') || rawSources.includes('QBP') || rawSources.includes('CONTROL');
+        const includeGT = rawSources === 'ALL' || rawSources.includes('GT') || rawSources.includes('GRAND') || rawSources.includes('QBP') || rawSources.includes('CONTROL');
 
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
