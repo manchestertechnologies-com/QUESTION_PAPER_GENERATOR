@@ -322,7 +322,71 @@ export default function CreatePaper() {
         fetchPaperDetails();
     }, [paperId]);
 
-    // ── 2. HIGH-SPEED QUESTIONS POOL FETCH WITH IN-MEMORY CACHE ──
+    // ── 2. HIGH-SPEED CHAPTER-SPECIFIC AND SUBJECT POOL QUESTION FETCHER ──
+    const fetchChapterQuestions = useCallback(async (chaptersToFetch, currentSub = subject, currentClass = selectedClass, currentSources = selectedSources) => {
+        if (!chaptersToFetch || chaptersToFetch.length === 0 || !currentSub) return;
+        const cleanClass = currentClass === 'Both' ? '' : currentClass;
+        
+        // Check which chapters are missing from in-memory cache
+        const missingChapters = chaptersToFetch.filter(ch => {
+            const chKey = `${currentSub.trim().toLowerCase()}_${cleanClass || 'all'}_${ch.trim().toLowerCase()}`;
+            return !questionsCache.current[chKey] || questionsCache.current[chKey].length === 0;
+        });
+
+        if (missingChapters.length === 0) {
+            const allCached = [];
+            chaptersToFetch.forEach(ch => {
+                const chKey = `${currentSub.trim().toLowerCase()}_${cleanClass || 'all'}_${ch.trim().toLowerCase()}`;
+                if (questionsCache.current[chKey]) {
+                    allCached.push(...questionsCache.current[chKey]);
+                }
+            });
+            setAvailableQuestions(prev => {
+                const map = new Map(prev.map(q => [q._id || q.id, q]));
+                allCached.forEach(q => { if (q) map.set(q._id || q.id, q); });
+                return Array.from(map.values());
+            });
+            return;
+        }
+
+        setLoadingQuestions(true);
+        try {
+            const sourceParam = (currentSources && currentSources.length > 0) ? `&source=${encodeURIComponent(currentSources.join(','))}` : '';
+            const fetchPromises = missingChapters.map(async (ch) => {
+                let url = `/api/questions?subject=${encodeURIComponent(currentSub)}&chapter=${encodeURIComponent(ch)}&limit=10000${sourceParam}`;
+                if (cleanClass) {
+                    url += `&classes=${encodeURIComponent(cleanClass)}`;
+                }
+                const res = await api.get(url, { skipLoader: true });
+                const rawQs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+                const qs = rawQs.filter(q => {
+                    if (!q) return false;
+                    const typeStr = (q.type || q.q_type || '').toLowerCase();
+                    if (typeStr.includes('true') || typeStr.includes('false') || typeStr.includes('tf')) return false;
+                    return true;
+                });
+                const chKey = `${currentSub.trim().toLowerCase()}_${cleanClass || 'all'}_${ch.trim().toLowerCase()}`;
+                questionsCache.current[chKey] = qs;
+                return qs;
+            });
+
+            const results = await Promise.all(fetchPromises);
+            const newlyFetched = results.flat();
+
+            setAvailableQuestions(prev => {
+                const map = new Map(prev.map(q => [q._id || q.id, q]));
+                newlyFetched.forEach(q => {
+                    if (q) map.set(q._id || q.id, q);
+                });
+                return Array.from(map.values());
+            });
+        } catch (err) {
+            console.error('Error fetching chapter questions:', err);
+        } finally {
+            setLoadingQuestions(false);
+        }
+    }, [subject, selectedClass, selectedSources]);
+
     const fetchQuestionsPool = async (forceSubject = subject, forceClass = selectedClass, forceSources = selectedSources) => {
         if (!forceSubject) return;
 
@@ -349,12 +413,14 @@ export default function CreatePaper() {
                 if (!q) return false;
                 const typeStr = (q.type || q.q_type || '').toLowerCase();
                 if (typeStr.includes('true') || typeStr.includes('false') || typeStr.includes('tf')) return false;
-                const opts = Array.isArray(q.options) ? q.options : [];
-                if (opts.length <= 2 && opts.some(o => /^(true|false)$/i.test(String(typeof o === 'object' ? (o.text || o.option || '') : o).trim()))) return false;
                 return true;
             });
             questionsCache.current[cacheKey] = qs;
-            setAvailableQuestions(qs);
+            setAvailableQuestions(prev => {
+                const map = new Map(prev.map(q => [q._id || q.id, q]));
+                qs.forEach(q => { if (q) map.set(q._id || q.id, q); });
+                return Array.from(map.values());
+            });
         } catch (err) {
             console.error('Error fetching questions pool:', err);
         } finally {
@@ -368,6 +434,13 @@ export default function CreatePaper() {
             fetchQuestionsPool(subject, selectedClass, selectedSources);
         }
     }, [subject, selectedClass, selectedSources]);
+
+    // Fetch chapter-specific questions immediately as chapters are toggled
+    useEffect(() => {
+        if (selectedChapters.length > 0) {
+            fetchChapterQuestions(selectedChapters, subject, selectedClass, selectedSources);
+        }
+    }, [selectedChapters, subject, selectedClass, selectedSources, fetchChapterQuestions]);
 
     // ── Chapter Quotas Auto-Sync & Helpers ──
     const targetMcqLimit = useMemo(() => {
@@ -798,23 +871,10 @@ export default function CreatePaper() {
 
     // Scoped Question Pool (Ensure all questions load reliably)
     const scopedQuestionPool = useMemo(() => {
-        const isJeeFormat = paperCategory !== 'assignment' && String(examType || '').toUpperCase().includes('JEE');
-
         return availableQuestions.filter(q => {
             // If already in selected questions, always preserve it
             const isAlreadySelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
             if (isAlreadySelected) return true;
-
-            // Numerical / No-options questions check:
-            // MUST ONLY BE INCLUDED IN JEE FORMAT; NOWHERE ELSE!
-            const isNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
-                                (q.q_type || '').toLowerCase() === 'numerical' || 
-                                !Array.isArray(q.options) || 
-                                q.options.length < 2;
-
-            if (!isJeeFormat && isNumerical) {
-                return false;
-            }
 
             // Class check (permissive: JEE/NEET/CET entrance questions match all high school classes)
             if (selectedClass && selectedClass !== 'Both' && q.classes && q.classes.length > 0) {
@@ -839,6 +899,24 @@ export default function CreatePaper() {
                 if (!matchesAnySelected && q.chapter !== 'General') return false;
             }
 
+            // Concept filtering: if specific concepts are selected
+            if (selectedConcepts.length > 0 && availableConceptsForSelectedChapters.length > 0) {
+                const allConceptsForThisCh = chapterConceptsMap[q.chapter] || [];
+                const selectedForThisCh = selectedConcepts.filter(c => allConceptsForThisCh.includes(c));
+                
+                // If user selected a specific subset of concepts for this chapter (and not all), filter by concept
+                if (selectedForThisCh.length > 0 && selectedForThisCh.length < allConceptsForThisCh.length) {
+                    const qConcept = (q.concept || q.topic || '').trim().toLowerCase();
+                    const matchesConcept = selectedForThisCh.some(sc => {
+                        const scClean = sc.trim().toLowerCase();
+                        return qConcept === scClean || qConcept.includes(scClean) || scClean.includes(qConcept);
+                    });
+                    if (!matchesConcept && q.concept && q.concept !== 'General' && q.concept !== q.chapter) {
+                        return false;
+                    }
+                }
+            }
+
             // Exclude broken questions with missing diagrams or [DIAGRAM REQUIRED] tags
             const qText = q.questionText || q.question || '';
             const isBrokenDiagram = /\[DIAGRAM\s+REQUIRED\]/i.test(qText) || 
@@ -849,7 +927,7 @@ export default function CreatePaper() {
 
             return true;
         });
-    }, [availableQuestions, selectedQuestions, selectedChapters, selectedConcepts, selectedClass, examType, paperCategory]);
+    }, [availableQuestions, selectedQuestions, selectedChapters, selectedConcepts, availableConceptsForSelectedChapters, chapterConceptsMap, selectedClass]);
 
     // Filtered questions for Manual Selection
     const filteredQuestions = useMemo(() => {
