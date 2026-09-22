@@ -16,7 +16,7 @@
  *  Step 5: Alignment & Fine-tuning
  *  Step 6: Finalize & Save to Department Archives
  */
-import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api';
