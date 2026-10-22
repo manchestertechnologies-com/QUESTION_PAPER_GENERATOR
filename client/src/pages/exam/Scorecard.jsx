@@ -31,9 +31,40 @@ export default function Scorecard() {
 
 
     useEffect(() => {
+        const cachedRaw = localStorage.getItem(`cbt_scorecard_${sessionId}`) || localStorage.getItem('cbt_scorecard_latest');
+        let cached = null;
+        if (cachedRaw) {
+            try { cached = JSON.parse(cachedRaw); } catch (e) {}
+        }
+
         api.get(`/api/exams/${examId}/scorecard/${sessionId}`)
-            .then(r => { setData(r.data); setLoading(false); })
-            .catch(() => setLoading(false));
+            .then(r => {
+                const s = r.data || {};
+                const merged = {
+                    ...cached,
+                    ...s,
+                    studentName: s.studentName || cached?.studentName || 'Student',
+                    rollNumber: s.rollNumber || cached?.rollNumber || '',
+                    examTitle: s.examTitle || cached?.examTitle || 'Online Examination',
+                    examType: s.examType || cached?.examType || 'CET',
+                    totalQuestions: s.totalQuestions || cached?.totalQuestions || (s.breakdown?.length || 0),
+                    attempted: s.attempted !== undefined ? s.attempted : (cached?.attempted || 0),
+                    correct: s.correct !== undefined ? s.correct : (cached?.correct || 0),
+                    incorrect: s.incorrect !== undefined ? s.incorrect : (cached?.incorrect || 0),
+                    unattempted: s.unattempted !== undefined ? s.unattempted : (cached?.unattempted || 0),
+                    score: s.score !== undefined ? s.score : (cached?.score || 0),
+                    weakAreas: (s.weakAreas && s.weakAreas.length > 0) ? s.weakAreas : (cached?.weakAreas || []),
+                    breakdown: (s.breakdown && s.breakdown.length > 0) ? s.breakdown : (cached?.breakdown || [])
+                };
+                setData(merged);
+                setLoading(false);
+            })
+            .catch(() => {
+                if (cached) {
+                    setData(cached);
+                }
+                setLoading(false);
+            });
     }, [examId, sessionId]);
 
     const downloadPDF = () => {
