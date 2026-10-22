@@ -156,7 +156,50 @@ export default function Scorecard() {
                 {/* Weak Areas Tab */}
                 {activeTab === 'weakareas' && (
                     <div style={styles.tabContent}>
-                        {data.weakAreas?.length > 0 ? (
+                        {data.topic_diagnostics?.length > 0 ? (
+                            <>
+                                <p style={styles.weakNote}>Diagnostic analysis grouped by Subject, Topic, and Subtopic with strict weakness detection:</p>
+                                <div style={styles.weakList}>
+                                    {data.topic_diagnostics.map((td, i) => {
+                                        const badgeStyle = td.classification === 'CRITICAL_WEAKNESS'
+                                            ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171' }
+                                            : td.classification === 'MODERATE_WEAKNESS'
+                                            ? { background: '#fef3c7', color: '#b45309', border: '1px solid #fbbf24' }
+                                            : td.classification === 'STRENGTH'
+                                            ? { background: '#dcfce7', color: '#15803d', border: '1px solid #4ade80' }
+                                            : { background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' };
+
+                                        const label = td.classification === 'CRITICAL_WEAKNESS'
+                                            ? '🚨 Critical Weakness'
+                                            : td.classification === 'MODERATE_WEAKNESS'
+                                            ? '⚠️ Moderate Weakness'
+                                            : td.classification === 'STRENGTH'
+                                            ? '💪 Strength'
+                                            : 'Average';
+
+                                        return (
+                                            <div key={i} style={styles.weakCard}>
+                                                <div style={styles.weakRank}>#{i + 1}</div>
+                                                <div style={styles.weakInfo}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                        <span style={styles.weakChapter}>{td.topic}</span>
+                                                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 700, ...badgeStyle }}>{label}</span>
+                                                    </div>
+                                                    <div style={styles.weakSubject}>{td.subject} {td.subtopic && td.subtopic !== 'General' ? `• ${td.subtopic}` : ''}</div>
+                                                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                                        Accuracy: <strong>{td.accuracy_rate}%</strong> ({td.correct_in_topic}/{td.attempted_in_topic}) | Attempt Rate: <strong>{td.attempt_rate}%</strong> ({td.attempted_in_topic}/{td.total_in_topic})
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={styles.weakCount}>{td.incorrect_in_topic} wrong</div>
+                                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>⏱️ {td.avg_time_per_topic_question}s / Q</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        ) : data.weakAreas?.length > 0 ? (
                             <>
                                 <p style={styles.weakNote}>These chapters had the most incorrect answers. Focus your revision here:</p>
                                 <div style={styles.weakList}>
@@ -188,10 +231,14 @@ export default function Scorecard() {
                         )}
                         <div style={styles.reviewList}>
                             {data.breakdown?.map((q, i) => {
-                                const attempted = q.selectedOption !== null && q.selectedOption !== '';
-                                let isCorrect = false;
+                                const attempted = q.is_attempted !== undefined
+                                    ? q.is_attempted
+                                    : (q.selectedOption !== null && q.selectedOption !== '');
+
+                                let isCorrect = q.is_correct !== undefined ? q.is_correct : false;
                                 let isWrong = false;
-                                if (attempted && !data.answerKeyHidden) {
+
+                                if (q.is_correct === undefined && attempted && !data.answerKeyHidden) {
                                     // 1. Numerical match with tolerance
                                     const tolerance = q.numericalTolerance || 0;
                                     const parsedSelected = parseFloat(q.selectedOption);
@@ -223,6 +270,9 @@ export default function Scorecard() {
                                             }
                                         }
                                     }
+                                }
+
+                                if (attempted && !data.answerKeyHidden) {
                                     isWrong = !isCorrect;
                                 }
                                 return (
@@ -302,6 +352,30 @@ export default function Scorecard() {
                                 <div style={styles.timeSummaryLabel}>Average Time Per Question</div>
                             </div>
                         </div>
+
+                        {data.panic_questions?.length > 0 && (
+                            <div style={{ marginTop: 24, padding: 16, background: '#fff1f2', borderRadius: 12, border: '1.5px solid #fda4af' }}>
+                                <h4 style={{ margin: '0 0 8px', color: '#be123c', fontSize: 15, fontWeight: 700 }}>
+                                    ⚠️ Time-Drain Mistakes (Panic Analysis)
+                                </h4>
+                                <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9f1239' }}>
+                                    These questions consumed more than twice your average question time (&gt;{data.panic_questions[0]?.threshold_seconds}s) and resulted in an incorrect answer:
+                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {data.panic_questions.map((pq, idx) => (
+                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '10px 14px', borderRadius: 8, border: '1px solid #fecdd3' }}>
+                                            <div>
+                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{pq.subject_id}</span>
+                                                <span style={{ color: '#64748b', fontSize: 13, marginLeft: 8 }}>{pq.topic_id}</span>
+                                            </div>
+                                            <div style={{ fontWeight: 800, color: '#e11d48' }}>
+                                                ⏱️ {pq.time_spent_seconds}s (Threshold: {pq.threshold_seconds}s)
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         <h4 style={{ ...styles.sectionTitle, marginTop: 24 }}>Questions Taking the Most Time</h4>
                         {(() => {
