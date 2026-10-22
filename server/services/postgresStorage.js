@@ -406,13 +406,13 @@ async function getPapers(teacherId = null) {
 
 async function getPaperById(id) {
     if (!id) return null;
-    const cleanId = String(id).replace(/^paper_/, '');
-    const isNum = /^\d+$/.test(cleanId);
+    const rawId = String(id).trim();
+    const cleanId = rawId.replace(/^paper_/, '');
     let res;
-    if (isNum) {
-        res = await pool.query('SELECT * FROM public.papers WHERE id = $1', [parseInt(cleanId, 10)]);
+    if (/^\d+$/.test(rawId)) {
+        res = await pool.query('SELECT * FROM public.papers WHERE id = $1 OR paper_id = $2', [parseInt(rawId, 10), rawId]);
     } else {
-        res = await pool.query('SELECT * FROM public.papers WHERE id::text = $1 OR paper_id = $2', [cleanId, cleanId]);
+        res = await pool.query('SELECT * FROM public.papers WHERE paper_id = $1 OR paper_id = $2 OR id::text = $3', [rawId, cleanId, cleanId]);
     }
     return res.rows[0] ? mapPaperRow(res.rows[0]) : null;
 }
