@@ -3,12 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { labIpOnly } = require('../middleware/labIp');
 const storage = require('../services/postgresStorage');
-const { Pool } = require('pg');
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-});
+const pool = require('../config/postgres');
 
 // ─────────────────────────────────────────────────────────────────
 // STUDENT: Look up student by roll number
