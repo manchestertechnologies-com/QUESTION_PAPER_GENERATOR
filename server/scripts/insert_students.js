@@ -38,7 +38,19 @@ const testStudents = [
     { name: 'SOHAN V', rollNumber: '2620135', section: 'II-PUC A', class_level: 'II-PUC' },
     { name: 'SUMANTH C S', rollNumber: '2620136', section: 'II-PUC A', class_level: 'II-PUC' },
     { name: 'TEKUMALLA SATHWIKA', rollNumber: '2620137', section: 'II-PUC A', class_level: 'II-PUC' },
-    { name: 'YASH SHARMA', rollNumber: '2620138', section: 'II-PUC A', class_level: 'II-PUC' }
+    { name: 'YASH SHARMA', rollNumber: '2620138', section: 'II-PUC A', class_level: 'II-PUC' },
+    // Quick-Access CBT Test Candidates (1000 - 1010)
+    { name: 'Student 1000', rollNumber: '1000', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1001', rollNumber: '1001', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1002', rollNumber: '1002', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1003', rollNumber: '1003', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1004', rollNumber: '1004', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1005', rollNumber: '1005', section: 'Batch A', class_level: 'II-PUC' },
+    { name: 'Student 1006', rollNumber: '1006', section: 'Batch B', class_level: 'I-PUC' },
+    { name: 'Student 1007', rollNumber: '1007', section: 'Batch B', class_level: 'I-PUC' },
+    { name: 'Student 1008', rollNumber: '1008', section: 'Batch B', class_level: 'I-PUC' },
+    { name: 'Student 1009', rollNumber: '1009', section: 'Batch B', class_level: 'I-PUC' },
+    { name: 'Student 1010', rollNumber: '1010', section: 'Batch B', class_level: 'I-PUC' }
 ];
 
 async function insertAll() {
