@@ -1,42 +1,30 @@
-/**
- * server/tests/setup.js
- * Global test setup: in-memory MongoDB, environment variable setup
- */
-process.env.NODE_ENV = 'test';
-process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-key-for-jest-tests-12345';
-process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Test@Admin123!';
-process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://vznhcbwrssbqvnihysys.supabase.co';
-process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test_mock_secret_key';
-
 const mongoose = require('mongoose');
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const dotenv = require('dotenv');
+const path = require('path');
 
-let mongoServer;
-jest.setTimeout(180000);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Start in-memory MongoDB before all tests
 beforeAll(async () => {
-    mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-    await mongoose.connect(uri);
-});
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'sapthagiri_pu_college_secret_key_davanagere_2026';
+    process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Sapthagiri1';
+    process.env.NODE_ENV = 'test';
 
-// Clean all collections between tests
-afterEach(async () => {
-    if (mongoose.connection.readyState === 1) {
-        const collections = mongoose.connection.collections;
-        for (const key in collections) {
-            await collections[key].deleteMany({});
+    if (process.env.MONGO_URI && mongoose.connection.readyState === 0) {
+        try {
+            await mongoose.connect(process.env.MONGO_URI);
+            console.log('Connected to MongoDB Atlas for integration testing');
+        } catch (err) {
+            console.error('Test DB connection error:', err.message);
         }
     }
 });
 
-// Stop server after all tests
 afterAll(async () => {
-    if (mongoose.connection.readyState !== 0) {
-        await mongoose.disconnect();
-    }
-    if (mongoServer) {
-        await mongoServer.stop();
+    try {
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.disconnect();
+        }
+    } catch (err) {
+        console.warn('DB disconnect error:', err.message);
     }
 });

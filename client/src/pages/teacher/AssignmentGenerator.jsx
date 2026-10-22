@@ -19,7 +19,6 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
 import ResizableDiagram from '../../components/ResizableDiagram';
-import FourDotLoader from '../../components/FourDotLoader';
 import { optionLabel, getResolvedAnswerLabel } from '../../utils/sanitize';
 
 // Helper component to render complete options for a question
@@ -121,66 +120,17 @@ const AssignmentGenerator = () => {
         const chaptersSet = new Set();
         const map = {};
 
-        const CHAPTER_ALIASES = {
-            'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Kinetic Theory of Gases', 'Heat and Thermodynamics'],
-            'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Heat and Thermodynamics'],
-            'kinetic theory': ['Kinetic Theory', 'Kinetic Theory of Gases', 'Thermodynamics'],
-            'kinetic theory of gases': ['Kinetic Theory of Gases', 'Kinetic Theory', 'Thermodynamics']
-        };
-
-        const STANDARD_SYLLABUS_CONCEPTS = {
-            'Thermodynamics': [
-                'Thermal Equilibrium and Zeroth Law',
-                'First Law of Thermodynamics & Internal Energy',
-                'Isothermal and Adiabatic Processes',
-                'Isochoric and Isobaric Processes',
-                'Work Done in Thermodynamic Processes',
-                'Heat Capacity, Specific Heat & Mayer’s Relation',
-                'Second Law of Thermodynamics (Kelvin-Planck & Clausius)',
-                'Reversible and Irreversible Processes',
-                'Heat Engines, Carnot Cycle & Refrigerators',
-                'Thermal Expansion & Calorimetry',
-                'Heat Transfer (Conduction, Convection, Radiation)',
-                'Newton’s Law of Cooling',
-                'Behaviour of Gases & Kinetic Theory of an Ideal Gas'
-            ]
-        };
-
         questionsPool.forEach(q => {
             const ch = q.chapter || 'General';
             chaptersSet.add(ch);
             if (!map[ch]) map[ch] = new Set();
             const cpt = q.concept || q.topic;
             if (cpt && cpt !== 'General' && cpt !== ch) {
-                map[ch].add(cpt.trim());
+                map[ch].add(cpt);
             }
         });
 
-        const sorted = Array.from(chaptersSet).filter(Boolean).sort();
-
-        // Cross-populate concepts across chapter aliases
-        sorted.forEach(ch => {
-            const normKey = ch.toLowerCase().trim();
-            const aliases = CHAPTER_ALIASES[normKey] || [];
-            aliases.forEach(aliasCh => {
-                if (map[aliasCh]) {
-                    map[aliasCh].forEach(c => {
-                        if (!map[ch]) map[ch] = new Set();
-                        if (c && c !== 'General' && c !== ch) {
-                            map[ch].add(c);
-                        }
-                    });
-                }
-            });
-        });
-
-        // Ensure standard NCERT syllabus concepts
-        Object.entries(STANDARD_SYLLABUS_CONCEPTS).forEach(([stdCh, cList]) => {
-            if (map[stdCh]) {
-                cList.forEach(c => map[stdCh].add(c));
-            }
-        });
-
+        const sorted = Array.from(chaptersSet).sort();
         const cleanMap = {};
         sorted.forEach(ch => {
             cleanMap[ch] = Array.from(map[ch] || []).sort();
@@ -223,43 +173,10 @@ const AssignmentGenerator = () => {
         );
     };
 
-    const CHAPTER_ALIASES = {
-        'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
-        'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
-        'kinetic theory': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
-        'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids'],
-        'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids'],
-        'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
-        'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-        'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
-        'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
-        'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
-        'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)']
-    };
-
-    const isChapterMatch = (qChapter, targetChapter) => {
-        if (!qChapter || !targetChapter) return false;
-        const qClean = qChapter.trim().toLowerCase();
-        const tClean = targetChapter.trim().toLowerCase();
-        if (qClean === tClean) return true;
-        const aliases = CHAPTER_ALIASES[tClean] || [];
-        return aliases.some(a => a.toLowerCase().trim() === qClean);
-    };
-
     // Scoped pool based on checked chapters & concepts
     const scopedPool = useMemo(() => {
         return questionsPool.filter(q => {
-            // Numericals and questions without options should only ever be in JEE format
-            const isNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
-                                (q.q_type || '').toLowerCase() === 'numerical' || 
-                                !Array.isArray(q.options) || 
-                                q.options.length < 2;
-            if (isNumerical) return false;
-
-            if (selectedChapters.length > 0) {
-                const matchesAny = selectedChapters.some(sch => isChapterMatch(q.chapter, sch));
-                if (!matchesAny && q.chapter !== 'General') return false;
-            }
+            if (selectedChapters.length > 0 && !selectedChapters.includes(q.chapter)) return false;
             if (selectedConcepts.length > 0) {
                 const cpt = q.concept || q.topic;
                 if (!selectedConcepts.includes(cpt)) return false;
@@ -276,7 +193,7 @@ const AssignmentGenerator = () => {
                 (q.chapter || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (q.concept || q.topic || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesChapter = !filterChapter || isChapterMatch(q.chapter, filterChapter);
+            const matchesChapter = !filterChapter || q.chapter === filterChapter;
             const matchesDifficulty = !filterDifficulty || (q.level || 'medium').toLowerCase() === filterDifficulty.toLowerCase();
             const matchesType = !filterType || (q.type || 'MCQ').toUpperCase() === filterType.toUpperCase();
 
@@ -341,10 +258,9 @@ const AssignmentGenerator = () => {
         questions: visibleQs,
         duration: null,
         isAssignment: true,
-        institutionName: user?.institutionName || 'Manchester PU College',
         startQNo,
         endQNo: endQNo || (startQNo + visibleQs.length - 1),
-    }), [title, subject, visibleQs, startQNo, endQNo, user?.institutionName]);
+    }), [title, subject, visibleQs, startQNo, endQNo]);
 
     // Save Assignment to MongoDB & Supabase
     const handleSaveAssignment = async () => {
@@ -355,8 +271,6 @@ const AssignmentGenerator = () => {
                 title: title || `${subject.toUpperCase()} Practice Assignment`,
                 subject,
                 classes: ['12'],
-                paperType: 'assessment',
-                institutionName: user?.institutionName || 'Manchester PU College',
                 duration: null,
                 isAssignment: true,
                 startQNo: startQNo || 1,
@@ -371,8 +285,7 @@ const AssignmentGenerator = () => {
             navigate('/teacher/dashboard/saved-papers');
         } catch (err) {
             console.error('Error saving assignment:', err);
-            const errMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to save assignment. Please try again.';
-            alert(errMsg);
+            alert('Failed to save assignment. Please try again.');
         } finally {
             setSaving(false);
         }
@@ -433,7 +346,7 @@ const AssignmentGenerator = () => {
                                 onClick={() => window.print()}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                             >
-                                <span>🖨️</span> Download / Print PDF
+                                <span>🖨</span> Download / Print PDF
                             </button>
                         </div>
                     </div>
@@ -669,7 +582,7 @@ const AssignmentGenerator = () => {
                                     onClick={() => setFullQualityView(!fullQualityView)}
                                     className="bg-slate-100 text-navy hover:bg-slate-200 px-3.5 py-2 rounded-xl text-xs font-bold transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>{fullQualityView ? '🖼️ Full Details View (Active)' : '📄 Compact View (Active)'}</span>
+                                    <span>{fullQualityView ? '🖼 Full Details View (Active)' : '📄 Compact View (Active)'}</span>
                                 </button>
 
                                 <button
@@ -683,7 +596,7 @@ const AssignmentGenerator = () => {
                                     onClick={() => setShowReviewModal(true)}
                                     className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5"
                                 >
-                                    <span>👁️</span> Review Selected ({selectedQuestions.length})
+                                    <span>👁</span> Review Selected ({selectedQuestions.length})
                                 </button>
                             </div>
                         </div>

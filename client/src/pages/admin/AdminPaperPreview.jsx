@@ -25,7 +25,6 @@ import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer'
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
-import FourDotLoader from '../../components/FourDotLoader';
 import { generatePaperSet, generateAllPQRS, generateAnswerKey } from '../../utils/pqrsGenerator';
 
 const AdminPaperPreview = () => {
@@ -93,21 +92,9 @@ const AdminPaperPreview = () => {
     // Ensure questions are valid objects before PQRS generation
     const validPaper = useMemo(() => {
         if (!selectedPaper) return null;
-        const rawQs = (Array.isArray(selectedPaper.questions) && selectedPaper.questions.length > 0)
-            ? selectedPaper.questions
-            : (Array.isArray(selectedPaper.questionObjects) ? selectedPaper.questionObjects : []);
-
+        const rawQs = Array.isArray(selectedPaper.questions) ? selectedPaper.questions : [];
         const cleanQs = rawQs.map((q, idx) => {
-            if (typeof q === 'object' && q !== null && (q.questionText || q.question)) {
-                return q;
-            }
-            const snap = selectedPaper.questionObjects?.[idx];
-            if (snap && typeof snap === 'object' && (snap.questionText || snap.question)) {
-                return snap;
-            }
-            if (typeof q === 'object' && q !== null) {
-                return q;
-            }
+            if (typeof q === 'object' && q !== null) return q;
             return {
                 _id: String(q || idx),
                 questionText: `Question #${idx + 1}`,
@@ -171,7 +158,8 @@ const AdminPaperPreview = () => {
     if (loading) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center p-8">
-                <FourDotLoader size="lg" text="Generating A4 Assessment Preview..." />
+                <div className="w-10 h-10 border-4 border-navy border-t-gold rounded-full animate-spin mb-4"></div>
+                <h3 className="text-sm font-black text-navy uppercase tracking-widest">Generating A4 Assessment Preview...</h3>
             </div>
         );
     }
@@ -321,7 +309,7 @@ const AdminPaperPreview = () => {
             {showSolutionsModal && (
                 <A4SolutionKey
                     paper={selectedPaper}
-                    questions={currentPaperSet?.questions || selectedPaper?.questions || []}
+                    questions={selectedPaper?.questions || []}
                     startQNo={settings?.startQNo || 1}
                     setName={activeSet}
                     onClose={() => setShowSolutionsModal(false)}

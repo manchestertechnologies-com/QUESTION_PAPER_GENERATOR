@@ -169,7 +169,7 @@ export default function LabLogin() {
 
                         {/* Card footer */}
                         <div style={s.cardFooter}>
-                            © {new Date().getFullYear()} Sapthagiri Pre University College · Davanagere
+                            © {new Date().getFullYear()} Manchester Technologies · Davanagere
                         </div>
                     </div>
                 </div>

@@ -7,7 +7,6 @@ import PaperRenderer, { DEFAULT_SETTINGS, SettingsPanel, formatMarks, calcTotal 
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
-import MergePapersModal from '../../components/MergePapersModal';
 
 /* ─── Inline styles ─── */
 const S = {
@@ -319,6 +318,29 @@ const PaperView = ({ paper: initialPaper, activeTemplate, onBack }) => {
                             ⚙️ Layout Settings
                         </button>
 
+                        <button
+                            style={{ ...S.btnPrint, background: '#059669', color: '#fff' }}
+                            onClick={async () => {
+                                try {
+                                    const res = await api.get(`/api/papers/${paper._id}/export-pdf`, { responseType: 'blob' });
+                                    const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+                                    const link = document.createElement('a');
+                                    link.href = blobUrl;
+                                    link.setAttribute('download', `${(paper.title || 'Question_Paper').replace(/\s+/g, '_')}.pdf`);
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    link.remove();
+                                    window.URL.revokeObjectURL(blobUrl);
+                                } catch (err) {
+                                    console.error('Vector PDF export error:', err);
+                                    window.print();
+                                }
+                            }}
+                            title="Download Crisp Vector PDF with pre-rendered KaTeX Math"
+                        >
+                            ⚡ Vector PDF
+                        </button>
+
                         <button style={S.btnPrint} onClick={() => window.print()}>
                             🖨 Print / Save PDF
                         </button>
@@ -387,7 +409,6 @@ const SavedPapers = () => {
     const [selectedPaper, setSelectedPaper] = useState(null);
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [hoveredRow, setHoveredRow] = useState(null);
-    const [showMergeModal, setShowMergeModal] = useState(false);
 
     /* ── Filter state ── */
     const [filterClass, setFilterClass] = useState('');
@@ -424,6 +445,45 @@ const SavedPapers = () => {
     const classOptions = [...new Set(
         papers.flatMap(p => p.classes || [])
     )].sort();
+
+    /* ── Helper to extract/compute section badges for multi-teacher collaboration ── */
+    const getPaperSectionBadges = (p) => {
+        if (!p) return [];
+        if (Array.isArray(p.sections) && p.sections.length > 0) {
+            return p.sections.map(s => ({
+                subject: s.subject,
+                count: Array.isArray(s.questions) ? s.questions.length : 0,
+                status: s.status || (s.questions && s.questions.length > 0 ? 'SAVED' : 'NOT_STARTED')
+            }));
+        }
+        const et = (p.exam_type || p.examType || '').toUpperCase();
+        let defaultSubjects = [];
+        if (et.includes('NEET')) defaultSubjects = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
+        else if (et.includes('JEE')) defaultSubjects = ['Physics', 'Chemistry', 'Mathematics'];
+        else if (et.includes('CET')) defaultSubjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+        else if (p.subject && p.subject.includes(',')) defaultSubjects = p.subject.split(',').map(s => s.trim());
+
+        if (defaultSubjects.length > 0) {
+            return defaultSubjects.map(sub => {
+                const subQs = (p.questions || []).filter(q => {
+                    const qSub = (q.sectionSubject || q.subject || '').toLowerCase();
+                    return qSub === sub.toLowerCase();
+                });
+                return {
+                    subject: sub,
+                    count: subQs.length,
+                    status: subQs.length > 0 ? 'SAVED' : 'NOT_STARTED'
+                };
+            });
+        }
+        return [];
+    };
+
+    /* ── Active drafts for multi-teacher shared editing ── */
+    const activeDrafts = papers.filter(p => {
+        const st = (p.status || '').toUpperCase();
+        return st === 'DRAFT' || st === 'IN_PROGRESS' || st === 'IN PROGRESS';
+    });
 
     /* ── Filtered papers ── */
     const filteredPapers = papers.filter(p => {
@@ -470,27 +530,6 @@ const SavedPapers = () => {
                     <p style={{ fontSize: '11px', fontWeight: 700, color: '#94a3b8', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Managed Institutional Paper Repository</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button
-                        onClick={() => setShowMergeModal(true)}
-                        style={{
-                            background: '#001f6d',
-                            color: '#c5a059',
-                            border: '2px solid #c5a059',
-                            borderRadius: '10px',
-                            padding: '8px 18px',
-                            fontSize: '11px',
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.1em',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 4px 12px rgba(0,31,109,0.2)'
-                        }}
-                    >
-                        <span>🔗</span> Merge Papers (PCMB / NEET / JEE)
-                    </button>
                     <div style={{
                         fontSize: '11px', color: '#c5a059',
                         background: '#001f6d', border: 'none',
@@ -533,6 +572,118 @@ const SavedPapers = () => {
                     <div style={S.summarySub}>Most recent paper</div>
                 </div>
             </div>
+
+            {/* Active Exam Drafts (Multi-Teacher Collaboration) */}
+            {activeDrafts.length > 0 && (
+                <div style={{ marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                        <span style={{ fontSize: '18px' }}>⚡</span>
+                        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 800, color: '#001f6d', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                            Active Exam Drafts (Multi-Teacher Collaboration)
+                        </h4>
+                        <span style={{ fontSize: '11px', fontWeight: 800, padding: '2px 8px', borderRadius: '12px', background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+                            {activeDrafts.length} Active Draft{activeDrafts.length > 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
+                        {activeDrafts.map(draft => {
+                            const draftSections = getPaperSectionBadges(draft);
+                            return (
+                                <div
+                                    key={draft._id}
+                                    style={{
+                                        background: '#fff',
+                                        border: '1.5px solid #cbd5e1',
+                                        borderRadius: '16px',
+                                        padding: '18px 20px',
+                                        boxShadow: '0 4px 16px rgba(0,31,109,0.06)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        gap: '12px',
+                                        borderLeft: '6px solid #f59e0b',
+                                    }}
+                                >
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                                            <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#0f172a' }}>
+                                                {draft.title || 'Untitled Exam Draft'}
+                                            </h5>
+                                            <span style={{
+                                                fontSize: '10px',
+                                                fontWeight: 800,
+                                                padding: '2px 8px',
+                                                borderRadius: '6px',
+                                                background: '#001f6d',
+                                                color: '#c5a059',
+                                                textTransform: 'uppercase',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {draft.exam_type || draft.examType || 'EXAM'}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>
+                                            Last Modified: {new Date(draft.updatedAt || draft.createdAt).toLocaleString()}
+                                        </div>
+
+                                        {/* Section Badges */}
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px' }}>
+                                            {draftSections.map((sec, sIdx) => {
+                                                const isSaved = sec.status === 'SAVED';
+                                                const isInProgress = sec.status === 'IN_PROGRESS';
+                                                return (
+                                                    <span
+                                                        key={sIdx}
+                                                        style={{
+                                                            fontSize: '11px',
+                                                            fontWeight: 700,
+                                                            padding: '3px 8px',
+                                                            borderRadius: '6px',
+                                                            background: isSaved ? '#ecfdf5' : isInProgress ? '#fffbeb' : '#f8fafc',
+                                                            color: isSaved ? '#065f46' : isInProgress ? '#92400e' : '#64748b',
+                                                            border: `1px solid ${isSaved ? '#a7f3d0' : isInProgress ? '#fde68a' : '#e2e8f0'}`,
+                                                        }}
+                                                    >
+                                                        [{sec.subject}: {sec.count} Qs - {sec.status === 'SAVED' ? 'Saved' : sec.status === 'IN_PROGRESS' ? 'In Progress' : 'Not Started'}]
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
+                                        <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569' }}>
+                                            Total: {(draft.questions || []).length} Qs
+                                        </span>
+                                        <button
+                                            onClick={() => navigate(`/teacher/create-paper?paperId=${draft._id}`)}
+                                            style={{
+                                                height: '32px',
+                                                padding: '0 14px',
+                                                fontSize: '11px',
+                                                fontWeight: 800,
+                                                borderRadius: '8px',
+                                                cursor: 'pointer',
+                                                background: '#001f6d',
+                                                color: '#c5a059',
+                                                border: 'none',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.08em',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                boxShadow: '0 4px 10px rgba(0,31,109,0.18)',
+                                            }}
+                                        >
+                                            ✏️ Continue Editing
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Section label + filter bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
@@ -601,7 +752,10 @@ const SavedPapers = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredPapers.map((p, i) => (
+                            {filteredPapers.map((p, i) => {
+                                const pSections = getPaperSectionBadges(p);
+                                const isDraft = (p.status || '').toUpperCase() === 'DRAFT' || (p.status || '').toUpperCase() === 'IN_PROGRESS';
+                                return (
                                 <tr
                                     key={p._id}
                                     style={{
@@ -622,7 +776,28 @@ const SavedPapers = () => {
                                                 <div style={S.paperTitle}>{p.title}</div>
                                                 <div style={S.paperId}>
                                                     {p.isAssignment ? 'ASSIGNMENT • ' : 'TEST • '}#{String(i + 1).padStart(4, '0')}
+                                                    {p.exam_type ? ` • ${p.exam_type}` : ''}
                                                 </div>
+                                                {pSections.length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                                                        {pSections.map((sec, sIdx) => (
+                                                            <span
+                                                                key={sIdx}
+                                                                style={{
+                                                                    fontSize: '10px',
+                                                                    fontWeight: 700,
+                                                                    padding: '2px 6px',
+                                                                    borderRadius: '4px',
+                                                                    background: sec.status === 'SAVED' ? '#ecfdf5' : sec.status === 'IN_PROGRESS' ? '#fffbeb' : '#f8fafc',
+                                                                    color: sec.status === 'SAVED' ? '#065f46' : sec.status === 'IN_PROGRESS' ? '#92400e' : '#64748b',
+                                                                    border: `1px solid ${sec.status === 'SAVED' ? '#a7f3d0' : sec.status === 'IN_PROGRESS' ? '#fde68a' : '#e2e8f0'}`
+                                                                }}
+                                                            >
+                                                                [{sec.subject}: {sec.count} Qs - {sec.status === 'SAVED' ? 'Saved' : sec.status === 'IN_PROGRESS' ? 'In Progress' : 'Not Started'}]
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </td>
@@ -646,11 +821,11 @@ const SavedPapers = () => {
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <span style={{
                                             ...S.tagClass, 
-                                            background: p.status === 'Approved' ? '#dcfce7' : p.status === 'Rejected' ? '#fee2e2' : '#fef9c3',
-                                            color: p.status === 'Approved' ? '#166534' : p.status === 'Rejected' ? '#991b1b' : '#854d0e',
-                                            border: 'none'
+                                            background: isDraft ? '#fef3c7' : p.status === 'Approved' ? '#dcfce7' : p.status === 'Rejected' ? '#fee2e2' : '#fef9c3',
+                                            color: isDraft ? '#b45309' : p.status === 'Approved' ? '#166534' : p.status === 'Rejected' ? '#991b1b' : '#854d0e',
+                                            border: isDraft ? '1px solid #fde68a' : 'none'
                                         }}>
-                                            {p.status || 'Pending Approval'}
+                                            {isDraft ? 'Draft (In Progress)' : (p.status || 'Pending Approval')}
                                         </span>
                                     </td>
 
@@ -658,13 +833,20 @@ const SavedPapers = () => {
                                     <td style={{ ...S.tdLast, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
                                         <div style={S.actionCell}>
                                             <button
-                                                style={S.btnEdit}
+                                                style={{
+                                                    ...S.btnEdit,
+                                                    background: isDraft ? '#001f6d' : '#f1f5f9',
+                                                    color: isDraft ? '#c5a059' : '#001f6d',
+                                                }}
                                                 onClick={() => navigate(`/teacher/create-paper?paperId=${p._id}`)}
                                                 onMouseEnter={e => { e.currentTarget.style.background = '#001f6d'; e.currentTarget.style.color = '#c5a059'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#001f6d'; }}
-                                                title="Edit questions and setup"
+                                                onMouseLeave={e => {
+                                                    e.currentTarget.style.background = isDraft ? '#001f6d' : '#f1f5f9';
+                                                    e.currentTarget.style.color = isDraft ? '#c5a059' : '#001f6d';
+                                                }}
+                                                title={isDraft ? "Continue Editing this draft" : "Edit questions and setup"}
                                             >
-                                                ✏️ Edit
+                                                {isDraft ? '✏️ Continue Editing' : '✏️ Edit'}
                                             </button>
                                             <button
                                                 style={S.btnView}
@@ -685,34 +867,12 @@ const SavedPapers = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            );
+                            })}
                         </tbody>
                     </table>
                 )}
             </div>
-
-            {/* Merge Papers Modal */}
-            {showMergeModal && (
-                <MergePapersModal
-                    papers={papers}
-                    onClose={() => setShowMergeModal(false)}
-                    onMergeSuccess={(newPaper) => {
-                        setPapers(prev => [newPaper, ...prev]);
-                        setSelectedPaper(newPaper);
-                        setShowMergeModal(false);
-                    }}
-                    onOpenPrint={(newPaper) => {
-                        setPapers(prev => [newPaper, ...prev]);
-                        setSelectedPaper(newPaper);
-                        setShowMergeModal(false);
-                    }}
-                    onOpenOnlineExam={(newPaper) => {
-                        setPapers(prev => [newPaper, ...prev]);
-                        setShowMergeModal(false);
-                        navigate('/teacher/cbt-exams');
-                    }}
-                />
-            )}
         </div>
     );
 };

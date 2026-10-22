@@ -45,30 +45,52 @@ export default function LabExamList() {
         return 'live';
     };
 
-    const handleCandidateSubmit = (e) => {
+    const [submittingCandidate, setSubmittingCandidate] = useState(false);
+    const [candidateError, setCandidateError] = useState('');
+
+    const handleCandidateSubmit = async (e) => {
         e.preventDefault();
-        if (!candidateData.studentName.trim() || !candidateData.rollNumber.trim()) {
+        const trimmedRoll = candidateData.rollNumber.trim().toUpperCase().replace(/[\s\-_]/g, '');
+        if (!trimmedRoll) {
+            setCandidateError('Please enter your official Enrollment / Register Number.');
             return;
         }
 
-        const info = {
-            studentName: candidateData.studentName.trim(),
-            rollNumber: candidateData.rollNumber.trim(),
-            section: candidateData.section.trim() || 'A',
-            studentEmail: `${candidateData.rollNumber.trim()}@student.sapthagiri.edu`
-        };
+        setSubmittingCandidate(true);
+        setCandidateError('');
 
-        localStorage.setItem('student_info', JSON.stringify(info));
-        const examId = candidateModalExam._id || candidateModalExam.id;
-
-        // Enter Full Screen Mode
         try {
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(() => {});
-            }
-        } catch (err) {}
+            const res = await api.get(`/api/lab/student/${encodeURIComponent(trimmedRoll)}`);
+            const s = res.data;
 
-        navigate(`/exam/${examId}/instructions`);
+            const info = {
+                studentName: s.name || candidateData.studentName.trim(),
+                rollNumber: s.rollNumber || trimmedRoll,
+                enrollmentNo: s.enrollmentNo || trimmedRoll,
+                satsNo: s.satsNo || '',
+                section: s.section || candidateData.section.trim() || 'A',
+                classLevel: s.classLevel || '',
+                studentEmail: s.email || `${trimmedRoll.toLowerCase()}@student.sapthagiri.edu`
+            };
+
+            localStorage.setItem('student_info', JSON.stringify(info));
+            const examId = candidateModalExam._id || candidateModalExam.id;
+
+            // Enter Full Screen Mode
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                }
+            } catch (err) {}
+
+            navigate(`/exam/${examId}/instructions`);
+        } catch (err) {
+            console.error('Candidate enrollment verification failed:', err);
+            const msg = err.response?.data?.msg || `Access Denied: Enrollment ID "${trimmedRoll}" was not found in Manchester Technologies records. Only enrolled students are allowed to take exams.`;
+            setCandidateError(msg);
+        } finally {
+            setSubmittingCandidate(false);
+        }
     };
 
     if (loading) return <LoadingScreen />;
@@ -86,7 +108,7 @@ export default function LabExamList() {
                             <img src="/ManchesterLogo.jpeg" alt="Sapthagiri Logo" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 8 }} />
                         </div>
                         <div>
-                            <div style={s.brandName}>Sapthagiri Pre University College, Davanagere</div>
+                            <div style={s.brandName}>Manchester Technologies, Davanagere</div>
                             <div style={s.brandSub}>Online Examination Portal</div>
                         </div>
                     </div>
@@ -166,6 +188,11 @@ export default function LabExamList() {
                         </div>
 
                         <form onSubmit={handleCandidateSubmit} style={mStyles.form}>
+                            {candidateError && (
+                                <div style={{ padding: '10px 14px', background: '#ffe4e6', border: '1px solid #f43f5e', color: '#9f1239', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' }}>
+                                    ⚠️ {candidateError}
+                                </div>
+                            )}
                             <div>
                                 <label style={mStyles.label}>
                                     Candidate Full Name <span style={{ color: '#e11d48' }}>*</span>
@@ -241,7 +268,7 @@ export default function LabExamList() {
 
             {/* Footer strip */}
             <footer style={s.footer}>
-                © {new Date().getFullYear()} Sapthagiri Pre University College, Davanagere · Online Examination System · Monitored Session
+                © {new Date().getFullYear()} Manchester Technologies, Davanagere · Online Examination System · Monitored Session
             </footer>
         </div>
     );

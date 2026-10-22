@@ -7,6 +7,7 @@ const UnifiedLogin = () => {
     const { login, user } = useContext(AuthContext);
     const navigate = useNavigate();
     const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // If already logged in, redirect them
     if (user) {
@@ -16,74 +17,121 @@ const UnifiedLogin = () => {
 
     const onSubmit = async e => {
         e.preventDefault();
+        setError('');
+        setIsSubmitting(true);
         try {
             const loggedInUser = await login(formData.email, formData.password);
-            // Unified single-sign routing
             if (loggedInUser.role === 'admin') {
                 navigate('/admin/dashboard');
             } else if (loggedInUser.role === 'teacher') {
                 navigate('/teacher/dashboard');
             }
         } catch (err) {
-            setError(err.msg || 'Login failed');
+            setError(err.msg || 'Invalid email or password. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4 font-sans">
-            <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md border-b-8 border-gold animate-fade-in-up">
-                <div className="text-center mb-10">
-                    <div className="w-24 h-24 rounded-3xl overflow-hidden mx-auto mb-6 shadow-xl hover:scale-110 transition-transform duration-300 bg-white p-1 border border-gray-100">
-                        <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-cover rounded-2xl" />
-                    </div>
-                    <h1 className="text-3xl font-black text-navy tracking-tight">Manchester College</h1>
-                    <p className="text-slate/60 mt-1 font-bold uppercase tracking-widest text-[10px]">Institutional Assessment Portal</p>
-                </div>
-                
-                {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 text-sm font-bold border border-red-100 text-center animate-pulse">{error}</div>}
-                
-                <form onSubmit={onSubmit} className="space-y-6">
-                    <div>
-                        <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2 ml-1">Official Email / ID</label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate/30">@</span>
-                            <input 
-                                type="email" 
-                                required 
-                                placeholder="name@manchester.edu"
-                                value={formData.email} 
-                                onChange={e => setFormData({...formData, email: e.target.value})} 
-                                className="w-full border-2 border-gray-100 p-4 pl-10 rounded-2xl bg-gray-50/50 focus:outline-none focus:border-navy focus:bg-white transition-all font-medium" 
+        <div className="min-h-screen relative flex items-center justify-center p-4 font-sans overflow-hidden bg-[#06101E]">
+            {/* Campus Background Image with Deep Gradient Overlay */}
+            <div 
+                className="absolute inset-0 bg-cover bg-center filter blur-[3px] scale-105 opacity-35 transition-all duration-1000"
+                style={{ backgroundImage: "url('/SapthagiriCampus.webp')" }}
+            ></div>
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#06101E]/95 via-[#091B38]/85 to-[#06101E]/90"></div>
+
+            {/* Glowing Accent Orbs */}
+            <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Login Card */}
+            <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-xl p-8 sm:p-10 rounded-3xl shadow-2xl border-t-4 border-amber-500 shadow-blue-950/50">
+                {/* College Crest & Header */}
+                <div className="text-center mb-8">
+                    <div className="relative inline-block mb-4">
+                        <div className="w-24 h-24 rounded-full overflow-hidden mx-auto shadow-xl ring-4 ring-amber-400/80 bg-white p-1 transform hover:scale-105 transition-transform duration-300">
+                            <img 
+                                src="/ManchesterLogo.jpeg" 
+                                alt="Manchester Technologies" 
+                                className="w-full h-full object-contain rounded-full" 
                             />
                         </div>
                     </div>
+
+                    <h1 className="text-2xl sm:text-3xl font-black text-[#081B3B] tracking-tight uppercase leading-tight">
+                        Manchester Technologies
+                    </h1>
+                    <div className="flex items-center justify-center gap-2 mt-1.5">
+                        <span className="h-px w-6 bg-amber-400"></span>
+                        <p className="text-[11px] font-extrabold text-amber-600 uppercase tracking-widest">
+                            Davanagere • The Land of Opportunity
+                        </p>
+                        <span className="h-px w-6 bg-amber-400"></span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider mt-1">
+                        Question Paper Generator Suite
+                    </p>
+                </div>
+
+                {error && (
+                    <div className="bg-red-50 text-red-700 p-3.5 rounded-2xl mb-6 text-xs font-bold border border-red-200 text-center flex items-center justify-center gap-2 animate-shake">
+                        <span>⚠️</span>
+                        <span>{error}</span>
+                    </div>
+                )}
+
+                <form onSubmit={onSubmit} className="space-y-5">
                     <div>
-                        <label className="block text-[10px] font-black text-navy uppercase tracking-widest mb-2 ml-1">Access Key</label>
+                        <label className="block text-[11px] font-black text-[#081B3B] uppercase tracking-wider mb-2 ml-1">
+                            College ID / Email Address
+                        </label>
                         <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate/30">🔒</span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">✉</span>
+                            <input 
+                                type="email" 
+                                required 
+                                placeholder="Enter College ID / Email"
+                                value={formData.email} 
+                                onChange={e => setFormData({...formData, email: e.target.value})} 
+                                className="w-full border-2 border-slate-200 p-3.5 pl-11 rounded-2xl bg-slate-50/70 focus:outline-none focus:border-amber-500 focus:bg-white transition-all text-sm font-medium text-slate-800" 
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-[11px] font-black text-[#081B3B] uppercase tracking-wider mb-2 ml-1">
+                            Secret Password
+                        </label>
+                        <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">🔒</span>
                             <input 
                                 type="password" 
                                 required 
                                 placeholder="••••••••"
                                 value={formData.password} 
                                 onChange={e => setFormData({...formData, password: e.target.value})} 
-                                className="w-full border-2 border-gray-100 p-4 pl-10 rounded-2xl bg-gray-50/50 focus:outline-none focus:border-navy focus:bg-white transition-all font-medium" 
+                                className="w-full border-2 border-slate-200 p-3.5 pl-11 rounded-2xl bg-slate-50/70 focus:outline-none focus:border-amber-500 focus:bg-white transition-all text-sm font-medium text-slate-800" 
                             />
                         </div>
                     </div>
+
                     <button 
                         type="submit" 
-                        className="w-full bg-navy text-gold p-4 rounded-2xl font-black text-lg hover:bg-primary-hover shadow-xl transition-all transform hover:-translate-y-1 active:translate-y-0 active:shadow-inner"
+                        disabled={isSubmitting}
+                        className="w-full bg-[#081B3B] hover:bg-[#0B2552] text-amber-400 font-black p-4 rounded-2xl text-sm uppercase tracking-widest shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2 border border-amber-400/30"
                     >
-                        Sign In
+                        {isSubmitting ? (
+                            <>
+                                <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                                <span>Authenticating...</span>
+                            </>
+                        ) : (
+                            <span>Access Faculty Portal →</span>
+                        )}
                     </button>
                 </form>
-
-                <div className="mt-10 pt-6 border-t border-gray-100 text-center">
-                    <p className="text-[10px] font-bold text-slate/40 uppercase tracking-widest">
-                        The Land of Opportunity
-                    </p>
-                </div>
             </div>
         </div>
     );

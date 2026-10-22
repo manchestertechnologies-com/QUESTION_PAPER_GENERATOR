@@ -1,7 +1,17 @@
 const primaryPool = require('../config/postgres');
 const {
     DB_CONFIGS,
+    QBP_CONTROL_CONFIG,
+    qbpControlSupabase,
     pools,
+    CLASS_11_BOTANY_CHAPTERS,
+    CLASS_11_ZOOLOGY_CHAPTERS,
+    CLASS_12_BOTANY_CHAPTERS,
+    CLASS_12_ZOOLOGY_CHAPTERS,
+    BOTANY_CHAPTERS,
+    ZOOLOGY_CHAPTERS,
+    BIOLOGY_SYLLABUS,
+    canonicalizeChapter,
     normalizeSubject,
     normalizeClass,
     getPoolForTarget,
@@ -17,13 +27,14 @@ const memoryTestQuestions = new Map();
 const metadataCache = new Map();
 const METADATA_TTL_MS = 5 * 60 * 1000;
 
-// UUID to database key routing cache (e.g. 'uuid-123' -> 'phy_11')
+// UUID to database key routing cache (e.g. 'uuid-123' -> 'math_11')
 const MAX_UUID_CACHE_SIZE = 100000;
 const uuidToDbKey = new Map();
 
 function cacheQuestionDb(id, dbKey) {
     if (!id || !dbKey) return;
     if (uuidToDbKey.size >= MAX_UUID_CACHE_SIZE) {
+        // Drop first 10,000 oldest keys
         const iter = uuidToDbKey.keys();
         for (let i = 0; i < 10000; i++) {
             const k = iter.next().value;
@@ -34,77 +45,6 @@ function cacheQuestionDb(id, dbKey) {
     uuidToDbKey.set(String(id), dbKey);
 }
 
-function clearMetadataCache() {
-    metadataCache.clear();
-}
-
-const CHAPTER_ALIASES = {
-    // Physics Units & Measurements
-    'units and measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Units, Dimensions and Measurement', 'Physical World'],
-    'units & measurements': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
-    'units and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
-    'physical world and measurement': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
-    'physical world': ['Units and Measurements', 'Units & Measurements', 'Units and Measurement', 'Physical World and Measurement', 'Physical World'],
-
-    // Physics Mechanics & Kinematics
-    'work, energy and power': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY', 'Work Power Energy'],
-    'work, power and energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
-    'work, power & energy': ['Work, Energy and Power', 'Work, Power and Energy', 'Work, Power & Energy', 'WORK,POWER AND ENERGY'],
-    'laws of motion': ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion', 'Force and Laws of Motion'],
-    "newton's laws of motion": ['Laws of Motion', "Newton's Laws of Motion", 'Newton’s Laws of Motion'],
-    'motion in a plane': ['Motion in a Plane', 'Motion in a Plane (Vectors)', 'Vectors'],
-    'motion in a straight line': ['Motion in a Straight Line', 'Motion in a Straight Line (1D)', 'Kinematics', 'Rectilinear Motion'],
-
-    // Physics Electromagnetism
-    'electric charges and fields': ['Electric Charges and Fields', 'ELECTRIC CHARGES AND FIELDS', 'Electric Charges & Fields', 'Electrostatics'],
-    'electrostatic potential and capacitance': ['Electrostatic Potential and Capacitance', 'Electrostatic Potential & Capacitance', 'Capacitance', 'Electrostatics'],
-    'electromagnetic induction': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
-    'emi': ['Electromagnetic Induction', 'EMI', 'Electromagnetic Induction (EMI)'],
-    'magnetism and matter': ['Magnetism and Matter', 'Magnetism & Matter', 'Moving Charges and Magnetism'],
-    'moving charges and magnetism': ['Moving Charges and Magnetism', 'Moving Charges & Magnetism', 'Magnetic Effects of Current'],
-    'electromagnetic waves': ['Electromagnetic Waves', 'EM Waves'],
-
-    // Physics Thermal Physics / Thermodynamics
-    'thermodynamics': ['Thermodynamics', 'Thermal Properties of Matter', 'Kinetic Theory', 'Thermal Physics'],
-    'thermal properties of matter': ['Thermal Properties of Matter', 'Thermodynamics', 'Kinetic Theory'],
-    'kinetic theory': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
-    'kinetic theory of gases': ['Kinetic Theory', 'Thermodynamics', 'Thermal Properties of Matter'],
-    
-    // Physics Solids & Fluids
-    'mechanical properties of solids': ['Mechanical Properties of Solids', 'Mechanical Properties of Fluids', 'Elasticity'],
-    'mechanical properties of fluids': ['Mechanical Properties of Fluids', 'Mechanical Properties of Solids', 'Fluid Mechanics', 'Hydrodynamics'],
-
-    // Physics Rotational
-    'system of particles and rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion', 'Laws of Motion', 'Motion in a Plane'],
-    'rotational motion': ['System of Particles and Rotational Motion', 'Rotational Motion'],
-    
-    // Physics Semiconductors
-    'semiconductor electronics': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)', 'Semiconductor Electronics'],
-    'semiconductor electronics: materials, devices and simple circuits': ['Semiconductor Electronics: Materials, Devices and Simple Circuits', 'Semiconductor Electronics (Legacy / Removed Syllabus)'],
-
-    // Chemistry
-    'some basic concepts of chemistry': ['Some Basic Concepts of Chemistry', 'SOME BASIC CONCEPTS OF CHEMISTRY', 'Basic Concepts of Chemistry', 'Mole Concept'],
-    'structure of atom': ['Structure of Atom', 'Atomic Structure'],
-    'chemical bonding and molecular structure': ['Chemical Bonding and Molecular Structure', 'Chemical Bonding & Molecular Structure', 'Chemical Bonding'],
-    'the p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-    'p-block elements': ['The p-Block Elements', 'p-Block Elements (Group 13 and 14)', 'p-Block Elements'],
-    'redox reactions': ['Redox Reactions', 'Redox Reactions (Legacy / Removed Syllabus)'],
-    'electrochemistry': ['Electrochemistry', 'Electrochemistry (Legacy / Removed Syllabus)'],
-    'chemical kinetics': ['Chemical Kinetics', 'Chemical Kinetics (Legacy / Removed Syllabus)'],
-    'organic chemistry - some basic principles and techniques': ['Organic Chemistry - Some Basic Principles and Techniques', 'Organic Chemistry - Some Basic Principles & Techniques', 'General Organic Chemistry'],
-
-    // Mathematics
-    'differential equations': ['Differential Equations', 'Differential Equations (Legacy / Removed Syllabus)'],
-    'integrals': ['Integrals', 'Integrals (Legacy / Removed Syllabus)'],
-    'probability': ['Probability', 'Probability (Legacy / Removed Syllabus)'],
-    'continuity and differentiability': ['Continuity and Differentiability', 'Continuity and Differentiability (Legacy / Removed Syllabus)'],
-    'matrices': ['Matrices', 'Matrices (Legacy / Removed Syllabus)'],
-    'relations and functions': ['Relations and Functions', 'Relations and Functions (Legacy / Removed Syllabus)'],
-    'complex numbers and quadratic equations': ['Complex Numbers and Quadratic Equations', 'Complex Numbers and Quadratic Equations (Legacy / Removed Syllabus)'],
-    'application of integrals': ['Application of Integrals', 'Application of Integrals (Legacy / Removed Syllabus)'],
-    'inverse trigonometric functions': ['Inverse Trigonometric Functions', 'Inverse Trigonometric Functions (Legacy / Removed Syllabus)']
-};
-
 /**
  * Universal tag cleaner to strip all internal difficulty and QPV/QBP metadata tags.
  */
@@ -113,6 +53,13 @@ function cleanDifficultyTags(text) {
     return text
         .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .replace(/\s*\[\s*(?:JEE|NEET|CET|AIPMT|CBSE|KCET|BITSAT|AIIMS|MHT-?CET|IIT|ADVANCED|MAIN)[\s\w\-,\(\)]*\d{4}\s*\]\s*$/i, '')
+        .replace(/\s*(?:JEE\s*(?:\(Advanced\)|\(Main\)|Advanced|Main)?|NEET|KCET|MHT-?CET|AIPMT|AIIMS)\s*\(?\d{4}\)?\s*$/i, '')
+        .replace(/\s*\[\s*\d{4}\s*\]\s*$/i, '')
+        .replace(/\s*\(\s*\d{4}\s*\)\s*$/i, '')
+        .replace(/\s*\[\s*\d+\s*(?:Marks?|M)?\s*\]\s*$/i, '')
+        .replace(/\s*\[\s*[A-Za-z]{1,5}\s*[-.]?\s*\d{1,5}\s*\]\s*$/i, '')
+        .replace(/\s*\[\s*[A-Za-z0-9_\-]{2,8}\s*\]\s*$/i, '')
         .trim();
 }
 
@@ -138,19 +85,10 @@ function isUuid(str) {
 function mapSupabaseToQuestion(row, usageMap = null) {
     if (!row) return null;
 
-    let type = 'MCQ';
+    const rawQuestion = row.question || '';
+    const rawAssertion = row.assertion || '';
+    const rawReason = row.reason || '';
     const qTypeLower = (row.q_type || '').toLowerCase();
-    if (qTypeLower.includes('numerical')) {
-        type = 'NUMERICAL';
-    } else if (qTypeLower.includes('assertion')) {
-        type = 'ASSERTION_REASON';
-    } else if (qTypeLower.includes('match')) {
-        type = 'MATCH_FOLLOWING';
-    } else if (qTypeLower.includes('statement')) {
-        type = 'STATEMENT_BASED';
-    } else if (qTypeLower.includes('true') || qTypeLower.includes('false')) {
-        type = 'TRUE_FALSE';
-    }
 
     const rawOptions = [];
     if (row.opt_a) rawOptions.push(row.opt_a);
@@ -185,7 +123,58 @@ function mapSupabaseToQuestion(row, usageMap = null) {
 
     const options = rawOptions.map(cleanDifficultyTags).filter(Boolean);
 
-    let answer = row.correct_option || row.num_answer || row.answer || '';
+    // Skip only strictly binary true/false format questions (2 options where options are strictly True & False)
+    const isStrictTF = (
+        qTypeLower === 'true_false' ||
+        qTypeLower === 'tf' ||
+        (options.length === 2 && 
+            options.some(o => /^true$/i.test(String(o).trim())) && 
+            options.some(o => /^false$/i.test(String(o).trim()))
+        ) ||
+        (/^true$/i.test(String(row.opt_a || '').trim()) && /^false$/i.test(String(row.opt_b || '').trim()) && !row.opt_c && !row.opt_d) ||
+        (/^false$/i.test(String(row.opt_a || '').trim()) && /^true$/i.test(String(row.opt_b || '').trim()) && !row.opt_c && !row.opt_d)
+    );
+    if (isStrictTF) return null;
+
+    // Smart Question Type Auto-Classification
+    let type = 'MCQ';
+    const isAR = (
+        qTypeLower.includes('assertion') || 
+        Boolean(rawAssertion && rawReason) || 
+        (/Assertion\s*(?:\(A\))?/i.test(rawQuestion) && /Reason\s*(?:\(R\))?/i.test(rawQuestion))
+    );
+    const isStatement = (
+        qTypeLower.includes('statement') || 
+        (/Statement\s*(?:I|1)\s*[:\-]/i.test(rawQuestion) && /Statement\s*(?:II|2)\s*[:\-]/i.test(rawQuestion))
+    );
+    const isMatch = (
+        qTypeLower.includes('match') || 
+        Boolean(row.column_a && row.column_a.length > 0) || 
+        /(?:Column|List)\s*I[\s\S]*(?:Column|List)\s*II/i.test(rawQuestion) ||
+        /Match (?:List|the following|Column)/i.test(rawQuestion)
+    );
+    const isNumeric = (
+        qTypeLower.includes('numerical') || 
+        (!options.length && Boolean(row.num_answer || row.correct_option))
+    );
+    const hasOptImages = options.length > 0 && options.every(opt => /\{\{IMG::|!\[|\[DIAGRAM:|<img|https?:\/\/.*?\.(png|jpg|jpeg|webp|svg|gif)|data:image\//i.test(String(opt)));
+    const hasDiag = Boolean(row.image_url || row.imageUrl || /\{\{IMG::|!\[/i.test(rawQuestion) || hasOptImages);
+
+    if (isAR) {
+        type = 'ASSERTION_REASON';
+    } else if (isStatement) {
+        type = 'STATEMENT_BASED';
+    } else if (isMatch) {
+        type = 'MATCH_FOLLOWING';
+    } else if (isNumeric) {
+        type = 'NUMERICAL';
+    } else if (hasDiag || qTypeLower.includes('diagram') || qTypeLower.includes('image')) {
+        type = 'DIAGRAM_BASED';
+    } else {
+        type = 'MCQ';
+    }
+
+    let answer = row.correct_option || row.num_answer || '';
     if (row.correct_option && options.length > 0) {
         const idx = parseInt(row.correct_option, 10) - 1;
         if (idx >= 0 && idx < options.length) {
@@ -204,35 +193,10 @@ function mapSupabaseToQuestion(row, usageMap = null) {
 
     const level = extractDifficulty(row.solution_text, row.question);
     const cleanSolution = cleanDifficultyTags(row.solution_text || '');
-    const cleanQuestion = cleanDifficultyTags(row.question || row.questionText || row.question_text || '');
+    const cleanQuestion = cleanDifficultyTags(row.question || '');
 
     const qIdStr = (row.id || '').toString();
     const usage = (usageMap && usageMap.get(qIdStr)) || null;
-
-    const usedCount = usage ? (parseInt(usage.used_count) || parseInt(usage.useCount) || 0) : (row.used_count || row.usedCount || row.timesUsed || row.useCount || 0);
-    const lastUsedAt = usage ? (usage.last_used_at || usage.lastUsedAt) : (row.last_used_at || row.lastUsedAt || null);
-    const firstUsedAt = usage ? (usage.first_used_at || usage.firstUsedAt || usage.last_used_at) : (row.first_used_at || row.firstUsedAt || null);
-    const lastUsedExam = usage ? (usage.last_exam_name || usage.lastUsedExam) : (row.last_exam_name || row.lastUsedExam || '');
-    const lastUsedTeacher = usage ? (usage.last_teacher_name || usage.lastUsedTeacher) : (row.last_teacher_name || row.lastUsedTeacher || '');
-    const lastUsedDate = usage ? (usage.last_exam_date || usage.lastUsedDate) : (row.last_exam_date || row.lastUsedDate || null);
-    const usageHistory = usage && Array.isArray(usage.usage_history) ? usage.usage_history : (Array.isArray(row.usage_history) ? row.usage_history : (Array.isArray(usage?.usageHistory) ? usage.usageHistory : []));
-
-    const repeatDays = Number(row.repeatDays || row.repeat_days) || 30;
-    let repeatStatus = 'AVAILABLE';
-    let nextEligibleDate = null;
-
-    if (lastUsedAt) {
-        const lastTime = new Date(lastUsedAt).getTime();
-        const repeatMs = repeatDays * 24 * 60 * 60 * 1000;
-        const nextTime = new Date(lastTime + repeatMs);
-        if (nextTime.getTime() > Date.now()) {
-            repeatStatus = 'IN REPEAT PERIOD';
-            nextEligibleDate = nextTime.toISOString().split('T')[0];
-        } else {
-            repeatStatus = 'AVAILABLE';
-            nextEligibleDate = nextTime.toISOString().split('T')[0];
-        }
-    }
 
     return {
         _id: row.id,
@@ -240,7 +204,7 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         questionId: row.id,
         subject: row.subject || 'Physics',
         classes: classesList,
-        chapter: row.chapter || 'General',
+        chapter: canonicalizeChapter(row.chapter || 'General'),
         concept: row.topic || row.chapter || 'General',
         subConcept: '',
         level: level,
@@ -253,517 +217,675 @@ function mapSupabaseToQuestion(row, usageMap = null) {
         answer: answer,
         correct_option: row.correct_option,
         num_answer: row.num_answer,
-        assertion: row.assertion || '',
-        reason: row.reason || '',
-        predef_options: row.predef_options || '',
+        solutionText: cleanSolution,
+        questionTextTranslation: cleanDifficultyTags(row.question_text_translation || ''),
+        optionsTranslation: Array.isArray(row.options_translation) ? row.options_translation.map(cleanDifficultyTags) : [],
+        assertion: cleanDifficultyTags(row.assertion || ''),
+        reason: cleanDifficultyTags(row.reason || ''),
         column_a: row.column_a || [],
         column_b: row.column_b || [],
-        match_options: row.match_options || null,
-        solutionText: cleanSolution,
-        solution_text: cleanSolution,
-        usedCount: usedCount,
-        timesUsed: usedCount,
-        firstUsedAt: firstUsedAt,
-        lastUsedAt: lastUsedAt,
-        lastUsedTeacher: lastUsedTeacher,
-        lastUsedExam: lastUsedExam,
-        lastUsedDate: lastUsedDate,
-        usageHistory: usageHistory,
-        useCount: usedCount,
-        repeatDays: repeatDays,
-        repeatStatus: repeatStatus,
-        nextEligibleDate: nextEligibleDate,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        created_by_name: row.created_by_name || 'Academic Faculty'
+        match_options: row.match_options || {},
+        sourceType: 'REGULAR',
+        sourceExam: Array.isArray(row.exams) ? row.exams.join(', ') : '',
+        createdBy: row.created_by,
+        createdByName: row.created_by_name || 'Admin',
+        createdAt: row.created_at || new Date().toISOString(),
+        // Usage history attributes
+        usedCount: usage ? parseInt(usage.used_count, 10) || 0 : 0,
+        lastUsedAt: usage ? usage.last_used_at : null,
+        lastUsedTeacher: usage ? usage.last_teacher_name : '',
+        lastUsedExam: usage ? usage.last_exam_name : '',
+        lastUsedDate: usage ? usage.last_exam_date : null,
+        usageHistory: usage && Array.isArray(usage.usage_history) ? usage.usage_history : []
     };
 }
 
 /**
- * Maps incoming Question DTO into Postgres row format for INSERT/UPDATE.
+ * Maps a system/frontend question object to Supabase database row format.
  */
 function mapQuestionToSupabase(dto, userId = null, userName = 'Admin') {
-    let q_type = 'mcq_single';
-    const typeUpper = (dto.type || '').toUpperCase();
-    if (typeUpper === 'NUMERICAL') q_type = 'numerical';
-    else if (typeUpper === 'ASSERTION_REASON') q_type = 'assertion_reason';
-    else if (typeUpper === 'MATCH_FOLLOWING') q_type = 'match_the_following';
-    else if (typeUpper === 'STATEMENT_BASED') q_type = 'statement_based';
-    else if (typeUpper === 'TRUE_FALSE') q_type = 'true_false';
+    const qType = (dto.type || 'MCQ').toLowerCase();
+    const isNumerical = qType === 'numerical';
 
-    let opt_a = null, opt_b = null, opt_c = null, opt_d = null;
-    if (Array.isArray(dto.options) && dto.options.length > 0) {
-        opt_a = dto.options[0] || null;
-        opt_b = dto.options[1] || null;
-        opt_c = dto.options[2] || null;
-        opt_d = dto.options[3] || null;
+    let optionsArr = Array.isArray(dto.options) ? dto.options : [];
+    if (typeof dto.options === 'string') {
+        try { optionsArr = JSON.parse(dto.options); } catch(e) { optionsArr = []; }
+    }
+    if (!Array.isArray(optionsArr)) optionsArr = [];
+
+    const optA = cleanDifficultyTags(optionsArr[0] || '');
+    const optB = cleanDifficultyTags(optionsArr[1] || '');
+    const optC = cleanDifficultyTags(optionsArr[2] || '');
+    const optD = cleanDifficultyTags(optionsArr[3] || '');
+
+    let correctOpt = '';
+    if (optionsArr.length > 0 && dto.answer) {
+        const idx = optionsArr.findIndex(opt => opt === dto.answer);
+        if (idx !== -1) correctOpt = String(idx + 1);
     }
 
-    let klass = '12';
-    if (dto.classes) {
-        if (Array.isArray(dto.classes) && dto.classes.length > 0) {
-            const has11 = dto.classes.some(c => String(c).includes('11'));
-            klass = has11 ? '11' : '12';
-        } else {
-            klass = String(dto.classes).includes('11') ? '11' : '12';
-        }
-    }
+    const klassVal = Array.isArray(dto.classes)
+        ? (dto.classes.find(c => c.includes('11') || c.includes('12')) || '12').replace(/Class\s*/i, '')
+        : '12';
 
-    let correct_option = null;
-    let num_answer = null;
+    const examsList = Array.isArray(dto.classes)
+        ? dto.classes.filter(c => ['JEE', 'NEET', 'CET', 'JEE Main', 'JEE Advanced'].includes(c))
+        : ['JEE'];
 
-    if (q_type === 'numerical') {
-        num_answer = dto.answer ? String(dto.answer).trim() : null;
-    } else {
-        if (dto.answer && typeof dto.answer === 'string') {
-            const trimmed = dto.answer.trim();
-            if (/^[1-4]$/.test(trimmed)) {
-                correct_option = trimmed;
-            } else if (/^[A-D]$/i.test(trimmed)) {
-                const map = { A: '1', B: '2', C: '3', D: '4' };
-                correct_option = map[trimmed.toUpperCase()];
-            } else if (Array.isArray(dto.options)) {
-                const idx = dto.options.findIndex(o => (o || '').trim().toLowerCase() === trimmed.toLowerCase());
-                if (idx !== -1) correct_option = String(idx + 1);
-            }
-        }
-    }
+    if (examsList.length === 0) examsList.push('JEE');
 
-    let levelTag = '';
-    if (dto.level && ['easy', 'medium', 'hard'].includes(dto.level.toLowerCase())) {
-        levelTag = ` [DIFFICULTY: ${dto.level.toLowerCase()}]`;
-    }
-    const finalSolution = dto.solutionText ? `${cleanDifficultyTags(dto.solutionText)}${levelTag}` : (levelTag ? levelTag.trim() : null);
+    const validUserId = isUuid(userId) ? userId : null;
+
+    const levelTag = dto.level ? `[QBP_DIFFICULTY:${dto.level.charAt(0).toUpperCase() + dto.level.slice(1)}]` : '';
+    const cleanSolution = cleanDifficultyTags(dto.solutionText || '');
+    const solutionWithTag = levelTag ? `${cleanSolution}\n${levelTag}` : cleanSolution;
 
     return {
         subject: dto.subject || 'Physics',
-        klass: klass,
+        klass: klassVal,
         chapter: dto.chapter || 'General',
-        topic: dto.concept || dto.topic || dto.chapter || 'General',
-        exams: Array.isArray(dto.classes) ? dto.classes : ['JEE', 'NEET'],
-        q_type: q_type,
-        question: cleanDifficultyTags(dto.questionText || dto.question || ''),
-        opt_a: opt_a ? cleanDifficultyTags(opt_a) : null,
-        opt_b: opt_b ? cleanDifficultyTags(opt_b) : null,
-        opt_c: opt_c ? cleanDifficultyTags(opt_c) : null,
-        opt_d: opt_d ? cleanDifficultyTags(opt_d) : null,
-        assertion: dto.assertion || null,
-        reason: dto.reason || null,
-        num_answer: num_answer,
-        correct_option: correct_option,
-        solution_text: finalSolution,
-        created_by: userId && isUuid(userId) ? userId : null,
-        created_by_name: userName || 'Academic Faculty',
-        updated_by: userId && isUuid(userId) ? userId : null,
-        updated_by_name: userName || 'Academic Faculty',
+        topic: dto.concept || dto.subConcept || 'General',
+        exams: examsList,
+        q_type: isNumerical ? 'numerical' : 'mcq_single',
+        question: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
+        opt_a: sanitizeHtml(optA),
+        opt_b: sanitizeHtml(optB),
+        opt_c: sanitizeHtml(optC),
+        opt_d: sanitizeHtml(optD),
+        assertion: sanitizeHtml(cleanDifficultyTags(dto.assertion || '')),
+        reason: sanitizeHtml(cleanDifficultyTags(dto.reason || '')),
+        num_answer: isNumerical ? (dto.answer || '') : '',
+        correct_option: correctOpt,
+        solution_text: sanitizeHtml(solutionWithTag),
+        created_by: validUserId,
+        created_by_name: userName,
+        updated_by: validUserId,
+        updated_by_name: userName,
         updated_at: new Date().toISOString()
     };
 }
 
 /**
- * Fetch usage history for a list of question UUIDs from primary database.
+ * Fetch usage map for a list of question UUIDs from primary database.
  */
 async function fetchUsageMap(questionIds) {
-    const usageMap = new Map();
     const validUuids = (questionIds || []).filter(isUuid);
+    const usageMap = new Map();
     if (validUuids.length === 0) return usageMap;
 
     try {
-        const query = `
-            SELECT question_id, paper_id, teacher_name, exam_name, exam_date, used_at
-            FROM public.question_usage
-            WHERE question_id = ANY($1::uuid[])
-            ORDER BY used_at DESC;
-        `;
-        const res = await primaryPool.query(query, [validUuids]);
+        const res = await primaryPool.query(`
+            SELECT 
+                qu.question_id,
+                count(*)::bigint AS used_count,
+                max(qu.used_at) AS last_used_at,
+                (array_agg(qu.teacher_name ORDER BY qu.used_at DESC))[1] AS last_teacher_name,
+                (array_agg(qu.exam_name ORDER BY qu.used_at DESC))[1] AS last_exam_name,
+                (array_agg(qu.exam_date ORDER BY qu.used_at DESC))[1] AS last_exam_date,
+                jsonb_agg(
+                    jsonb_build_object(
+                        'id', qu.id,
+                        'paper_id', qu.paper_id,
+                        'teacher_id', qu.teacher_id,
+                        'teacher_name', qu.teacher_name,
+                        'exam_name', qu.exam_name,
+                        'exam_date', qu.exam_date,
+                        'used_at', qu.used_at
+                    ) ORDER BY qu.used_at DESC
+                ) AS usage_history
+            FROM public.question_usage qu
+            WHERE qu.question_id = ANY($1::uuid[])
+            GROUP BY qu.question_id;
+        `, [validUuids]);
+
         for (const row of res.rows) {
-            const qIdStr = row.question_id.toString();
-            if (!usageMap.has(qIdStr)) {
-                usageMap.set(qIdStr, {
-                    lastUsedAt: row.used_at,
-                    useCount: 0,
-                    usageHistory: []
-                });
-            }
-            const record = usageMap.get(qIdStr);
-            record.useCount++;
-            record.usageHistory.push({
-                paperId: row.paper_id,
-                teacherName: row.teacher_name,
-                examName: row.exam_name,
-                examDate: row.exam_date,
-                usedAt: row.used_at
-            });
+            usageMap.set(row.question_id.toString(), row);
         }
-    } catch (err) {
-        // Soft fail if usage table is unavailable
+    } catch (e) {
+        // Graceful non-blocking fallback if usage table is idle
+        // console.warn('[USAGE] Lookup notice:', e.message);
     }
+
     return usageMap;
 }
 
 /**
- * Build dynamic SQL where conditions for PostgreSQL based on filter DTO.
+ * Build WHERE clauses and values for a question query.
  */
-function buildWhereClause(filters) {
-    const conditions = [];
+function buildQueryFilters(filters) {
+    const whereClauses = [];
     const values = [];
     let paramIndex = 1;
 
-    if (filters.subject) {
-        const sub = normalizeSubject(filters.subject);
-        if (sub) {
-            conditions.push(`subject ILIKE $${paramIndex}`);
-            values.push(`%${sub}%`);
-            paramIndex++;
+    // Exclude True/False questions completely
+    whereClauses.push("(q.q_type IS NULL OR (q.q_type NOT ILIKE '%true%' AND q.q_type NOT ILIKE '%false%'))");
+
+    // Subject specific chapter isolation for Botany vs Zoology
+    const normSub = normalizeSubject(filters.subject);
+    const filterClass = normalizeClass(filters.classes || filters.class);
+    let allowedBotanyChapters = BOTANY_CHAPTERS;
+    let allowedZoologyChapters = ZOOLOGY_CHAPTERS;
+    if (filterClass === '11') {
+        allowedBotanyChapters = CLASS_11_BOTANY_CHAPTERS;
+        allowedZoologyChapters = CLASS_11_ZOOLOGY_CHAPTERS;
+    } else if (filterClass === '12') {
+        allowedBotanyChapters = CLASS_12_BOTANY_CHAPTERS;
+        allowedZoologyChapters = CLASS_12_ZOOLOGY_CHAPTERS;
+    }
+
+    if (normSub === 'Botany') {
+        if (filters.chapter) {
+            const rawChapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+            const canonicalList = rawChapters.map(canonicalizeChapter).filter(ch => allowedBotanyChapters.includes(ch));
+            const chaptersToUse = canonicalList.length > 0 ? canonicalList : allowedBotanyChapters;
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(chaptersToUse);
+        } else {
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(allowedBotanyChapters);
+        }
+    } else if (normSub === 'Zoology') {
+        if (filters.chapter) {
+            const rawChapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+            const canonicalList = rawChapters.map(canonicalizeChapter).filter(ch => allowedZoologyChapters.includes(ch));
+            const chaptersToUse = canonicalList.length > 0 ? canonicalList : allowedZoologyChapters;
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(chaptersToUse);
+        } else {
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(allowedZoologyChapters);
+        }
+    } else if (filters.chapter) {
+        // Standard chapter filter for Physics, Chemistry, Maths, Biology
+        const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+        const canonicalList = chapters.map(canonicalizeChapter);
+        if (canonicalList.length > 0) {
+            whereClauses.push(`q.chapter = ANY($${paramIndex++}::text[])`);
+            values.push(canonicalList);
         }
     }
 
-    if (filters.classes || filters.class) {
-        const klass = normalizeClass(filters.classes || filters.class);
-        if (klass && klass !== 'both') {
-            conditions.push(`klass = $${paramIndex}`);
-            values.push(klass);
-            paramIndex++;
+    // Topic / Concept filter
+    if (filters.concept) {
+        const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
+        if (concepts.length > 0) {
+            whereClauses.push(`q.topic = ANY($${paramIndex++}::text[])`);
+            values.push(concepts);
         }
     }
 
-    if (filters.chapter) {
-        const ch = filters.chapter.trim();
-        const chLower = ch.toLowerCase();
-        const aliases = CHAPTER_ALIASES[chLower] || [ch];
-
-        const aliasConditions = aliases.map(() => {
-            const idx = paramIndex++;
-            return `chapter ILIKE $${idx}`;
-        });
-        aliases.forEach(a => values.push(`%${a}%`));
-        conditions.push(`(${aliasConditions.join(' OR ')})`);
-    }
-
-    if (filters.concept || filters.topic) {
-        const conceptVal = (filters.concept || filters.topic).trim();
-        conditions.push(`topic ILIKE $${paramIndex}`);
-        values.push(`%${conceptVal}%`);
-        paramIndex++;
-    }
-
+    // Question Type filter
     if (filters.type) {
-        const typeUpper = filters.type.toUpperCase();
-        if (typeUpper === 'NUMERICAL') {
-            conditions.push(`(q_type = 'numerical' OR num_answer IS NOT NULL)`);
-        } else if (typeUpper === 'MCQ') {
-            conditions.push(`(q_type = 'mcq_single' OR q_type = 'mcq' OR (opt_a IS NOT NULL AND q_type != 'numerical'))`);
-        } else if (typeUpper === 'ASSERTION_REASON') {
-            conditions.push(`q_type = 'assertion_reason'`);
-        } else if (typeUpper === 'MATCH_FOLLOWING') {
-            conditions.push(`q_type = 'match_the_following'`);
-        } else if (typeUpper === 'STATEMENT_BASED') {
-            conditions.push(`q_type = 'statement_based'`);
+        const typeArr = Array.isArray(filters.type) ? filters.type : filters.type.split(',').map(t => t.trim().toLowerCase());
+        const qTypes = [];
+        typeArr.forEach(t => {
+            if (t.includes('numerical')) qTypes.push('numerical');
+            else if (t.includes('assertion')) qTypes.push('assertion_reason', 'assertion');
+            else if (t.includes('match')) qTypes.push('match', 'match_following');
+            else if (t.includes('statement')) qTypes.push('statement_based', 'statement');
+            else if (t.includes('diagram') || t.includes('image')) qTypes.push('diagram_based', 'image_based');
+            else if (t.includes('mcq')) qTypes.push('mcq_single', 'mcq', 'mcq_multiple');
+        });
+        if (qTypes.length > 0) {
+            whereClauses.push(`q.q_type = ANY($${paramIndex++}::text[])`);
+            values.push([...new Set(qTypes)]);
         }
     }
 
-    if (filters.search) {
-        const s = filters.search.trim();
-        const idx = paramIndex++;
-        conditions.push(`(question ILIKE $${idx} OR chapter ILIKE $${idx} OR topic ILIKE $${idx})`);
-        values.push(`%${s}%`);
+    // Level / Difficulty filter
+    if (filters.level) {
+        const levelArr = Array.isArray(filters.level) ? filters.level : filters.level.split(',').map(l => l.trim().toLowerCase()).filter(Boolean);
+        if (levelArr.length > 0) {
+            const levelPatterns = levelArr.map(lvl => {
+                const cap = lvl.charAt(0).toUpperCase() + lvl.slice(1).toLowerCase();
+                return `%DIFFICULTY:${cap}%`;
+            });
+            whereClauses.push(`(q.solution_text ILIKE ANY($${paramIndex}::text[]) OR q.question ILIKE ANY($${paramIndex++}::text[]))`);
+            values.push(levelPatterns);
+        }
     }
 
-    const whereString = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    return { whereString, values };
+    // Search text filter
+    if (filters.search && filters.search.trim()) {
+        const searchStr = filters.search.trim();
+        whereClauses.push(`(q.question ILIKE $${paramIndex} OR q.chapter ILIKE $${paramIndex} OR q.topic ILIKE $${paramIndex++})`);
+        values.push(`%${searchStr}%`);
+    }
+
+    // Exclude specific question IDs (e.g. questions already in active paper)
+    if (filters.excludeIds) {
+        const rawIds = Array.isArray(filters.excludeIds)
+            ? filters.excludeIds
+            : String(filters.excludeIds).split(',').map(id => id.trim()).filter(Boolean);
+        const validUuids = rawIds.filter(isUuid);
+        if (validUuids.length > 0) {
+            whereClauses.push(`NOT (q.id = ANY($${paramIndex++}::uuid[]))`);
+            values.push(validUuids);
+        }
+    }
+
+    // Exclude True/False questions explicitly from all queries
+    whereClauses.push("(q.q_type IS NULL OR (q.q_type NOT ILIKE '%true%' AND q.q_type NOT ILIKE '%false%' AND q.q_type NOT ILIKE '%tf%'))");
+    whereClauses.push("NOT (q.opt_a ILIKE 'true' AND q.opt_b ILIKE 'false')");
+    whereClauses.push("NOT (q.opt_a ILIKE 'false' AND q.opt_b ILIKE 'true')");
+
+    return { whereClauses, values };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Queries & API Methods
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
- * Query questions across the targeted subject pools (all 8 databases).
+ * Query questions with multi-database routing, indexed filters, and usage history.
  */
 async function getQuestions(filters = {}, page = 1, limit = 50) {
-    if (isTest) {
-        const allTest = Array.from(memoryTestQuestions.values());
-        let filtered = allTest;
-        if (filters.subject) {
-            filtered = filtered.filter(q => (q.subject || '').toLowerCase().includes(filters.subject.toLowerCase()));
-        }
-        if (filters.chapter) {
-            filtered = filtered.filter(q => (q.chapter || '').toLowerCase().includes(filters.chapter.toLowerCase()));
-        }
+    if (isTest && memoryTestQuestions.size > 0) {
+        let list = Array.from(memoryTestQuestions.values());
+        if (filters.subject) list = list.filter(q => q.subject.toLowerCase() === filters.subject.toLowerCase());
         return {
-            questions: filtered.slice((page - 1) * limit, page * limit),
-            pagination: { page, limit, total: filtered.length, totalPages: Math.ceil(filtered.length / limit) }
+            questions: list,
+            pagination: { page: Number(page), limit: Number(limit), total: list.length, pages: 1 }
         };
     }
 
-    const targetPools = getPoolsForQuery(filters.subject, filters.classes || filters.class);
-    const offset = (page - 1) * limit;
+    const requestedLimit = Math.max(1, Math.min(20000, Number(limit) || 50));
+    const requestedPage = Math.max(1, Number(page) || 1);
+    const offset = (requestedPage - 1) * requestedLimit;
+    // If a chapter filter is provided, query all class pools for that subject so chapters from any class level are never missed
+    const effectiveClasses = filters.chapter ? 'Both' : filters.classes;
+    const targetPoolEntries = getPoolsForQuery(filters.subject, effectiveClasses);
+    const { whereClauses, values } = buildQueryFilters(filters);
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     try {
-        const { whereString, values } = buildWhereClause(filters);
+        // Query target pools in parallel
+        const poolResults = await Promise.all(
+            targetPoolEntries.map(async (entry) => {
+                try {
+                    // 1. Fetch total matching count
+                    const countRes = await entry.pool.query(
+                        `SELECT count(*)::bigint as total FROM public.questions q ${whereSql};`,
+                        values
+                    );
+                    const total = parseInt(countRes.rows[0]?.total || 0, 10);
 
-        // Fetch counts from targeted pools in parallel
-        const countPromises = targetPools.map(entry => {
-            return entry.pool.query(`SELECT count(*)::int as total FROM public.questions ${whereString}`, values)
-                .then(res => res.rows[0]?.total || 0)
-                .catch(() => 0);
-        });
+                    // 2. Fetch rows
+                    // For single target pool: limit/offset applied directly in SQL
+                    // For multi-pool union: fetch up to (offset + requestedLimit) to allow accurate global sorting
+                    const queryLimit = targetPoolEntries.length === 1 ? requestedLimit : (offset + requestedLimit);
+                    const queryOffset = targetPoolEntries.length === 1 ? offset : 0;
 
-        const counts = await Promise.all(countPromises);
-        const totalCount = counts.reduce((acc, c) => acc + c, 0);
+                    const queryValues = [...values, queryLimit, queryOffset];
+                    const limitParam = `$${queryValues.length - 1}`;
+                    const offsetParam = `$${queryValues.length}`;
 
-        if (totalCount === 0) {
-            return {
-                questions: [],
-                pagination: { page, limit, total: 0, totalPages: 0 }
-            };
-        }
+                    const sql = `
+                        SELECT 
+                            q.id, q.subject, q.klass, q.chapter, q.topic, q.exams,
+                            q.q_type, q.question, q.opt_a, q.opt_b, q.opt_c, q.opt_d,
+                            q.assertion, q.reason, q.correct_option, q.num_answer,
+                            q.solution_text, q.created_by, q.created_by_name, q.created_at
+                        FROM public.questions q
+                        ${whereSql}
+                        ORDER BY q.created_at DESC
+                        LIMIT ${limitParam} OFFSET ${offsetParam};
+                    `;
 
-        // Fetch questions from pools
-        let questionsToFetch = limit;
-        let skipRemaining = offset;
-        const allFoundRows = [];
+                    const rowsRes = await entry.pool.query(sql, queryValues);
+                    
+                    // Cache UUIDs to this pool key
+                    for (const r of rowsRes.rows) {
+                        cacheQuestionDb(r.id, entry.key);
+                    }
 
-        for (let i = 0; i < targetPools.length; i++) {
-            const entry = targetPools[i];
-            const poolTotal = counts[i];
-
-            if (poolTotal === 0) continue;
-
-            if (skipRemaining >= poolTotal) {
-                skipRemaining -= poolTotal;
-                continue;
-            }
-
-            const poolOffset = skipRemaining;
-            skipRemaining = 0;
-            const poolLimit = questionsToFetch;
-
-            const dataQuery = `
-                SELECT * FROM public.questions
-                ${whereString}
-                ORDER BY created_at DESC NULLS LAST, id DESC
-                LIMIT ${poolLimit} OFFSET ${poolOffset};
-            `;
-
-            try {
-                const res = await entry.pool.query(dataQuery, values);
-                for (const row of res.rows) {
-                    cacheQuestionDb(row.id, entry.key);
-                    allFoundRows.push(row);
+                    return {
+                        total,
+                        rows: rowsRes.rows,
+                        dbKey: entry.key
+                    };
+                } catch (err) {
+                    console.error(`[POOL ERROR - ${entry.name}]:`, err.message);
+                    return { total: 0, rows: [], dbKey: entry.key };
                 }
-                questionsToFetch -= res.rows.length;
-                if (questionsToFetch <= 0) break;
-            } catch (err) {
-                console.error(`[Query error on ${entry.name}]:`, err.message);
+            })
+        );
+
+        // Query QBP Control (PYQ & Grand Tests database) if source is all or qbp_control
+        let qbpRows = [];
+        let qbpTotal = 0;
+        const includeQbp = filters.source === 'qbp_control' || filters.source === 'all' || filters.source === 'pyq' || filters.source === 'grand_test' || !filters.source;
+        if (includeQbp && qbpControlSupabase) {
+            try {
+                let qbpQuery = qbpControlSupabase.from('questions').select('*', { count: 'exact' });
+                if (filters.subject) {
+                    qbpQuery = qbpQuery.ilike('subject', `%${filters.subject}%`);
+                }
+                if (filters.chapter) {
+                    const chapters = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
+                    if (chapters.length > 0) {
+                        qbpQuery = qbpQuery.in('chapter', chapters);
+                    }
+                }
+                if (filters.concept) {
+                    const concepts = Array.isArray(filters.concept) ? filters.concept : filters.concept.split(',').map(c => c.trim()).filter(Boolean);
+                    if (concepts.length > 0) {
+                        qbpQuery = qbpQuery.in('topic', concepts);
+                    }
+                }
+                if (filters.type) {
+                    qbpQuery = qbpQuery.ilike('q_type', `%${filters.type}%`);
+                }
+                if (filters.search) {
+                    qbpQuery = qbpQuery.or(`question.ilike.%${filters.search}%,chapter.ilike.%${filters.search}%,topic.ilike.%${filters.search}%`);
+                }
+                qbpQuery = qbpQuery.order('created_at', { ascending: false }).range(0, requestedLimit - 1);
+                const qbpRes = await qbpQuery;
+                if (qbpRes.data && qbpRes.data.length > 0) {
+                    qbpTotal = qbpRes.count || qbpRes.data.length;
+                    qbpRows = qbpRes.data;
+                    for (const r of qbpRows) {
+                        cacheQuestionDb(r.id, 'qbp_control');
+                    }
+                }
+            } catch (e) {
+                console.error('[QBP CONTROL FETCH ERROR]:', e.message);
             }
         }
 
-        // Fetch usage history
-        const questionIds = allFoundRows.map(r => r.id);
-        const usageMap = await fetchUsageMap(questionIds);
+        // Aggregate counts & rows
+        const subjectTotal = poolResults.reduce((acc, r) => acc + r.total, 0);
+        const grandTotal = filters.source === 'qbp_control' ? qbpTotal : (subjectTotal + qbpTotal);
 
-        const dtos = allFoundRows.map(r => mapSupabaseToQuestion(r, usageMap));
+        let mergedRows = [];
+        if (filters.source === 'qbp_control') {
+            mergedRows = qbpRows.slice(offset, offset + requestedLimit);
+        } else if (targetPoolEntries.length === 1 && qbpRows.length === 0) {
+            mergedRows = poolResults[0].rows;
+        } else {
+            // Merge subject rows and QBP control rows, sort descending by created_at, apply global pagination
+            for (const pr of poolResults) {
+                mergedRows.push(...pr.rows);
+            }
+            mergedRows.push(...qbpRows);
+            mergedRows.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            mergedRows = mergedRows.slice(offset, offset + requestedLimit);
+        }
+
+        // Fetch usage data from primary database
+        const qIds = mergedRows.map(r => r.id);
+        const usageMap = await fetchUsageMap(qIds);
+
+        // Filter by usage if specified ('never_used' or 'used_before')
+        if (filters.usage) {
+            const u = filters.usage.toString().toLowerCase().trim();
+            if (u === 'never_used' || u === 'never') {
+                mergedRows = mergedRows.filter(r => !usageMap.has(r.id.toString()));
+            } else if (u === 'used_before' || u === 'used') {
+                mergedRows = mergedRows.filter(r => usageMap.has(r.id.toString()));
+            }
+        }
+
+        const mappedQuestions = mergedRows.map(r => mapSupabaseToQuestion(r, usageMap)).filter(Boolean);
 
         return {
-            questions: dtos,
+            questions: mappedQuestions,
             pagination: {
-                page,
-                limit,
-                total: totalCount,
-                totalPages: Math.ceil(totalCount / limit)
+                page: requestedPage,
+                limit: requestedLimit,
+                total: grandTotal,
+                pages: Math.ceil(grandTotal / requestedLimit)
             }
         };
     } catch (err) {
         console.error('[DATABASE] getQuestions error:', err.message);
-        throw new Error(err.message);
+        return {
+            questions: [],
+            pagination: { page: requestedPage, limit: requestedLimit, total: 0, pages: 0 }
+        };
     }
 }
 
 /**
- * Fast aggregate metadata query for a subject across databases.
+ * Fast cached metadata query across subject databases.
  */
-async function getSubjectMetadata(subject, cleanClass = '') {
-    const normSub = normalizeSubject(subject) || 'Physics';
-    const normKlass = normalizeClass(cleanClass);
-    const cacheKey = `${normSub.toLowerCase()}_${normKlass || 'all'}`;
+async function getSubjectMetadata(subject = '', klass = null) {
+    const normSub = normalizeSubject(subject) || 'ALL';
+    const normKlass = normalizeClass(klass) || 'ALL';
+    const cacheKey = `${normSub.toLowerCase()}_${normKlass.toLowerCase()}`;
 
     const cached = metadataCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < METADATA_TTL_MS)) {
         return cached.data;
     }
 
-    const targetPools = getPoolsForQuery(normSub, normKlass);
-
     try {
-        const metadataPromises = targetPools.map(async (entry) => {
-            const whereParts = [`subject ILIKE '${normSub}%'`];
-            if (normKlass && normKlass !== 'both') {
-                whereParts.push(`klass = '${normKlass}'`);
-            }
-            const whereClause = `WHERE ${whereParts.join(' AND ')}`;
+        const targetPools = getPoolsForQuery(subject, klass);
 
-            const totalQuery = `SELECT count(*)::int as total FROM public.questions ${whereClause};`;
-            const chaptersQuery = `
-                SELECT chapter, count(*)::int as count 
-                FROM public.questions 
-                ${whereClause} 
-                GROUP BY chapter 
-                ORDER BY chapter ASC;
-            `;
-            const conceptsQuery = `
-                SELECT chapter, topic as name, count(*)::int as count 
-                FROM public.questions 
-                ${whereClause} AND topic IS NOT NULL AND topic != '' 
-                GROUP BY chapter, topic 
-                ORDER BY chapter, count DESC;
-            `;
+        const results = await Promise.all(
+            targetPools.map(async (entry) => {
+                try {
+                    const [countRes, chaptersRes, conceptsRes] = await Promise.all([
+                        entry.pool.query('SELECT count(*)::bigint as total FROM public.questions;'),
+                        entry.pool.query('SELECT DISTINCT chapter FROM public.questions WHERE chapter IS NOT NULL ORDER BY chapter;'),
+                        entry.pool.query('SELECT DISTINCT chapter, topic as name FROM public.questions WHERE chapter IS NOT NULL AND topic IS NOT NULL ORDER BY chapter, topic;')
+                    ]);
 
-            const [totRes, chapRes, cptRes] = await Promise.all([
-                entry.pool.query(totalQuery).catch(() => ({ rows: [{ total: 0 }] })),
-                entry.pool.query(chaptersQuery).catch(() => ({ rows: [] })),
-                entry.pool.query(conceptsQuery).catch(() => ({ rows: [] }))
-            ]);
-
-            return {
-                total: totRes.rows[0]?.total || 0,
-                chapters: chapRes.rows || [],
-                concepts: cptRes.rows || []
-            };
-        });
-
-        const results = await Promise.all(metadataPromises);
-
-        let grandTotal = 0;
-        const chapterMap = new Map();
-        const conceptMap = new Map();
-
-        for (const res of results) {
-            grandTotal += res.total;
-            for (const ch of res.chapters) {
-                if (ch.chapter) {
-                    chapterMap.set(ch.chapter, (chapterMap.get(ch.chapter) || 0) + ch.count);
+                    return {
+                        total: parseInt(countRes.rows[0]?.total || 0, 10),
+                        chapters: chaptersRes.rows.map(r => r.chapter).filter(Boolean),
+                        concepts: conceptsRes.rows.map(r => ({ chapter: r.chapter, name: r.name })).filter(c => c.name)
+                    };
+                } catch (e) {
+                    console.error(`[META ERROR - ${entry.name}]:`, e.message);
+                    return { total: 0, chapters: [], concepts: [] };
                 }
-            }
-            for (const cpt of res.concepts) {
-                if (cpt.name && cpt.chapter) {
-                    const key = `${cpt.chapter}:::${cpt.name}`;
-                    if (!conceptMap.has(key)) {
-                        conceptMap.set(key, { chapter: cpt.chapter, name: cpt.name, count: 0 });
+            })
+        );
+
+        let total = 0;
+        const chaptersSet = new Set();
+        const conceptsList = [];
+
+        // Pre-seed taxonomy chapters & concepts from BIOLOGY_SYLLABUS
+        const isBioRelated = ['Botany', 'Zoology', 'Biology'].includes(normSub);
+        if (isBioRelated) {
+            const classesToInclude = normKlass === '11' ? ['class_11'] : normKlass === '12' ? ['class_12'] : ['class_11', 'class_12'];
+            const subTracks = normSub === 'Botany' ? ['botany'] : normSub === 'Zoology' ? ['zoology'] : ['botany', 'zoology'];
+
+            for (const cls of classesToInclude) {
+                const classData = BIOLOGY_SYLLABUS[cls];
+                if (!classData) continue;
+                for (const track of subTracks) {
+                    const chList = classData[track] || [];
+                    for (const item of chList) {
+                        const canonCh = canonicalizeChapter(item.chapter);
+                        chaptersSet.add(canonCh);
+                        if (Array.isArray(item.concepts)) {
+                            for (const cpt of item.concepts) {
+                                conceptsList.push({ chapter: canonCh, name: cpt });
+                            }
+                        }
                     }
-                    conceptMap.get(key).count += cpt.count;
                 }
             }
         }
 
-        const chaptersList = Array.from(chapterMap.keys()).sort();
-        const conceptsList = Array.from(conceptMap.values()).sort((a, b) => a.chapter.localeCompare(b.chapter));
+        // Allowed chapters filter for database results
+        let allowedChapters = null;
+        if (normSub === 'Botany') {
+            allowedChapters = normKlass === '11' ? CLASS_11_BOTANY_CHAPTERS : normKlass === '12' ? CLASS_12_BOTANY_CHAPTERS : BOTANY_CHAPTERS;
+        } else if (normSub === 'Zoology') {
+            allowedChapters = normKlass === '11' ? CLASS_11_ZOOLOGY_CHAPTERS : normKlass === '12' ? CLASS_12_ZOOLOGY_CHAPTERS : ZOOLOGY_CHAPTERS;
+        } else if (normSub === 'Biology') {
+            allowedChapters = normKlass === '11' 
+                ? [...CLASS_11_BOTANY_CHAPTERS, ...CLASS_11_ZOOLOGY_CHAPTERS]
+                : normKlass === '12'
+                    ? [...CLASS_12_BOTANY_CHAPTERS, ...CLASS_12_ZOOLOGY_CHAPTERS]
+                    : [...BOTANY_CHAPTERS, ...ZOOLOGY_CHAPTERS];
+        }
 
-        const resultData = {
-            total: grandTotal,
-            chapters: chaptersList,
-            concepts: conceptsList
+        for (const r of results) {
+            total += r.total;
+            r.chapters.forEach(ch => {
+                const canonCh = canonicalizeChapter(ch);
+                if (!allowedChapters || allowedChapters.includes(canonCh)) {
+                    chaptersSet.add(canonCh);
+                }
+            });
+            r.concepts.forEach(c => {
+                const canonCh = canonicalizeChapter(c.chapter);
+                if (!allowedChapters || allowedChapters.includes(canonCh)) {
+                    conceptsList.push({ chapter: canonCh, name: c.name });
+                }
+            });
+        }
+
+        // Deduplicate concepts by chapter + name
+        const conceptSeen = new Set();
+        const distinctConcepts = [];
+        for (const c of conceptsList) {
+            const canonCh = canonicalizeChapter(c.chapter);
+            if (allowedChapters && !allowedChapters.includes(canonCh)) continue;
+            const key = `${canonCh}:::${c.name.trim()}`;
+            if (!conceptSeen.has(key)) {
+                conceptSeen.add(key);
+                distinctConcepts.push({ chapter: canonCh, name: c.name.trim() });
+            }
+        }
+
+        const result = {
+            total,
+            chapters: Array.from(chaptersSet).sort(),
+            concepts: distinctConcepts
         };
 
-        metadataCache.set(cacheKey, { timestamp: Date.now(), data: resultData });
-        return resultData;
+        metadataCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
     } catch (err) {
-        console.error('[DATABASE] getSubjectMetadata error:', err.message);
+        console.error('[METADATA] getSubjectMetadata error:', err.message);
         return { total: 0, chapters: [], concepts: [] };
     }
 }
 
 /**
- * Get daily question creation count across all subject databases.
- */
-async function getDailyQuestionsCount() {
-    try {
-        const allPools = getAllPools();
-        const countPromises = allPools.map(entry => {
-            return entry.pool.query("SELECT count(*)::int as count FROM public.questions WHERE created_at >= CURRENT_DATE")
-                .then(res => res.rows[0]?.count || 0)
-                .catch(() => 0);
-        });
-
-        const counts = await Promise.all(countPromises);
-        return counts.reduce((acc, c) => acc + c, 0);
-    } catch (err) {
-        console.error('[DATABASE] getDailyQuestionsCount error:', err.message);
-        return 0;
-    }
-}
-
-/**
- * Fetch a single question by UUID across subject databases.
+ * Get a single question by UUID with usage history attached.
  */
 async function getQuestionById(id) {
     if (isTest && memoryTestQuestions.has(id)) {
         return memoryTestQuestions.get(id);
     }
-
     if (!isUuid(id)) return null;
 
-    let targetDbKey = uuidToDbKey.get(String(id));
-    let targetPoolEntry = targetDbKey ? pools.get(targetDbKey) : null;
+    try {
+        let targetDbKey = uuidToDbKey.get(String(id));
+        let foundRow = null;
 
-    if (targetPoolEntry) {
-        try {
-            const res = await targetPoolEntry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+        if (targetDbKey === 'qbp_control' && qbpControlSupabase) {
+            try {
+                const { data } = await qbpControlSupabase.from('questions').select('*').eq('id', id).single();
+                if (data) foundRow = data;
+            } catch (e) {}
+        }
+
+        if (targetDbKey && pools.has(targetDbKey) && !foundRow) {
+            const poolEntry = pools.get(targetDbKey);
+            const res = await poolEntry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
             if (res.rows.length > 0) {
-                const usageMap = await fetchUsageMap([id]);
-                return mapSupabaseToQuestion(res.rows[0], usageMap);
+                foundRow = res.rows[0];
             }
-        } catch (e) {}
-    }
+        }
 
-    // Search across all pools
-    for (const entry of getAllPools()) {
-        try {
-            const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
-            if (res.rows.length > 0) {
-                cacheQuestionDb(id, entry.key);
-                const usageMap = await fetchUsageMap([id]);
-                return mapSupabaseToQuestion(res.rows[0], usageMap);
+        // If not found in cached pool, search all pools in parallel
+        if (!foundRow) {
+            const all = getAllPools();
+            const lookups = await Promise.all(
+                all.map(async (entry) => {
+                    try {
+                        const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
+                        if (res.rows.length > 0) {
+                            return { row: res.rows[0], key: entry.key };
+                        }
+                    } catch (e) {}
+                    return null;
+                })
+            );
+
+            const match = lookups.find(Boolean);
+            if (match) {
+                foundRow = match.row;
+                cacheQuestionDb(id, match.key);
             }
-        } catch (e) {}
-    }
+        }
 
-    return null;
+        // Fallback to QBP Control
+        if (!foundRow && qbpControlSupabase) {
+            try {
+                const { data } = await qbpControlSupabase.from('questions').select('*').eq('id', id).single();
+                if (data) {
+                    foundRow = data;
+                    cacheQuestionDb(id, 'qbp_control');
+                }
+            } catch (e) {}
+        }
+
+        if (!foundRow) return null;
+
+        const usageMap = await fetchUsageMap([id]);
+        return mapSupabaseToQuestion(foundRow, usageMap);
+    } catch (err) {
+        console.error('[DATABASE] getQuestionById error:', err.message);
+        return null;
+    }
 }
 
 /**
- * Fetch multiple questions by an array of UUIDs across databases.
+ * Batch lookup questions by UUIDs with usage history.
  */
-async function getQuestionsByIds(ids = []) {
+async function getQuestionsByIds(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+
+    if (isTest) {
+        return ids.map(id => memoryTestQuestions.get(id)).filter(Boolean);
+    }
+
     const validUuids = ids.filter(isUuid);
     if (validUuids.length === 0) return [];
 
     try {
         const foundRowsMap = new Map();
-        const uncachedUuids = [];
 
-        // 1. Group cached IDs by pool
-        const poolToIds = new Map();
+        // 1. Group cached UUIDs by known DB key
+        const byPool = new Map();
+        const uncached = [];
+
         for (const id of validUuids) {
-            const idStr = id.toString();
-            const dbKey = uuidToDbKey.get(idStr);
-            if (dbKey && pools.has(dbKey)) {
-                if (!poolToIds.has(dbKey)) poolToIds.set(dbKey, []);
-                poolToIds.get(dbKey).push(id);
+            const key = uuidToDbKey.get(String(id));
+            if (key === 'qbp_control' && qbpControlSupabase) {
+                uncached.push(id);
+            } else if (key && pools.has(key)) {
+                if (!byPool.has(key)) byPool.set(key, []);
+                byPool.get(key).push(id);
             } else {
-                uncachedUuids.push(id);
+                uncached.push(id);
             }
         }
 
         // 2. Query known pools
-        const knownPromises = Array.from(poolToIds.entries()).map(async ([dbKey, poolIds]) => {
-            const entry = pools.get(dbKey);
+        const knownPromises = Array.from(byPool.entries()).map(async ([key, pIds]) => {
+            const entry = pools.get(key);
             try {
-                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[])', [poolIds]);
+                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[]);', [pIds]);
                 res.rows.forEach(r => foundRowsMap.set(r.id.toString(), r));
-            } catch (e) {}
+            } catch (e) {
+                console.error(`[BATCH ERROR - ${key}]:`, e.message);
+            }
         });
 
-        // 3. Search uncached IDs across all pools
-        const uncachedPromises = uncachedUuids.length > 0 ? getAllPools().map(async (entry) => {
+        // 3. For any uncached IDs, query all pools in parallel
+        const uncachedPromises = uncached.length > 0 ? getAllPools().map(async (entry) => {
             try {
-                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[])', [uncachedUuids]);
+                const res = await entry.pool.query('SELECT * FROM public.questions WHERE id = ANY($1::uuid[]);', [uncached]);
                 res.rows.forEach(r => {
                     foundRowsMap.set(r.id.toString(), r);
                     cacheQuestionDb(r.id, entry.key);
@@ -773,11 +895,25 @@ async function getQuestionsByIds(ids = []) {
 
         await Promise.all([...knownPromises, ...uncachedPromises]);
 
-        // 4. Fetch usage
+        // 4. For any still missing IDs, check QBP Control
+        const missingIds = validUuids.filter(id => !foundRowsMap.has(id.toString()));
+        if (missingIds.length > 0 && qbpControlSupabase) {
+            try {
+                const { data } = await qbpControlSupabase.from('questions').select('*').in('id', missingIds);
+                if (Array.isArray(data)) {
+                    data.forEach(r => {
+                        foundRowsMap.set(r.id.toString(), r);
+                        cacheQuestionDb(r.id, 'qbp_control');
+                    });
+                }
+            } catch (e) {}
+        }
+
+        // 5. Fetch usage
         const foundUuids = Array.from(foundRowsMap.keys());
         const usageMap = await fetchUsageMap(foundUuids);
 
-        // 5. Return ordered according to requested IDs
+        // 6. Return ordered according to requested IDs
         return validUuids
             .map(id => foundRowsMap.get(id.toString()))
             .filter(Boolean)
@@ -789,44 +925,88 @@ async function getQuestionsByIds(ids = []) {
 }
 
 /**
+ * Assemble questions strictly honoring chapter quotas & difficulty distribution.
+ */
+async function getQuestionsWithChapterQuotas({
+    subject = 'Physics',
+    classes = '12',
+    chapterQuotas = {},
+    difficultyDistribution = { easy: 40, medium: 40, hard: 20 },
+    sources = ['subject', 'qbp_control'],
+    concepts = []
+}) {
+    const normSub = normalizeSubject(subject);
+    const normKlass = normalizeClass(classes);
+    const resultQuestions = [];
+    const report = {};
+
+    const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
+    const sourceParam = sources.includes('all') || (sources.includes('subject') && sources.includes('qbp_control'))
+        ? 'all'
+        : (sources.includes('qbp_control') ? 'qbp_control' : 'subject');
+
+    for (const [chapterName, targetQty] of Object.entries(chapterQuotas)) {
+        const qty = parseInt(targetQty, 10);
+        if (isNaN(qty) || qty <= 0) continue;
+
+        // Fetch pool of questions for this specific chapter
+        const chapterFilters = {
+            subject: normSub,
+            classes: normKlass,
+            chapter: chapterName,
+            source: sourceParam
+        };
+        if (Array.isArray(concepts) && concepts.length > 0) {
+            chapterFilters.concept = concepts;
+        }
+
+        const fetchRes = await getQuestions(chapterFilters, 1, 2000);
+        const pool = fetchRes.questions || [];
+
+        const easyTarget = Math.round(qty * ((difficultyDistribution.easy || 40) / 100));
+        const medTarget = Math.round(qty * ((difficultyDistribution.medium || 40) / 100));
+        const hardTarget = Math.max(0, qty - easyTarget - medTarget);
+
+        const easyPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+        const medPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+        const hardPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+
+        const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
+        const pickedMed = shuffle(medPool).slice(0, medTarget);
+        const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+
+        let combined = [...pickedEasy, ...pickedMed, ...pickedHard];
+        const usedIds = new Set(combined.map(q => q._id || q.id));
+
+        if (combined.length < qty) {
+            const remainder = pool.filter(q => !usedIds.has(q._id || q.id));
+            combined.push(...shuffle(remainder).slice(0, qty - combined.length));
+        }
+
+        report[chapterName] = {
+            requested: qty,
+            delivered: combined.length,
+            available: pool.length
+        };
+
+        resultQuestions.push(...combined);
+    }
+
+    return {
+        questions: resultQuestions,
+        distributionReport: report,
+        total: resultQuestions.length
+    };
+}
+
+/**
  * Record usage of questions in a paper / exam into primary database.
  */
 async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName, examName, examDate) {
     if (!Array.isArray(questionIds) || questionIds.length === 0) return;
 
-    if (isTest) {
-        const nowIso = new Date().toISOString();
-        const dateStr = examDate || nowIso.split('T')[0];
-        questionIds.forEach(rawId => {
-            const id = typeof rawId === 'string' ? rawId : (rawId._id || rawId.id);
-            if (memoryTestQuestions.has(id)) {
-                const q = memoryTestQuestions.get(id);
-                const prevCount = q.usedCount || q.timesUsed || 0;
-                const newCount = prevCount + 1;
-                const history = Array.isArray(q.usageHistory) ? [...q.usageHistory] : [];
-                history.push({
-                    paper_id: paperId ? paperId.toString() : 'paper_test',
-                    teacher_id: teacherId ? teacherId.toString() : 'teacher_test',
-                    teacher_name: teacherName || 'Faculty',
-                    exam_name: examName || 'Assessment',
-                    exam_date: dateStr,
-                    used_at: nowIso
-                });
-                q.usedCount = newCount;
-                q.timesUsed = newCount;
-                q.lastUsedAt = nowIso;
-                q.lastUsedExam = examName || 'Assessment';
-                q.lastUsedTeacher = teacherName || 'Faculty';
-                q.lastUsedDate = dateStr;
-                q.usageHistory = history;
-                if (!q.firstUsedAt) q.firstUsedAt = nowIso;
-                memoryTestQuestions.set(id, q);
-            }
-        });
-        return;
-    }
-
-    const validUuids = questionIds.filter(isUuid);
+    const validUuids = questionIds.map(q => (typeof q === 'string' ? q : (q._id || q.id))).filter(isUuid);
     if (validUuids.length === 0) return;
 
     try {
@@ -834,8 +1014,9 @@ async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName,
         try {
             await client.query('BEGIN');
             const insertQuery = `
-                INSERT INTO public.question_usage (question_id, paper_id, teacher_id, teacher_name, exam_name, exam_date, used_at)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW());
+                INSERT INTO public.question_usage (
+                    question_id, paper_id, teacher_id, teacher_name, exam_name, exam_date, used_at
+                ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::date, CURRENT_DATE), NOW());
             `;
             for (const qId of validUuids) {
                 await client.query(insertQuery, [
@@ -844,13 +1025,13 @@ async function recordQuestionUsage(questionIds, paperId, teacherId, teacherName,
                     teacherId ? teacherId.toString() : null,
                     teacherName || 'Faculty',
                     examName || 'Assessment',
-                    examDate || new Date().toISOString().split('T')[0]
+                    examDate || null
                 ]);
             }
             await client.query('COMMIT');
-        } catch (err) {
+        } catch (txErr) {
             await client.query('ROLLBACK');
-            throw err;
+            throw txErr;
         } finally {
             client.release();
         }
@@ -867,20 +1048,24 @@ async function createQuestion(dto, userId = null, userName = 'Admin') {
 
     if (isTest) {
         const fakeId = `q_test_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-        const testRow = {
+        const mapped = {
+            _id: fakeId,
             id: fakeId,
-            ...payload,
+            questionId: fakeId,
+            subject: dto.subject || 'Physics',
+            classes: dto.classes || ['JEE'],
+            chapter: dto.chapter || 'General',
+            concept: dto.concept || 'General',
+            type: dto.type || 'MCQ',
+            questionText: sanitizeHtml(cleanDifficultyTags(dto.questionText || '')),
+            options: (dto.options || []).map(cleanDifficultyTags),
             answer: dto.answer || '',
-            opt_a: payload.opt_a,
-            opt_b: payload.opt_b,
-            opt_c: payload.opt_c,
-            opt_d: payload.opt_d,
-            options: (dto.options || [payload.opt_a, payload.opt_b, payload.opt_c, payload.opt_d]).filter(Boolean),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            solutionText: sanitizeHtml(cleanDifficultyTags(dto.solutionText || '')),
+            questionTextTranslation: dto.questionTextTranslation || '',
+            optionsTranslation: dto.optionsTranslation || [],
+            createdBy: userId,
+            createdAt: payload.created_at
         };
-        const mapped = mapSupabaseToQuestion(testRow);
-        if (dto.answer) mapped.answer = dto.answer;
         memoryTestQuestions.set(fakeId, mapped);
         return mapped;
     }
@@ -933,6 +1118,7 @@ async function updateQuestion(id, dto, userId = null, userName = 'Admin') {
     let targetPoolEntry = targetDbKey ? pools.get(targetDbKey) : null;
 
     if (!targetPoolEntry) {
+        // Find which pool has it
         for (const entry of getAllPools()) {
             const check = await entry.pool.query('SELECT id FROM public.questions WHERE id = $1 LIMIT 1;', [id]);
             if (check.rows.length > 0) {
@@ -1006,19 +1192,122 @@ async function deleteQuestion(id) {
     return true;
 }
 
+/**
+ * Fast multi-pool daily question addition statistics for Admin Overview
+ */
+async function getDailyQuestionStats() {
+    const all = getAllPools();
+    const results = await Promise.allSettled(
+        all.map(async (entry) => {
+            try {
+                const todayRes = await entry.pool.query(`
+                    SELECT count(*)::bigint as count
+                    FROM public.questions
+                    WHERE created_at >= CURRENT_DATE;
+                `);
+
+                const yesterdayRes = await entry.pool.query(`
+                    SELECT count(*)::bigint as count
+                    FROM public.questions
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE;
+                `);
+
+                const totalRes = await entry.pool.query(`
+                    SELECT count(*)::bigint as count FROM public.questions;
+                `);
+
+                const dailyRes = await entry.pool.query(`
+                    SELECT 
+                        to_char(created_at::date, 'YYYY-MM-DD') as date,
+                        count(*)::bigint as count
+                    FROM public.questions
+                    WHERE created_at >= CURRENT_DATE - INTERVAL '14 days'
+                    GROUP BY created_at::date
+                    ORDER BY date DESC;
+                `);
+
+                return {
+                    key: entry.key,
+                    name: entry.name,
+                    subject: entry.subject,
+                    klass: entry.klass,
+                    total: parseInt(totalRes.rows[0]?.count || 0, 10),
+                    today: parseInt(todayRes.rows[0]?.count || 0, 10),
+                    yesterday: parseInt(yesterdayRes.rows[0]?.count || 0, 10),
+                    dailyHistory: dailyRes.rows.map(r => ({ date: r.date, count: parseInt(r.count, 10) }))
+                };
+            } catch (err) {
+                console.error(`[DAILY STATS ERROR - ${entry.name}]:`, err.message);
+                return {
+                    key: entry.key,
+                    name: entry.name,
+                    subject: entry.subject,
+                    klass: entry.klass,
+                    total: 0,
+                    today: 0,
+                    yesterday: 0,
+                    dailyHistory: []
+                };
+            }
+        })
+    );
+
+    const poolStats = results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean);
+
+    const totalQuestions = poolStats.reduce((sum, p) => sum + p.total, 0);
+    const addedToday = poolStats.reduce((sum, p) => sum + p.today, 0);
+    const addedYesterday = poolStats.reduce((sum, p) => sum + p.yesterday, 0);
+
+    const subjectsToday = {
+        Physics: 0,
+        Chemistry: 0,
+        Mathematics: 0,
+        Biology: 0
+    };
+    poolStats.forEach(p => {
+        const sub = p.subject;
+        if (subjectsToday[sub] !== undefined) {
+            subjectsToday[sub] += p.today;
+        } else {
+            subjectsToday[sub] = p.today;
+        }
+    });
+
+    const dailyMap = new Map();
+    poolStats.forEach(p => {
+        p.dailyHistory.forEach(dh => {
+            const current = dailyMap.get(dh.date) || 0;
+            dailyMap.set(dh.date, current + dh.count);
+        });
+    });
+
+    const dailyTimeline = Array.from(dailyMap.entries())
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+    return {
+        totalQuestions,
+        addedToday,
+        addedYesterday,
+        subjectsToday,
+        dailyTimeline,
+        pools: poolStats,
+        fetchedAt: new Date().toISOString()
+    };
+}
+
 module.exports = {
     getQuestions,
     getQuestionById,
     getQuestionsByIds,
+    getQuestionsWithChapterQuotas,
     getSubjectMetadata,
-    getDailyQuestionsCount,
-    clearMetadataCache,
+    getDailyQuestionStats,
     recordQuestionUsage,
     createQuestion,
     updateQuestion,
     deleteQuestion,
     mapSupabaseToQuestion,
     mapQuestionToSupabase,
-    cleanDifficultyTags,
-    extractDifficulty
+    cleanDifficultyTags
 };

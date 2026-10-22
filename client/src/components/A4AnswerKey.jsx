@@ -18,6 +18,11 @@ export default function A4AnswerKey({
     const [saving, setSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState({ type: '', msg: '' });
 
+    // Sync activeSet if setName prop changes
+    useEffect(() => {
+        if (setName) setActiveSet(setName);
+    }, [setName]);
+
     // Initialize localQuestions with questions passed or paper questions
     useEffect(() => {
         const baseQs = (questions && questions.length > 0) ? questions : (paper?.questions || []);
@@ -36,12 +41,6 @@ export default function A4AnswerKey({
     }, [activePaper, localQuestions, paper]);
 
     const paperTitle = activePaper?.title || paper.title || `${paper.subject || 'Academic'} Assessment`;
-
-    const isJeePaper = useMemo(() => {
-        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
-        const title = (paper?.title || '').toUpperCase();
-        return examType.includes('JEE') || title.includes('JEE') || paper?.isJEE;
-    }, [paper]);
 
     // Handle editing a specific question's answer in localQuestions
     const handleAnswerChange = (qIndex, newAnswer) => {
@@ -227,7 +226,7 @@ export default function A4AnswerKey({
                                 fontFamily: 'Calibri, "Segoe UI", Arial, sans-serif',
                             }}
                         >
-                            {/* Official Manchester PU College Crest Watermark - Non-intrusive background layer */}
+                            {/* Official Manchester Technologies Crest Watermark - Non-intrusive background layer */}
                             <div 
                                 className="a4-watermark-wrapper"
                                 style={{
@@ -266,13 +265,13 @@ export default function A4AnswerKey({
                                     <div className="flex items-center justify-center gap-3 mb-2">
                                         <img
                                             src="/ManchesterLogo.jpeg"
-                                            alt="Manchester PU College"
+                                            alt="Manchester Technologies"
                                             className="w-14 h-14 object-contain rounded-full border border-slate-200 shadow-xs"
                                             onError={e => { e.currentTarget.style.display = 'none'; }}
                                         />
                                         <div className="text-left">
                                             <h1 className="text-xl sm:text-2xl font-black text-navy uppercase tracking-tight leading-tight">
-                                                Sapthagiri Pre University College
+                                                Manchester Technologies
                                             </h1>
                                             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                                                 Davanagere • The Land of Opportunity
@@ -300,114 +299,79 @@ export default function A4AnswerKey({
                                     </div>
                                 )}
 
-                                {/* ── Excel Spreadsheet Style Answer Key Table ── */}
-                                {(() => {
-                                    // Split questions into sections if JEE, or single table otherwise
-                                    const secAQs = isJeePaper ? resolvedQuestions.slice(0, 20) : resolvedQuestions;
-                                    const secBQs = isJeePaper ? resolvedQuestions.slice(20) : [];
-
-                                    const renderExcelGrid = (qs, startIndex = 0) => {
-                                        const rows = [];
-                                        for (let i = 0; i < qs.length; i += 5) {
-                                            rows.push(qs.slice(i, i + 5));
-                                        }
+                                {/* ── Primary Answer Key Grid (5 columns on desktop, clean balanced cards) ── */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2.5 sm:gap-3 text-xs">
+                                    {resolvedQuestions.map((q, idx) => {
+                                        const currentQNo = q.setQNo || (startQNo + idx);
+                                        const answerLabel = getResolvedAnswerLabel(q);
+                                        const isLong = isDescriptiveAnswer(q.answer || answerLabel);
 
                                         return (
-                                            <div className="overflow-x-auto my-2 rounded-lg border-2 border-slate-900 shadow-sm bg-white">
-                                                <table className="w-full border-collapse text-xs font-sans">
-                                                    <thead>
-                                                        <tr className="bg-slate-900 text-white">
-                                                            {[1, 2, 3, 4, 5].map(colIdx => (
-                                                                <React.Fragment key={colIdx}>
-                                                                    <th className="border border-slate-700 py-2 px-2 text-center font-black tracking-wider text-[11px] bg-slate-900 text-amber-300 w-[10%]">
-                                                                        Q.No
-                                                                    </th>
-                                                                    <th className="border border-slate-700 py-2 px-2 text-center font-black tracking-wider text-[11px] bg-slate-900 text-white w-[10%]">
-                                                                        Ans
-                                                                    </th>
-                                                                </React.Fragment>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {rows.map((row, rIdx) => (
-                                                            <tr key={rIdx} className="hover:bg-slate-50 transition">
-                                                                {[0, 1, 2, 3, 4].map(cIdx => {
-                                                                    const q = row[cIdx];
-                                                                    if (!q) {
-                                                                        return (
-                                                                            <React.Fragment key={cIdx}>
-                                                                                <td className="border border-slate-400 bg-slate-100/60 py-2.5 px-1.5 text-center">&nbsp;</td>
-                                                                                <td className="border border-slate-400 bg-white py-2.5 px-1.5 text-center">&nbsp;</td>
-                                                                            </React.Fragment>
-                                                                        );
-                                                                    }
-                                                                    const globalIdx = startIndex + (rIdx * 5 + cIdx);
-                                                                    const qNo = q.setQNo || (startQNo + globalIdx);
-                                                                    const answerLabel = getResolvedAnswerLabel(q);
-                                                                    const isLong = isDescriptiveAnswer(q.answer || answerLabel);
+                                            <div
+                                                key={idx}
+                                                className={`border rounded-xl p-2.5 flex flex-col justify-between transition ${
+                                                    isEditing 
+                                                        ? 'bg-amber-50/40 border-amber-300 shadow-xs' 
+                                                        : 'border-slate-300 bg-slate-50/50 hover:bg-slate-100'
+                                                }`}
+                                                style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                            >
+                                                <div className="flex items-center justify-between gap-1 mb-1.5">
+                                                    <span className="font-black text-slate-700 text-xs">
+                                                        Q.{currentQNo}
+                                                    </span>
+                                                    {!isEditing && (
+                                                        <span className={`font-black px-2.5 py-0.5 rounded text-xs text-center shadow-2xs ${
+                                                            isLong
+                                                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                                : 'bg-navy text-amber-400 min-w-[26px]'
+                                                        }`}>
+                                                            {isLong ? 'See Below' : answerLabel}
+                                                        </span>
+                                                    )}
+                                                </div>
 
-                                                                    return (
-                                                                        <React.Fragment key={cIdx}>
-                                                                            {/* Q.No: Light gray shaded Excel cell */}
-                                                                            <td className="border border-slate-400 bg-slate-200/90 font-black text-slate-900 text-center py-2.5 px-2 text-xs select-none">
-                                                                                Q.{qNo}
-                                                                            </td>
-                                                                            {/* Ans: Crisp white Excel cell with high-contrast answer */}
-                                                                            <td className="border border-slate-400 bg-white font-black text-slate-950 text-center py-2.5 px-2 text-xs">
-                                                                                {!isEditing ? (
-                                                                                    <span className={`font-black ${isLong ? 'text-[10px] text-amber-900' : 'text-slate-950 text-xs'}`}>
-                                                                                        {isLong ? 'See Below' : answerLabel}
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        value={q.answer || answerLabel || ''}
-                                                                                        onChange={e => handleAnswerChange(globalIdx, e.target.value)}
-                                                                                        className="w-full text-center font-black text-xs py-0.5 border border-amber-400 rounded bg-amber-50 text-navy outline-none focus:ring-1 focus:ring-navy"
-                                                                                    />
-                                                                                )}
-                                                                            </td>
-                                                                        </React.Fragment>
-                                                                    );
-                                                                })}
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                                {/* Edit Mode Controls */}
+                                                {isEditing ? (
+                                                    <div className="space-y-1.5 pt-1">
+                                                        {/* Quick option pills for MCQ */}
+                                                        <div className="flex items-center gap-1 justify-between">
+                                                            {['A', 'B', 'C', 'D'].map(optKey => (
+                                                                <button
+                                                                    key={optKey}
+                                                                    type="button"
+                                                                    onClick={() => handleAnswerChange(idx, optKey)}
+                                                                    className={`flex-1 py-1 rounded text-[11px] font-black transition cursor-pointer ${
+                                                                        answerLabel === optKey
+                                                                            ? 'bg-navy text-gold shadow-sm ring-1 ring-gold'
+                                                                            : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-300'
+                                                                    }`}
+                                                                >
+                                                                    {optKey}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        {/* Custom answer text input for numerical or 1-line answer */}
+                                                        <input
+                                                            type="text"
+                                                            value={q.answer || ''}
+                                                            onChange={e => handleAnswerChange(idx, e.target.value)}
+                                                            placeholder="Or type answer..."
+                                                            className="w-full text-[11px] font-bold px-2 py-1 border border-slate-300 rounded bg-white text-navy outline-none focus:border-navy"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    // In view mode, show small preview if it's a short text answer
+                                                    !isLong && q.answer && q.answer !== answerLabel && (
+                                                        <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                                            {String(q.answer).slice(0, 20)}
+                                                        </div>
+                                                    )
+                                                )}
                                             </div>
                                         );
-                                    };
-
-                                    return (
-                                        <div className="space-y-4">
-                                            {isJeePaper ? (
-                                                <>
-                                                    {secAQs.length > 0 && (
-                                                        <div>
-                                                            <div className="bg-slate-900 text-white px-3.5 py-1.5 rounded-t-lg flex items-center justify-between font-black text-xs uppercase tracking-wider border border-slate-900">
-                                                                <span>SECTION A — MULTIPLE CHOICE QUESTIONS</span>
-                                                                <span className="text-amber-400 text-[10px]">Q.1 TO Q.{secAQs.length}</span>
-                                                            </div>
-                                                            {renderExcelGrid(secAQs, 0)}
-                                                        </div>
-                                                    )}
-                                                    {secBQs.length > 0 && (
-                                                        <div className="mt-4">
-                                                            <div className="bg-amber-500 text-slate-950 px-3.5 py-1.5 rounded-t-lg flex items-center justify-between font-black text-xs uppercase tracking-wider border border-amber-600">
-                                                                <span>SECTION B — NUMERICAL VALUE QUESTIONS</span>
-                                                                <span className="text-slate-950 text-[10px] font-black">Q.{secAQs.length + 1} TO Q.{resolvedQuestions.length}</span>
-                                                            </div>
-                                                            {renderExcelGrid(secBQs, 20)}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                renderExcelGrid(resolvedQuestions, 0)
-                                            )}
-                                        </div>
-                                    );
-                                })()}
+                                    })}
+                                </div>
 
                                 {/* ── Descriptive / 1-Line / 2-Line Formatted Answers Section (If Any) ── */}
                                 {descriptiveQuestions.length > 0 && (
@@ -451,7 +415,7 @@ export default function A4AnswerKey({
 
                                 {/* ── Document Footer ── */}
                                 <div className="mt-12 pt-4 border-t border-slate-300 text-center text-[11px] text-slate-500 flex justify-between items-center">
-                                    <span>Manchester PU College Examination Authority</span>
+                                    <span>Manchester Technologies Examination Authority</span>
                                     <span>Official Answer Key • Set {activeSet}</span>
                                 </div>
                             </div>

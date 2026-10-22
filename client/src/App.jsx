@@ -3,21 +3,17 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { LoadingProvider, useLoading } from './context/LoadingContext';
 import { setLoadingCallback } from './api';
-import FourDotLoader from './components/FourDotLoader';
 import UnifiedLogin from './pages/auth/UnifiedLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
 import CreatePaper from './pages/teacher/CreatePaper';
-
-// New exam & lab pages
-import LabLogin from './pages/lab/LabLogin';
-import LabExamList from './pages/lab/LabExamList';
-import StudentLabPortal from './pages/exam/StudentLabPortal';
-import StaticExamPortal from './pages/exam/StaticExamPortal';
 import ExamInstructions from './pages/exam/ExamInstructions';
 import ExamEngine from './pages/exam/ExamEngine';
 import Scorecard from './pages/exam/Scorecard';
 import Disqualified from './pages/exam/Disqualified';
+import LabLogin from './pages/lab/LabLogin';
+import LabExamList from './pages/lab/LabExamList';
+import StudentLabPortal from './pages/exam/StudentLabPortal';
 import BridgeApp from './pages/admin/BridgeApp';
 
 // ── App Loader Linker ────────────────────────────────────────────────────────
@@ -36,13 +32,17 @@ const ApiLoaderLinker = ({ children }) => {
 };
 
 const AppLoadingSpinner = () => (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 font-sans animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-white shadow-xl flex items-center justify-center p-2.5 mb-5 border-2 border-gold/30">
-            <img src="/ManchesterLogo.jpeg" alt="Manchester College" className="w-full h-full object-contain" />
+    <div className="min-h-screen bg-[#071328] flex flex-col items-center justify-center p-6 font-sans animate-fade-in relative overflow-hidden">
+        {/* Background decorative glow */}
+        <div className="absolute w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div className="w-20 h-20 rounded-3xl bg-white shadow-2xl flex items-center justify-center p-2 mb-5 border-2 border-amber-400/40 relative z-10">
+            <img src="/ManchesterLogo.jpeg" alt="Manchester Technologies" className="w-full h-full object-contain rounded-2xl" />
         </div>
-        <FourDotLoader size="md" />
-        <h3 className="text-sm font-black text-navy uppercase tracking-widest mt-2">Manchester College</h3>
-        <p className="text-[10px] text-slate/40 font-bold uppercase tracking-wider mt-1">Connecting to Secure Assessment Network...</p>
+        <div className="w-9 h-9 border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin mb-4"></div>
+        <h3 className="text-base font-black text-white uppercase tracking-widest text-center">Manchester Technologies</h3>
+        <p className="text-[11px] text-amber-400/90 font-bold uppercase tracking-wider mt-1">Computer-Based Testing & Assessment Suite</p>
+        <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Loading Portal...</p>
     </div>
 );
 
@@ -50,10 +50,7 @@ const ProtectedRoute = ({ children, role }) => {
     const { user, loading } = useContext(AuthContext);
     if (loading) return <AppLoadingSpinner />;
     if (!user) return <Navigate to="/" />;
-    if (role) {
-        const allowedRoles = Array.isArray(role) ? role : [role];
-        if (!allowedRoles.includes(user.role)) return <Navigate to="/" />;
-    }
+    if (role && user.role !== role) return <Navigate to="/" />;
     return children;
 };
 
@@ -73,6 +70,16 @@ function App() {
                                 <AdminDashboard />
                             </ProtectedRoute>
                         } />
+                        <Route path="/admin/create-paper" element={
+                            <ProtectedRoute role="admin">
+                                <CreatePaper />
+                            </ProtectedRoute>
+                        } />
+                        <Route path="/admin/bridge" element={
+                            <ProtectedRoute role="admin">
+                                <BridgeApp />
+                            </ProtectedRoute>
+                        } />
 
                         {/* Teacher Routes */}
                         <Route path="/teacher/dashboard/*" element={
@@ -81,41 +88,27 @@ function App() {
                             </ProtectedRoute>
                         } />
                         <Route path="/teacher/create-paper" element={
-                            <ProtectedRoute role={['teacher', 'admin']}>
+                            <ProtectedRoute role="teacher">
                                 <CreatePaper />
                             </ProtectedRoute>
                         } />
+                        <Route path="/teacher/omr" element={<Navigate to="/teacher/dashboard/omr" replace />} />
 
-                        {/* ── Dedicated Student Lab Examination Portal ── */}
+                        {/* Student CBT Examination Routes */}
+                        <Route path="/exam/:examId/instructions" element={<ExamInstructions />} />
+                        <Route path="/exam/:examId/scorecard/:sessionId" element={<Scorecard />} />
+                        <Route path="/exam/:examId" element={<ExamEngine />} />
+                        <Route path="/exam/disqualified" element={<Disqualified />} />
+
+                        {/* Dedicated Student Lab Examination Portal */}
                         <Route path="/lab-exam" element={<StudentLabPortal />} />
                         <Route path="/student-exam" element={<Navigate to="/lab-exam" replace />} />
                         <Route path="/student/exam" element={<Navigate to="/lab-exam" replace />} />
+
+                        {/* Student Lab Engine Routes */}
                         <Route path="/lab" element={<StudentLabPortal />} />
                         <Route path="/lab-login" element={<LabLogin />} />
                         <Route path="/lab/exams" element={<LabExamList />} />
-
-                        {/* ── Teacher OMR Route ── */}
-                        <Route path="/teacher/omr" element={<Navigate to="/teacher/dashboard/omr" replace />} />
-
-                        {/* ── Static Universal Exam Portal ── */}
-                        <Route path="/exam" element={<StaticExamPortal />} />
-                        <Route path="/online-exam" element={<StaticExamPortal />} />
-                        <Route path="/exam-portal" element={<StaticExamPortal />} />
-                        <Route path="/exam/portal" element={<StaticExamPortal />} />
-
-                        {/* ── Exam Flow (Public — accessible via shared link or lab) ── */}
-                        <Route path="/exam/:examId/instructions" element={<ExamInstructions />} />
-                        <Route path="/exam/:examId" element={<ExamEngine />} />
-                        <Route path="/exam/:examId/scorecard/:sessionId" element={<Scorecard />} />
-                        <Route path="/exam/disqualified" element={<Disqualified />} />
-
-                        {/* ── Admin Bridge App ── */}
-                        <Route path="/admin/bridge" element={
-                            <ProtectedRoute role="admin">
-                                <BridgeApp />
-                            </ProtectedRoute>
-                        } />
-                        <Route path="/bridge-app" element={<BridgeApp />} />
 
                         {/* Fallback */}
                         <Route path="*" element={<Navigate to="/" />} />

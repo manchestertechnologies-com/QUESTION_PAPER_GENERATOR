@@ -5,23 +5,23 @@
 
 
 @theme {
-  /* MANCHESTER COLLEGE COLOR THEME */
-  --color-primary: #001f6d;       /* Deep Royal Blue */
-  --color-primary-hover: #00154d; /* Darker Blue */
+  /* MANCHESTER TECHNOLOGIES COLOR THEME */
+  --color-primary: #081B3B;       /* Deep Imperial Navy */
+  --color-primary-hover: #06152E; /* Darker Navy */
   
-  --color-secondary: #c5a059;       /* Rich Metallic Gold */
-  --color-secondary-hover: #a68541; /* Antique Gold */
+  --color-secondary: #f59e0b;       /* Bright Royal Gold */
+  --color-secondary-hover: #d97706; /* Rich Amber Gold */
   
-  --color-accent: #e5e7eb;          /* Sophisticated Gray */
-  --color-background: #f3f4f6;      /* Light Slate Gray Background */
+  --color-accent: #e2e8f0;          /* Clean Slate */
+  --color-background: #f8fafc;      /* Light Crisp Gray Background */
   --color-surface: #ffffff;         /* Pure White Surface */
 
-  --color-navy: #001f6d;
-  --color-gold: #c5a059;
-  --color-slate: #1e293b;
+  --color-navy: #081B3B;
+  --color-gold: #f59e0b;
+  --color-slate: #0f172a;
 
   /* UNIVERSAL TYPOGRAPHY */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 body {
@@ -30,6 +30,29 @@ body {
   color: #1e293b; /* Slate 800 - Professional dark gray text */
   margin: 0;
   padding: 0;
+}
+
+/* ── UNIFORM TYPOGRAPHY FOR QUESTIONS, OPTIONS & KATEX MATH ── */
+/* Prevents KaTeX default 1.21em scaling so math matches surrounding text size 100% */
+.katex {
+  font-size: 1em !important;
+  font-weight: 400 !important;
+  text-rendering: auto;
+}
+
+.katex-display {
+  font-size: 1em !important;
+  margin: 0.4em 0 !important;
+}
+
+.katex * {
+  font-weight: 400 !important;
+}
+
+.math-renderer {
+  font-size: inherit !important;
+  font-weight: 400 !important;
+  font-style: normal;
 }
 
 /* HTML: <div class="loader"></div> */
@@ -83,16 +106,4 @@ body {
   0% { background-position: 0% 0%; }
   100% { background-position: 200% 0%; }
 }
-
-@keyframes bounceDot {
-  0%, 80%, 100% {
-    transform: scale(0.6) translateY(0);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.15) translateY(-8px);
-    opacity: 1;
-  }
-}
-
 

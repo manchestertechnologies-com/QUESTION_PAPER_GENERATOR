@@ -20,6 +20,7 @@ api.interceptors.request.use((config) => {
     const token = localStorage.getItem('token');
     if (token) {
         config.headers['Authorization'] = `Bearer ${token}`;
+        config.headers['x-auth-token'] = token;
     }
     return config;
 }, (error) => {
@@ -37,7 +38,6 @@ api.interceptors.response.use(
     },
     (error) => {
         loadingCallback(false);
-
         if (error.response && error.response.status === 401) {
             // Clear local credentials on 401
             localStorage.removeItem('token');

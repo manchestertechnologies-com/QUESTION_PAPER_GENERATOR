@@ -6,40 +6,13 @@ const UserSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, enum: ['admin', 'teacher'], required: true },
     subject: { type: String }, // For teachers
-    classes: [{ type: String }],
-    institutionName: { type: String, default: 'Manchester College' },
-    institutionEmail: { type: String },
-    status: { type: String, enum: ['active', 'disabled'], default: 'active' },
-    isTrial: { type: Boolean, default: false },
-    trialStatus: { type: String, enum: ['none', 'active', 'expired', 'revoked'], default: 'none' },
-    trialStartDate: { type: Date },
-    trialExpiryDate: { type: Date },
-    trialDurationDays: { type: Number, default: 0 },
-    trialReason: { type: String, default: '' },
-    omrAccess: { type: Boolean, default: true },
-    quotas: {
-        assessment: {
-            used: { type: Number, default: 0 },
-            max: { type: Number, default: 2 },
-            maxQuestions: { type: Number, default: 60 }
-        },
-        jee: {
-            used: { type: Number, default: 0 },
-            max: { type: Number, default: 2 },
-            maxQuestions: { type: Number, default: 240 }
-        },
-        neet: {
-            used: { type: Number, default: 0 },
-            max: { type: Number, default: 2 },
-            maxQuestions: { type: Number, default: 240 }
-        },
-        cet: {
-            used: { type: Number, default: 0 },
-            max: { type: Number, default: 2 },
-            maxQuestions: { type: Number, default: 240 }
-        }
-    },
+    classes: [{ type: String }], // Optional depending on how assignment works
+    omrAccess: { type: Boolean, default: false }, // Assigned by Admin
     createdAt: { type: Date, default: Date.now }
+}, {
+    bufferCommands: false,
+    bufferTimeoutMS: 2000
 });
 
-module.exports = mongoose.model('User', UserSchema);
+module.exports = mongoose.models.User || mongoose.model('User', UserSchema);
+

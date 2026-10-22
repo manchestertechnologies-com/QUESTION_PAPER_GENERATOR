@@ -7,7 +7,6 @@ const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const { sanitizeHtml, sanitizeArray } = require('../utils/sanitize');
 const supabaseQuestions = require('../services/supabaseQuestions');
-const supabaseGtPyqQuestions = require('../services/supabaseGtPyqQuestions');
 
 const { storage } = require('../config/cloudinary');
 
@@ -90,339 +89,117 @@ router.post('/', [auth, checkRole(['admin', 'teacher']), upload.fields([{ name: 
     }
 });
 
-// @route   GET /api/questions/daily-stats
-// @desc    Get live count of questions added today across Supabase and MongoDB
-// @access  Teacher / Admin
-router.get('/daily-stats', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
-    try {
-        const supaToday = await supabaseQuestions.getDailyQuestionsCount();
-        
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const mongoToday = await Question.countDocuments({
-            createdAt: { $gte: todayStart }
-        });
-
-        const totalAddedToday = (supaToday || 0) + (mongoToday || 0);
-
-        res.json({
-            success: true,
-            addedToday: totalAddedToday,
-            date: new Date().toISOString()
-        });
-    } catch (err) {
-        console.error('[DAILY STATS] error:', err.message);
-        res.json({
-            success: true,
-            addedToday: 0,
-            date: new Date().toISOString()
-        });
-    }
-});
-
 // @route   GET /api/questions
-// @desc    Get questions filtered by subject, chapter, type, class, and source types from Supabase & MongoDB
+// @desc    Get questions filtered by subject, chapter, type, class from Supabase
 // @access  Teacher / Admin
 router.get('/', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const { classes, chapter, concept, type, subject, search, level, usage, sourceType, sources, source } = req.query;
+        const { classes, chapter, concept, type, subject, search, level, usage, source } = req.query;
         let filters = {};
 
-        // Subject-level access control — allow Biology/Botany/Zoology faculty to query between Botany/Zoology/Biology
-        const teacherSub = (req.user.subject || '').toLowerCase();
-        const isBioFaculty = ['biology', 'botany', 'zoology'].some(b => teacherSub.includes(b));
-
+        // Subject-level access control — teachers can access their own subject or mixed subjects for paper generation
         if (req.user.role === 'teacher') {
-            if (isBioFaculty && subject && ['biology', 'botany', 'zoology'].some(b => subject.toLowerCase().includes(b))) {
+            if (subject && subject !== 'all') {
                 filters.subject = subject;
-            } else if (req.user.subject) {
+            } else {
                 filters.subject = req.user.subject;
-            } else if (subject) {
-                filters.subject = subject;
             }
         } else if (subject) {
             filters.subject = subject;
         }
 
-        if (classes) filters.classes = classes;
+        const classParam = req.query.class || classes;
+        if (classParam && classParam !== 'Both' && classParam !== 'all') {
+            filters.classes = classParam;
+        }
         if (chapter) filters.chapter = chapter;
         if (concept) filters.concept = concept;
         if (type) filters.type = type;
         if (search) filters.search = search;
         if (level) filters.level = level;
         if (usage) filters.usage = usage;
-
-        // Parse requested sources (REGULAR/BANK/SUBJECT, PYQ, GT, QBP_CONTROL)
-        const rawSources = (source || sources || sourceType || 'ALL').toUpperCase();
-        const includeBank = rawSources === 'ALL' || rawSources.includes('REGULAR') || rawSources.includes('BANK') || rawSources.includes('SUBJECT');
-        const includePYQ = rawSources === 'ALL' || rawSources.includes('PYQ') || rawSources.includes('QBP') || rawSources.includes('CONTROL');
-        const includeGT = rawSources === 'ALL' || rawSources.includes('GT') || rawSources.includes('GRAND') || rawSources.includes('QBP') || rawSources.includes('CONTROL');
+        if (source) filters.source = source;
+        if (req.query.excludeIds) filters.excludeIds = req.query.excludeIds;
 
         // Pagination
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit) || (req.query.paginated === 'true' ? 50 : 100)));
-        const combinedQuestions = [];
-        let totalCount = 0;
 
-        const getQuestionSignature = (q) => {
-            if (!q) return '';
-            const raw = (q.questionText || q.question || '').toLowerCase()
-                .replace(/\\(?:textbf|textit|mathrm|text|bm)\{([^}]*)\}/g, '$1')
-                .replace(/[^a-z0-9]/g, '');
-            return raw.slice(0, 160);
-        };
+        const result = await supabaseQuestions.getQuestions(filters, page, limit);
 
-        const existingIds = new Set();
-        const existingSignatures = new Set();
-
-        const addUniqueQuestions = (questionsList, isGtPyqFilter = false) => {
-            (questionsList || []).forEach(q => {
-                if (!q) return;
-                const id = (q._id || q.id || '').toString();
-                const sig = getQuestionSignature(q);
-
-                if (isGtPyqFilter) {
-                    const isGT = q.sourceType === 'GT';
-                    const isPYQ = q.sourceType === 'PYQ';
-                    if (!((isGT && includeGT) || (isPYQ && includePYQ) || (!isGT && !isPYQ))) {
-                        return;
-                    }
-                }
-
-                if (id && existingIds.has(id)) return;
-                if (sig && sig.length > 20 && existingSignatures.has(sig)) return;
-
-                if (id) existingIds.add(id);
-                if (sig && sig.length > 20) existingSignatures.add(sig);
-
-                combinedQuestions.push(q);
-                totalCount++;
-            });
-        };
-
-        // 1. Fetch from Supabase (Standard Question Bank) if enabled
-        if (includeBank) {
-            try {
-                const result = await supabaseQuestions.getQuestions(filters, page, limit);
-                if (result && Array.isArray(result.questions)) {
-                    addUniqueQuestions(result.questions);
-                }
-            } catch (supaErr) {
-                console.warn('[QUESTIONS GET] Supabase fetch warning:', supaErr.message);
-            }
-        }
-
-        // 2. Fetch from GT & PYQ Supabase database (hjjgjcvpqgcebuokjque) if enabled
-        if (includePYQ || includeGT) {
-            try {
-                const gtPyqResult = await supabaseGtPyqQuestions.getQuestions(filters, page, limit);
-                if (gtPyqResult && Array.isArray(gtPyqResult.questions)) {
-                    addUniqueQuestions(gtPyqResult.questions, true);
-                }
-            } catch (gtPyqErr) {
-                console.warn('[QUESTIONS GET] GT/PYQ Supabase fetch warning:', gtPyqErr.message);
-            }
-        }
-
-        // 3. Fetch from MongoDB Question model (PYQ, GT, and custom regular) if enabled
-        if (includePYQ || includeGT || (!includeBank && (includePYQ || includeGT))) {
-            try {
-                const mongoQuery = {};
-                if (filters.subject) {
-                    const subLower = filters.subject.toLowerCase();
-                    if (subLower.includes('botan') || subLower.includes('zool') || subLower.includes('bio')) {
-                        mongoQuery.subject = new RegExp('botany|zoology|biology', 'i');
-                    } else {
-                        mongoQuery.subject = new RegExp(`^${filters.subject}$`, 'i');
-                    }
-                }
-
-                // Source Type filtering in MongoDB
-                const sourceTypesToQuery = [];
-                if (includeBank && rawSources.includes('REGULAR')) sourceTypesToQuery.push('REGULAR');
-                if (includePYQ) sourceTypesToQuery.push('PYQ');
-                if (includeGT) sourceTypesToQuery.push('GT');
-
-                if (sourceTypesToQuery.length > 0 && rawSources !== 'ALL') {
-                    mongoQuery.sourceType = { $in: sourceTypesToQuery };
-                }
-
-                if (filters.chapter) {
-                    const chs = Array.isArray(filters.chapter) ? filters.chapter : filters.chapter.split(',').map(c => c.trim()).filter(Boolean);
-                    if (chs.length > 0) {
-                        const expandedChs = [];
-                        chs.forEach(c => {
-                            expandedChs.push(c);
-                            expandedChs.push(c.replace(/and/gi, '&'));
-                            expandedChs.push(c.replace(/&/gi, 'and'));
-                            expandedChs.push(c.replace(/:/gi, ' -'));
-                            expandedChs.push(c.replace(/:/gi, ''));
-                            expandedChs.push(c.replace(/[\s\-_]+/g, ' '));
-                        });
-                        mongoQuery.chapter = { $in: [...new Set(expandedChs)].map(c => new RegExp(`^\\s*${c.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\s*')}\\s*$`, 'i')) };
-                    }
-                }
-
-                if (filters.level) {
-                    mongoQuery.level = filters.level.toLowerCase();
-                }
-
-                if (filters.search && filters.search.trim()) {
-                    const sRegex = new RegExp(filters.search.trim(), 'i');
-                    mongoQuery.$or = [{ questionText: sRegex }, { chapter: sRegex }, { concept: sRegex }];
-                }
-
-                const mongoDocs = await Question.find(mongoQuery).sort({ createdAt: -1 }).limit(limit).lean();
-                
-                const mappedMongo = (mongoDocs || []).map(q => {
-                    const typeStr = (q.type || 'MCQ').toUpperCase();
-                    let optArr = Array.isArray(q.options) ? q.options : [];
-                    return {
-                        _id: q._id.toString(),
-                        id: q._id.toString(),
-                        questionId: q.questionId || q._id.toString(),
-                        subject: q.subject,
-                        classes: Array.isArray(q.classes) ? q.classes : [q.classes || '12'],
-                        chapter: q.chapter || 'General',
-                        concept: q.concept || q.chapter || 'General',
-                        subConcept: q.subConcept || '',
-                        level: q.level || 'medium',
-                        type: typeStr,
-                        q_type: typeStr.toLowerCase(),
-                        questionText: q.questionText,
-                        imageUrl: q.imageUrl || null,
-                        solutionImageUrl: q.solutionImageUrl || null,
-                        options: optArr,
-                        matchPairs: Array.isArray(q.matchPairs) ? q.matchPairs : [],
-                        answer: q.answer || '',
-                        solutionText: q.solutionText || '',
-                        assertion: q.assertion || '',
-                        reason: q.reason || '',
-                        statements: Array.isArray(q.statements) ? q.statements : [],
-                        numericalTolerance: q.numericalTolerance || 0,
-                        sourceType: q.sourceType || (q.sourceModel === 'GrandTestPaper' ? 'GT' : (q.sourceModel === 'PreviousYearPaper' ? 'PYQ' : 'REGULAR')),
-                        sourceExam: q.sourceExam || '',
-                        sourceYear: q.sourceYear || null,
-                        sourcePaperName: q.sourcePaperName || '',
-                        sourceDisplayCode: q.sourceDisplayCode || '',
-                        academicYearLevel: q.academicYearLevel || '',
-                        createdBy: q.createdBy,
-                        createdAt: q.createdAt || new Date().toISOString()
-                    };
-                });
-
-                addUniqueQuestions(mappedMongo);
-            } catch (mongoErr) {
-                console.warn('[QUESTIONS GET] Mongo fetch warning:', mongoErr.message);
-            }
-        }
-
-        res.setHeader('X-Total-Count', totalCount || combinedQuestions.length);
-        res.setHeader('X-Total-Pages', Math.ceil((totalCount || combinedQuestions.length) / limit) || 1);
+        res.setHeader('X-Total-Count', result.pagination.total);
+        res.setHeader('X-Total-Pages', result.pagination.pages);
 
         if (req.query.paginated === 'true') {
-            return res.json({
-                questions: combinedQuestions,
-                pagination: {
-                    total: totalCount || combinedQuestions.length,
-                    page,
-                    limit,
-                    pages: Math.ceil((totalCount || combinedQuestions.length) / limit) || 1
-                }
-            });
+            return res.json(result);
         }
 
-        // Return array by default for backward compatibility
-        return res.json(combinedQuestions);
+        // Return array by default for backward compatibility with frontend components expecting res.data array
+        return res.json(result.questions);
     } catch (err) {
         console.error('[QUESTIONS GET] error:', err.message);
-        res.status(500).json({ msg: 'Server error fetching questions.' });
+        res.status(500).json({ msg: 'Server error fetching questions from Supabase.' });
+    }
+});
+
+// @route   POST /api/questions/chapter-distribution
+// @desc    Auto-assemble questions adhering strictly to per-chapter quotas & difficulty distribution
+// @access  Teacher / Admin
+router.post('/chapter-distribution', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    try {
+        const { classes, chapterQuotas, difficultyDistribution, sources, concepts, subject: reqSub } = req.body;
+        const subject = reqSub || (req.user.role === 'teacher' ? req.user.subject : 'Physics');
+
+        if (!chapterQuotas || typeof chapterQuotas !== 'object' || Object.keys(chapterQuotas).length === 0) {
+            return res.status(400).json({ msg: 'chapterQuotas object is required.' });
+        }
+
+        const result = await supabaseQuestions.getQuestionsWithChapterQuotas({
+            subject,
+            classes: classes || req.body.class || '12',
+            chapterQuotas,
+            difficultyDistribution: difficultyDistribution || { easy: 40, medium: 40, hard: 20 },
+            sources: Array.isArray(sources) && sources.length > 0 ? sources : ['subject', 'qbp_control'],
+            concepts: concepts || []
+        });
+
+        res.json(result);
+    } catch (err) {
+        console.error('[QUESTIONS CHAPTER-DISTRIBUTION] error:', err.message);
+        res.status(500).json({ msg: 'Server error generating chapter-distributed questions.' });
     }
 });
 
 // @route   GET /api/questions/meta
-// @desc    Get metadata (total count, distinct chapters, distinct topics) across Supabase & MongoDB
+// @desc    Get metadata (total count, distinct chapters, distinct topics) for subject & class
 // @access  Teacher / Admin
 router.get('/meta', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
     try {
-        const teacherSub = (req.user.subject || '').toLowerCase();
-        const isBioFaculty = ['biology', 'botany', 'zoology'].some(b => teacherSub.includes(b));
-        const requestedSub = req.query.subject || '';
-
-        let subject = requestedSub;
-        if (!subject) {
-            subject = req.user.role === 'teacher' ? req.user.subject : '';
-        } else if (req.user.role === 'teacher' && !isBioFaculty && req.user.subject) {
-            subject = req.user.subject;
-        }
-
-        const klass = req.query.class || req.query.klass || '';
-        let meta = { total: 0, chapters: [], concepts: [] };
-        
-        try {
-            meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
-        } catch (supaErr) {
-            console.warn('[QUESTIONS META] Supabase meta error:', supaErr.message);
-        }
-
-        // Also merge chapters and concepts from GT/PYQ Supabase database
-        try {
-            const gtPyqMeta = await supabaseGtPyqQuestions.getMetadata(subject);
-            if (gtPyqMeta && Array.isArray(gtPyqMeta.chapters)) {
-                const chaptersSet = new Set(meta.chapters || []);
-                gtPyqMeta.chapters.forEach(ch => {
-                    if (ch && ch !== 'General' && ch !== 'Full Syllabus') chaptersSet.add(ch);
-                });
-                meta.chapters = Array.from(chaptersSet);
-            }
-        } catch (gtPyqMetaErr) {
-            console.warn('[QUESTIONS META] GT/PYQ meta error:', gtPyqMetaErr.message);
-        }
-
-        // Also merge chapters and concepts from MongoDB Question collection (including PYQ and GT)
-        try {
-            const mongoQuery = {};
-            if (subject) {
-                const subLower = subject.toLowerCase();
-                if (subLower.includes('botan') || subLower.includes('zool') || subLower.includes('bio')) {
-                    mongoQuery.subject = new RegExp('botany|zoology|biology', 'i');
-                } else {
-                    mongoQuery.subject = new RegExp(`^${subject}$`, 'i');
-                }
-            }
-
-            const mongoQuestions = await Question.find(mongoQuery, 'chapter concept topic sourceType').lean();
-            const chaptersSet = new Set(meta.chapters || []);
-            const conceptsMap = new Map();
-            (meta.concepts || []).forEach(c => {
-                if (c && c.name && c.chapter) conceptsMap.set(`${c.chapter}___${c.name}`, c);
-            });
-
-            mongoQuestions.forEach(q => {
-                if (q.chapter && q.chapter !== 'General') {
-                    chaptersSet.add(q.chapter);
-                }
-                const cpt = q.concept || q.topic;
-                if (q.chapter && cpt && cpt !== 'General' && cpt !== q.chapter) {
-                    const key = `${q.chapter}___${cpt}`;
-                    if (!conceptsMap.has(key)) {
-                        conceptsMap.set(key, { chapter: q.chapter, name: cpt, concept: cpt });
-                    }
-                }
-            });
-
-            meta.chapters = Array.from(chaptersSet).sort();
-            meta.concepts = Array.from(conceptsMap.values());
-            meta.total = (meta.total || 0) + (mongoQuestions.length || 0);
-        } catch (mongoMetaErr) {
-            console.warn('[QUESTIONS META] Mongo meta merge warning:', mongoMetaErr.message);
-        }
-
-        res.json(meta);
+        const subject = req.query.subject || (req.user.role === 'teacher' ? req.user.subject : '');
+        const klass = req.query.class || req.query.classes || null;
+        const meta = await supabaseQuestions.getSubjectMetadata(subject, klass);
+        // Metric privacy: omit overall question count
+        const sanitized = {
+            chapters: meta.chapters || [],
+            concepts: meta.concepts || []
+        };
+        res.json(sanitized);
     } catch (err) {
         console.error('[QUESTIONS META] error:', err.message);
-        res.status(500).json({ msg: 'Server error fetching question metadata.' });
+        res.status(500).json({ msg: 'Server error fetching metadata.' });
     }
+});
+// @route   GET /api/questions/daily-stats
+// @desc    Redacted for strict institutional metric privacy
+// @access  Teacher / Admin
+router.get('/daily-stats', [auth, checkRole(['admin', 'teacher'])], async (req, res) => {
+    res.json({
+        totalQuestions: null,
+        addedToday: null,
+        subjectsToday: {},
+        databases: [],
+        dailyTimeline: []
+    });
 });
 
 // @route   GET /api/questions/:id
@@ -622,9 +399,6 @@ router.post('/:id/generate-variant', [auth, checkRole(['admin', 'teacher'])], as
             isMongo = true;
         } else {
             question = await supabaseQuestions.getQuestionById(req.params.id);
-            if (!question) {
-                question = await supabaseGtPyqQuestions.getQuestionById(req.params.id);
-            }
         }
 
         if (!question) return res.status(404).json({ msg: 'Question not found.' });

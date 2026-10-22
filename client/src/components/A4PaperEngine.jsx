@@ -12,6 +12,7 @@
  */
 import React, { useMemo } from 'react';
 import QuestionBlock from './QuestionBlock';
+import MathRenderer from './MathRenderer';
 import { InstructionCoverPage, PaperHeader, formatMarks, calcTotal } from './PaperRenderer';
 
 export default function A4PaperEngine({
@@ -40,14 +41,6 @@ export default function A4PaperEngine({
     const visibleCount = Math.max(0, endQNo - startQNo + 1);
     const visibleQuestions = useMemo(() => questions.slice(0, visibleCount), [questions, visibleCount]);
 
-    const isJeePaper = useMemo(() => {
-        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
-        const title = (paper?.title || '').toUpperCase();
-        const paperClasses = paper?.classes || classes || [];
-        const isJeeClass = Array.isArray(paperClasses) && paperClasses.some(c => String(c).toUpperCase() === 'JEE');
-        return examType.includes('JEE') || title.includes('JEE') || Boolean(paper?.isJEE) || isJeeClass;
-    }, [paper, classes]);
-
     const zoomScale = (zoom || 100) / 100;
     const isTwoCol = settings.columns === 2;
 
@@ -68,7 +61,7 @@ export default function A4PaperEngine({
             >
                 {/* ── Single Unified Question Paper Sheet ── */}
                 <div className="a4-sheet-page a4-questions-page" style={{ position: 'relative' }}>
-                    {/* Official Manchester PU College Circular Emblem Watermark - Fixed across all pages */}
+                    {/* Official Manchester Technologies Circular Emblem Watermark - Fixed across all pages */}
                     <div 
                         className="a4-watermark-wrapper"
                         style={{
@@ -86,14 +79,14 @@ export default function A4PaperEngine({
                     >
                         <img 
                             src="/ManchesterLogo.jpeg" 
-                            alt="Manchester PU College Crest Watermark" 
+                            alt="Manchester Technologies Crest Watermark" 
                             className="a4-watermark-logo"
                             style={{
                                 width: '380px',
-                                height: '380px',
+                                height: 'auto',
+                                maxHeight: '380px',
                                 objectFit: 'contain',
-                                borderRadius: '50%',
-                                opacity: 0.055,
+                                opacity: 0.08,
                                 filter: 'grayscale(100%)',
                                 display: 'block',
                                 pointerEvents: 'none',
@@ -121,7 +114,7 @@ export default function A4PaperEngine({
                                 templateUrl={activeTemplate?.fileUrl}
                                 isAssignment={isAssignment}
                                 setName={paper?.setName || 'P'}
-                                institutionName={paper?.institutionName}
+                                headerConfig={paper?.headerConfig}
                             />
                         </div>
 
@@ -136,128 +129,73 @@ export default function A4PaperEngine({
                         >
                             {visibleQuestions.map((q, idx) => {
                                 const displayNum = startQNo + idx;
+                                const examTypeStr = String(paper?.examType || paper?.exam_type || '').toUpperCase();
+                                const isJEE = examTypeStr.includes('JEE');
 
-                                // ── Universal Section Headers Detection (Merged Papers, Pattern Sections, Subject Transitions, JEE) ──
-                                const isCurrentNumerical = (q.type || '').toUpperCase() === 'NUMERICAL' || 
-                                                           (q.q_type || '').toLowerCase() === 'numerical' || 
-                                                           !Array.isArray(q.options) || 
-                                                           q.options.length < 2;
+                                const curSubject = q.sectionSubject || q.subject || '';
+                                const prevSubject = idx > 0 ? (visibleQuestions[idx - 1].sectionSubject || visibleQuestions[idx - 1].subject || '') : '';
+                                const isSubjectChange = Boolean(curSubject && prevSubject && curSubject.toLowerCase() !== prevSubject.toLowerCase());
 
-                                const prevQ = idx > 0 ? visibleQuestions[idx - 1] : null;
-                                const isPrevNumerical = prevQ ? (
-                                    (prevQ.type || '').toUpperCase() === 'NUMERICAL' || 
-                                    (prevQ.q_type || '').toLowerCase() === 'numerical' || 
-                                    !Array.isArray(prevQ.options) || 
-                                    prevQ.options.length < 2
-                                ) : false;
+                                let showHeader = false;
+                                let headerTitle = '';
+                                let directiveText = null;
 
-                                let sectionBanner = null;
-                                const currentSecName = (q.sectionName || '').trim();
-                                const prevSecName = (prevQ?.sectionName || '').trim();
-                                const currentSub = (q.subject || '').trim();
-                                const prevSub = (prevQ?.subject || '').trim();
+                                if (isJEE) {
+                                    const isNum = Boolean(q.isNumerical || (q.type && q.type.toUpperCase().includes('NUMERICAL')) || (!q.options?.length && q.num_answer));
+                                    const prevIsNum = idx > 0 ? Boolean(visibleQuestions[idx - 1].isNumerical || (visibleQuestions[idx - 1].type && visibleQuestions[idx - 1].type.toUpperCase().includes('NUMERICAL')) || (!visibleQuestions[idx - 1].options?.length && visibleQuestions[idx - 1].num_answer)) : false;
 
-                                // 1. Explicit sectionName on question (e.g. from merged papers or section assignments)
-                                if (currentSecName && currentSecName !== prevSecName) {
-                                    const secQuestions = visibleQuestions.filter(item => (item.sectionName || '').trim() === currentSecName);
-                                    const startRange = startQNo + idx;
-                                    const endRange = startRange + secQuestions.length - 1;
-                                    const rangeText = secQuestions.length > 1 ? `(QUESTION NOS. ${startRange} TO ${endRange})` : `(QUESTION NO. ${startRange})`;
-
-                                    sectionBanner = {
-                                        title: currentSecName.toUpperCase(),
-                                        subtitle: rangeText
-                                    };
-                                }
-                                // 2. Paper pattern sections matching
-                                else if (!currentSecName && Array.isArray(paper?.pattern) && paper.pattern.length > 1) {
-                                    let offset = 0;
-                                    for (let sIdx = 0; sIdx < paper.pattern.length; sIdx++) {
-                                        const pSec = paper.pattern[sIdx];
-                                        const secLen = Number(pSec.numQuestions || pSec.count || 0);
-                                        if (idx === offset && secLen > 0) {
-                                            const startRange = startQNo + offset;
-                                            const endRange = startRange + secLen - 1;
-                                            const secTitle = pSec.sectionName || pSec.title || `SECTION ${String.fromCharCode(65 + sIdx)}: ${(pSec.subject || pSec.type || '').toUpperCase()}`;
-                                            sectionBanner = {
-                                                title: secTitle.toUpperCase(),
-                                                subtitle: secLen > 1 ? `(QUESTION NOS. ${startRange} TO ${endRange})` : `(QUESTION NO. ${startRange})`
-                                            };
-                                            break;
-                                        }
-                                        offset += secLen;
+                                    if (isSubjectChange) {
+                                        showHeader = true;
+                                        headerTitle = `${curSubject.toUpperCase()} • PART A (SECTION A)`;
+                                        directiveText = 'This section contains 20 Multiple Choice Questions. Each question has four choices (A), (B), (C), (D). Only one choice is correct.';
+                                    } else if (idx === 0) {
+                                        showHeader = true;
+                                        headerTitle = curSubject ? `${curSubject.toUpperCase()} • PART A (SECTION A)` : 'PART A (SECTION A)';
+                                        directiveText = 'This section contains 20 Multiple Choice Questions. Each question has four choices (A), (B), (C), (D). Only one choice is correct.';
+                                    } else if (isNum && !prevIsNum) {
+                                        showHeader = true;
+                                        headerTitle = curSubject ? `${curSubject.toUpperCase()} • PART B (SECTION B - NUMERICALS)` : 'PART B (SECTION B - NUMERICALS)';
+                                        directiveText = 'This section contains 5 Numerical Value Questions. The answer to each question is a NUMERICAL VALUE. No options are provided.';
                                     }
-                                }
-                                // 3. Multi-subject or Merged paper subject boundary transition
-                                else if (!currentSecName && (paper?.isMerged || (paper?.subject && ['PCMB', 'NEET', 'CET'].includes(paper.subject))) && currentSub && (!prevQ || currentSub.toLowerCase() !== prevSub.toLowerCase())) {
-                                    const subQuestions = visibleQuestions.filter(item => (item.subject || '').trim().toLowerCase() === currentSub.toLowerCase());
-                                    const startRange = startQNo + idx;
-                                    const endRange = startRange + subQuestions.length - 1;
-                                    sectionBanner = {
-                                        title: `SECTION: ${currentSub.toUpperCase()}`,
-                                        subtitle: `(QUESTION NOS. ${startRange} TO ${endRange})`
-                                    };
-                                }
-                                // 4. JEE Section Transitions (Section A MCQ vs Section B Numerical)
-                                else if (isJeePaper) {
-                                    if (idx === 0 && !isCurrentNumerical) {
-                                        const firstNumIdx = visibleQuestions.findIndex(item => 
-                                            (item.type || '').toUpperCase() === 'NUMERICAL' || 
-                                            (item.q_type || '').toLowerCase() === 'numerical' || 
-                                            !Array.isArray(item.options) || 
-                                            item.options.length < 2
-                                        );
-                                        const secACount = firstNumIdx !== -1 ? firstNumIdx : Math.min(20, visibleQuestions.length);
-                                        sectionBanner = {
-                                            title: 'SECTION A',
-                                            subtitle: `(MULTIPLE CHOICE QUESTIONS — QUESTION NOS. ${startQNo} TO ${startQNo + secACount - 1})`
-                                        };
-                                    } else if (isCurrentNumerical && (!prevQ || !isPrevNumerical)) {
-                                        sectionBanner = {
-                                            title: 'SECTION B',
-                                            subtitle: '(NUMERICAL VALUE QUESTIONS — ENTER THE CORRECT NUMERICAL VALUE)'
-                                        };
-                                    } else if (!isCurrentNumerical && prevQ && isPrevNumerical) {
-                                        sectionBanner = {
-                                            title: 'SECTION A',
-                                            subtitle: '(MULTIPLE CHOICE QUESTIONS)'
-                                        };
+                                } else {
+                                    // Normal paper (KCET, NEET, Board, General):
+                                    // NO section A, B, C, D banners!
+                                    // Only show subject banner if multi-subject exam transitions to another subject
+                                    if (isSubjectChange) {
+                                        showHeader = true;
+                                        headerTitle = `SUBJECT: ${curSubject.toUpperCase()}`;
+                                        directiveText = null;
                                     }
                                 }
 
                                 return (
                                     <React.Fragment key={q._id || displayNum}>
-                                        {/* ── Prominent Bold & Caps JEE Section Banner ── */}
-                                        {sectionBanner && (
+                                        {showHeader && (
                                             <div
-                                                className="a4-jee-section-banner"
+                                                className="part-header-directive-block"
                                                 style={{
-                                                    textAlign: 'center',
-                                                    padding: '6px 10px',
-                                                    margin: idx === 0 ? '4px 0 10px 0' : '14px 0 10px 0',
-                                                    borderTop: '2.5px solid #000',
-                                                    borderBottom: '2.5px solid #000',
-                                                    background: '#f8fafc',
-                                                    columnSpan: 'all',
-                                                    WebkitColumnSpan: 'all',
+                                                    margin: idx === 0 ? '4px 0 10px 0' : '16px 0 10px 0',
+                                                    padding: '6px 12px',
+                                                    backgroundColor: '#f8fafc',
+                                                    borderLeft: '4px solid #001f6d',
+                                                    borderTop: '1px solid #cbd5e1',
+                                                    borderBottom: '1px solid #cbd5e1',
                                                     breakInside: 'avoid',
-                                                    WebkitColumnBreakInside: 'avoid',
                                                     pageBreakInside: 'avoid',
-                                                    width: '100%',
-                                                    boxSizing: 'border-box'
+                                                    breakAfter: 'avoid',
+                                                    columnSpan: isTwoCol ? 'all' : 'none',
                                                 }}
                                             >
-                                                <div style={{ fontWeight: 900, fontSize: '14px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#000' }}>
-                                                    <strong>{sectionBanner.title}</strong>
+                                                <div style={{ fontWeight: 900, fontSize: '12px', textTransform: 'uppercase', color: '#001f6d', letterSpacing: '0.04em' }}>
+                                                    {headerTitle}
                                                 </div>
-                                                {sectionBanner.subtitle && (
-                                                    <div style={{ fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#333', marginTop: '2px' }}>
-                                                        {sectionBanner.subtitle}
+                                                {directiveText && (
+                                                    <div style={{ fontSize: '10.5px', fontWeight: 600, color: '#334155', marginTop: '2px', fontStyle: 'italic', whiteSpace: 'pre-line' }}>
+                                                        {directiveText}
                                                     </div>
                                                 )}
                                             </div>
                                         )}
-
                                         <div
                                             className="question-print-item"
                                             style={{
@@ -293,6 +231,63 @@ export default function A4PaperEngine({
                         </div>
                     </div>
                 </div>
+
+                {/* Optional Scheme of Valuation Sheet on Last Page */}
+                {(paper?.includeSchemeOnLastPage || settings?.includeSchemeOnLastPage) && (
+                    <div className="a4-sheet-page a4-scheme-page" style={{ position: 'relative', pageBreakBefore: 'always', breakBefore: 'page', marginTop: '28px' }}>
+                        <div className="a4-page-content" style={{ fontFamily: settings.fontFamily, fontSize: '11px', lineHeight: '1.4', padding: '12mm' }}>
+                            <div style={{ textAlign: 'center', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '14px' }}>
+                                <div style={{ fontSize: '17px', fontWeight: 900, textTransform: 'uppercase', color: '#000' }}>
+                                    {paper?.headerConfig?.collegeName || 'MANCHESTER TECHNOLOGIES'}
+                                </div>
+                                <div style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#001f6d', marginTop: '2px' }}>
+                                    SCHEME OF VALUATION & ANSWER KEY
+                                </div>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#333', marginTop: '2px' }}>
+                                    {paper?.title || 'EXAMINATION'} • Subject: {paper?.subject} • Max Marks: {totalMarks}
+                                </div>
+                            </div>
+
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1.5px solid #000' }}>
+                                        <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '50px', textAlign: 'center', fontWeight: 800 }}>Q.No</th>
+                                        <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '90px', textAlign: 'center', fontWeight: 800 }}>Part / Key</th>
+                                        <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'left', fontWeight: 800 }}>Valuation Criteria / Steps / Key Solution</th>
+                                        <th style={{ padding: '6px 8px', border: '1px solid #cbd5e1', width: '60px', textAlign: 'center', fontWeight: 800 }}>Marks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {visibleQuestions.map((q, qIdx) => {
+                                        const num = startQNo + qIdx;
+                                        const key = q.answer || q.correct_option || '-';
+                                        const m = q.marks || (formatMarks(q.type, classes).replace(/\D+/g, '') || '1');
+                                        return (
+                                            <tr key={q._id || num} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 700 }}>
+                                                    {num}
+                                                </td>
+                                                <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 800, color: '#001f6d' }}>
+                                                    {q.part ? `${q.part} (${key})` : key}
+                                                </td>
+                                                <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1' }}>
+                                                    {q.solutionText ? (
+                                                        <MathRenderer text={q.solutionText} />
+                                                    ) : (
+                                                        <span>Correct Option / Standard step marks ({key})</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '6px 8px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 800 }}>
+                                                    {m}M
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── CSS STYLES FOR ON-SCREEN AND PRINT ── */}
@@ -445,11 +440,11 @@ export default function A4PaperEngine({
                         print-color-adjust: exact !important;
                     }
                     body:not(.printing-answer-key):not(.printing-solution-key) .a4-watermark-logo {
-                        width: 340px !important;
-                        height: 340px !important;
+                        width: 360px !important;
+                        height: auto !important;
+                        max-height: 360px !important;
                         object-fit: contain !important;
-                        border-radius: 50% !important;
-                        opacity: 0.045 !important;
+                        opacity: 0.075 !important;
                         filter: grayscale(100%) !important;
                         display: block !important;
                         visibility: visible !important;
@@ -563,11 +558,24 @@ export default function A4PaperEngine({
                     .question-print-item {
                         display: block !important;
                         width: 100% !important;
-                        break-inside: auto !important;
-                        orphans: 2 !important;
-                        widows: 2 !important;
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        -webkit-column-break-inside: avoid !important;
+                        orphans: 3 !important;
+                        widows: 3 !important;
                         position: relative !important;
                         z-index: 1 !important;
+                    }
+                    .part-header-directive-block {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        break-after: avoid !important;
+                    }
+                    .a4-scheme-page {
+                        page-break-before: always !important;
+                        break-before: page !important;
+                        box-shadow: none !important;
+                        border: none !important;
                     }
                     .a4-questions-flow {
                         orphans: 2 !important;

@@ -12,31 +12,32 @@ export default function A4SolutionKey({
 }) {
     const [activeSet, setActiveSet] = useState(setName || paper?.setName || 'P');
 
-    const baseQs = useMemo(() => {
+    // Sync activeSet if setName prop changes
+    React.useEffect(() => {
+        if (setName) setActiveSet(setName);
+    }, [setName]);
+
+    const baseQuestions = useMemo(() => {
         return (questions && questions.length > 0) ? questions : (paper?.questions || []);
     }, [questions, paper]);
 
     const activePaper = useMemo(() => {
-        const fullPaper = {
+        const effectivePaper = {
             ...paper,
-            questions: baseQs
+            _id: paper?._id || paper?.id || 'qp-default',
+            questions: baseQuestions
         };
-        if (!baseQs || baseQs.length === 0) return fullPaper;
-        return generatePaperSet(fullPaper, activeSet);
-    }, [paper, baseQs, activeSet]);
+        if (!effectivePaper.questions || effectivePaper.questions.length === 0) return effectivePaper;
+        return generatePaperSet(effectivePaper, activeSet);
+    }, [paper, baseQuestions, activeSet]);
 
     const resolvedQuestions = useMemo(() => {
-        if (activePaper?.questions && activePaper.questions.length > 0) return activePaper.questions;
-        return baseQs;
-    }, [activePaper, baseQs]);
+        return (activePaper?.questions && activePaper.questions.length > 0)
+            ? activePaper.questions
+            : baseQuestions;
+    }, [activePaper, baseQuestions]);
 
     const paperTitle = activePaper?.title || paper.title || `${paper.subject || 'Academic'} Assessment`;
-
-    const isJeePaper = useMemo(() => {
-        const examType = (paper?.examType || paper?.paperType || '').toUpperCase();
-        const title = (paper?.title || '').toUpperCase();
-        return examType.includes('JEE') || title.includes('JEE') || paper?.isJEE;
-    }, [paper]);
 
     const handlePrint = () => {
         document.body.classList.add('printing-solution-key');
@@ -67,7 +68,7 @@ export default function A4SolutionKey({
                                     onClick={() => setActiveSet(s)}
                                     className={`px-2.5 py-0.5 rounded-lg text-xs font-black transition cursor-pointer ${
                                         activeSet === s
-                                            ? 'bg-navy text-gold shadow-sm scale-105'
+                                            ? 'bg-navy text-gold shadow-sm'
                                             : 'bg-white text-slate-700 hover:bg-slate-200'
                                     }`}
                                 >
@@ -109,14 +110,14 @@ export default function A4SolutionKey({
                     <div className="mx-auto w-full max-w-[794px]">
                         <div
                             id="print-target-solution-key"
-                            className="a4-solution-key-sheet bg-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full text-slate-800 space-y-5 border border-slate-300 relative"
+                            className="a4-solution-key-sheet bg-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full text-slate-800 space-y-6 border border-slate-300 relative"
                             style={{
                                 minHeight: 'auto',
                                 boxSizing: 'border-box',
                                 fontFamily: 'Calibri, "Segoe UI", Arial, sans-serif',
                             }}
                         >
-                            {/* Official Manchester PU College Crest Watermark - Non-intrusive background layer */}
+                            {/* Official Manchester Technologies Crest Watermark - Non-intrusive background layer */}
                             <div 
                                 className="a4-watermark-wrapper"
                                 style={{
@@ -151,17 +152,17 @@ export default function A4SolutionKey({
 
                             <div style={{ position: 'relative', zIndex: 1 }}>
                                 {/* ── College Header ── */}
-                                <div className="text-center border-b-2 border-slate-900 pb-3 mb-5">
+                                <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
                                     <div className="flex items-center justify-center gap-3 mb-2">
                                         <img
                                             src="/ManchesterLogo.jpeg"
-                                            alt="Manchester PU College"
-                                            className="w-13 h-13 object-contain rounded-full border border-slate-200 shadow-xs"
+                                            alt="Manchester Technologies"
+                                            className="w-14 h-14 object-contain rounded-full border border-slate-200 shadow-xs"
                                             onError={e => { e.currentTarget.style.display = 'none'; }}
                                         />
                                         <div className="text-left">
                                             <h1 className="text-xl sm:text-2xl font-black text-navy uppercase tracking-tight leading-tight">
-                                                Sapthagiri Pre University College
+                                                Manchester Technologies
                                             </h1>
                                             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
                                                 Davanagere • The Land of Opportunity
@@ -169,21 +170,21 @@ export default function A4SolutionKey({
                                         </div>
                                     </div>
 
-                                    <div className="mt-2 pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs font-semibold text-slate-700">
+                                    <div className="mt-3 pt-2 border-t border-slate-200 flex flex-wrap justify-between items-center text-xs font-semibold text-slate-700">
                                         <span className="font-bold text-navy">{paperTitle}</span>
                                         <span>SET: <strong>{activeSet}</strong></span>
                                         {paper.subject && <span>Subject: <strong>{paper.subject}</strong></span>}
                                         <span>Total Questions: <strong>{resolvedQuestions.length}</strong></span>
                                     </div>
-                                    <div className="mt-1.5 text-center">
+                                    <div className="mt-1 text-center">
                                         <span className="inline-block bg-slate-900 text-amber-400 font-bold text-[11px] uppercase tracking-widest px-4 py-0.5 rounded-full">
-                                            Detailed Solutions Guide — SET {activeSet}
+                                            Detailed Solutions Guide
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* ── Questions & Explanations Flow ── */}
-                                <div className="space-y-4">
+                                <div className="space-y-6">
                                     {resolvedQuestions.map((q, idx) => {
                                         const currentQNo = q.setQNo || (startQNo + idx);
                                         const answerLabel = getResolvedAnswerLabel(q);
@@ -192,85 +193,85 @@ export default function A4SolutionKey({
                                         const diagramImg = q.imageUrl || q.image_url;
                                         const explanation = q.solutionText || q.solution || q.explanation || '';
                                         const options = Array.isArray(q.options) ? q.options : [];
-                                        const showSecAHeader = isJeePaper && (idx % 25 === 0);
-                                        const showSecBHeader = isJeePaper && (idx % 25 === 20);
 
                                         return (
-                                            <React.Fragment key={idx}>
-                                                {showSecAHeader && (
-                                                    <div 
-                                                        className="bg-slate-900 text-white p-3 rounded-xl border-2 border-slate-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
-                                                        style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                                                    >
-                                                        <span className="font-black text-xs sm:text-sm tracking-widest text-amber-400 uppercase">
-                                                            SECTION A — MULTIPLE CHOICE QUESTIONS
-                                                        </span>
-                                                        <span className="text-[11px] font-bold text-slate-200 uppercase">
-                                                            (QUESTION NOS. {idx + 1} TO {Math.min(idx + 20, resolvedQuestions.length)})
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                {showSecBHeader && (
-                                                    <div 
-                                                        className="bg-amber-500 text-slate-950 p-3 rounded-xl border-2 border-amber-600 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 shadow-md"
-                                                        style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                                                    >
-                                                        <span className="font-black text-xs sm:text-sm tracking-widest uppercase text-slate-950">
-                                                            SECTION B — NUMERICAL VALUE QUESTIONS
-                                                        </span>
-                                                        <span className="text-[11px] font-black text-slate-900 uppercase">
-                                                            (QUESTION NOS. {idx + 1} TO {Math.min(idx + 5, resolvedQuestions.length)})
-                                                        </span>
-                                                    </div>
-                                                )}
-                                                <div
-                                                    className="border-2 border-slate-300 rounded-xl p-3.5 bg-white space-y-2 shadow-2xs"
-                                                    style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
-                                                >
-                                                    {/* Question Card Header: Dark Q number badge on left, crisp light/green answer pill on right */}
-                                                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="bg-slate-900 text-white font-black text-xs px-2.5 py-1 rounded-md shadow-xs">
-                                                                Question {currentQNo}
-                                                            </span>
-                                                            {q.originalQNo && q.originalQNo !== currentQNo && (
-                                                                <span className="text-[10px] font-bold text-slate-400">
-                                                                    (Original Q.{q.originalQNo})
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {options.length >= 2 ? (
-                                                            <span className="bg-emerald-50 text-emerald-950 text-xs font-black px-3 py-1 rounded-md border border-emerald-300 shadow-2xs">
-                                                                Correct Answer: ({answerLabel})
-                                                            </span>
-                                                        ) : (
-                                                            <span className="bg-amber-50 text-amber-950 text-xs font-black px-3 py-1 rounded-md border border-amber-300 shadow-2xs">
-                                                                Correct Value: {answerLabel}
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* ONLY Explanation / Solution Body */}
-                                                    <div className="pt-1 text-[12px] text-slate-900 font-normal leading-relaxed">
-                                                        {explanation ? (
-                                                            <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-200">
-                                                                <MathRenderer inline text={explanation} />
-                                                            </div>
-                                                        ) : (
-                                                            <p className="text-slate-400 italic text-[11px] py-1">
-                                                                {options.length >= 2 ? `Option (${answerLabel}) is the verified correct answer.` : `Value ${answerLabel} is the verified correct answer.`}
-                                                            </p>
-                                                        )}
-                                                    </div>
+                                            <div
+                                                key={idx}
+                                                className="border border-slate-200 rounded-2xl p-5 bg-slate-50/40 space-y-3"
+                                                style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                            >
+                                                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                                                    <span className="font-bold text-sm text-navy">
+                                                        Question {currentQNo}
+                                                    </span>
+                                                    <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-md border border-emerald-200">
+                                                        Correct Answer: ({answerLabel})
+                                                    </span>
                                                 </div>
-                                            </React.Fragment>
+
+                                                {/* Question Text */}
+                                                <div className="text-xs text-slate-800 font-normal leading-relaxed">
+                                                    <MathRenderer inline text={qText} />
+                                                </div>
+
+                                                {/* Diagram if present */}
+                                                {diagramImg && (
+                                                    <div className="my-2 max-w-xs mx-auto border border-slate-200 rounded-lg p-1 bg-white">
+                                                        <img
+                                                            src={diagramImg}
+                                                            alt={`Q${currentQNo} Diagram`}
+                                                            className="max-h-36 object-contain mx-auto"
+                                                            onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Options summary */}
+                                                {options.length > 0 && (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px] text-slate-600">
+                                                        {options.map((opt, oi) => {
+                                                            const isCorrect = isOptionCorrect(q, oi);
+                                                            return (
+                                                                <div
+                                                                    key={oi}
+                                                                    className={`p-1.5 rounded flex items-start gap-1.5 ${
+                                                                        isCorrect
+                                                                            ? 'bg-emerald-50 text-emerald-900 font-medium border border-emerald-200'
+                                                                            : 'bg-white border border-slate-100'
+                                                                    }`}
+                                                                >
+                                                                    <span className="font-semibold">({labels[oi] || String.fromCharCode(65 + oi)})</span>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <MathRenderer inline text={typeof opt === 'object' ? (opt.text || '') : String(opt)} />
+                                                                    </div>
+                                                                    {isCorrect && <span className="text-emerald-700 font-bold">✓</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* Explanation Box with full KaTeX Math Rendering */}
+                                                <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
+                                                    <span className="font-bold text-navy block">Explanation:</span>
+                                                    {explanation ? (
+                                                        <div className="leading-relaxed">
+                                                            <MathRenderer inline text={explanation} />
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-slate-400 italic text-[11px]">
+                                                            Option ({answerLabel}) is the verified correct answer.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         );
                                     })}
                                 </div>
 
                                 {/* ── Document Footer ── */}
                                 <div className="mt-12 pt-4 border-t border-slate-300 text-center text-[11px] text-slate-500 flex justify-between items-center">
-                                    <span>Manchester PU College Examination Authority</span>
+                                    <span>Manchester Technologies Examination Authority</span>
                                     <span>Comprehensive Solutions Guide</span>
                                 </div>
                             </div>

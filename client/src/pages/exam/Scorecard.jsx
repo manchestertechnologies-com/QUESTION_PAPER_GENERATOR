@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
-import FourDotLoader from '../../components/FourDotLoader';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -43,11 +42,7 @@ export default function Scorecard() {
         window.open(downloadUrl, '_blank');
     };
 
-    if (loading) return (
-        <div style={styles.center}>
-            <FourDotLoader size="lg" text="Loading Examination Scorecard..." />
-        </div>
-    );
+    if (loading) return <div style={styles.center}>Loading scorecard...</div>;
     if (!data) return <div style={styles.center}>Scorecard not found.</div>;
 
     const percentage = data.totalQuestions > 0
@@ -149,6 +144,32 @@ export default function Scorecard() {
                                     </div>
                                 </div>
                             </div>
+
+                            {data.classStats && (
+                                <div style={{ marginTop: 24, padding: 18, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
+                                    <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>
+                                        🏫 Class Performance & Comparative Standing
+                                    </h4>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14, textAlign: 'center' }}>
+                                        <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{data.classStats.classAverageScore}</div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Class Average</div>
+                                        </div>
+                                        <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981' }}>{data.classStats.classTopScore}</div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Class Highest</div>
+                                        </div>
+                                        <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b' }}>#{data.classStats.rank} / {data.classStats.totalCandidates}</div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Class Rank</div>
+                                        </div>
+                                        <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#06b6d4' }}>{data.classStats.percentile}%</div>
+                                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Percentile</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -156,50 +177,7 @@ export default function Scorecard() {
                 {/* Weak Areas Tab */}
                 {activeTab === 'weakareas' && (
                     <div style={styles.tabContent}>
-                        {data.topic_diagnostics?.length > 0 ? (
-                            <>
-                                <p style={styles.weakNote}>Diagnostic analysis grouped by Subject, Topic, and Subtopic with strict weakness detection:</p>
-                                <div style={styles.weakList}>
-                                    {data.topic_diagnostics.map((td, i) => {
-                                        const badgeStyle = td.classification === 'CRITICAL_WEAKNESS'
-                                            ? { background: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171' }
-                                            : td.classification === 'MODERATE_WEAKNESS'
-                                            ? { background: '#fef3c7', color: '#b45309', border: '1px solid #fbbf24' }
-                                            : td.classification === 'STRENGTH'
-                                            ? { background: '#dcfce7', color: '#15803d', border: '1px solid #4ade80' }
-                                            : { background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' };
-
-                                        const label = td.classification === 'CRITICAL_WEAKNESS'
-                                            ? '🚨 Critical Weakness'
-                                            : td.classification === 'MODERATE_WEAKNESS'
-                                            ? '⚠️ Moderate Weakness'
-                                            : td.classification === 'STRENGTH'
-                                            ? '💪 Strength'
-                                            : 'Average';
-
-                                        return (
-                                            <div key={i} style={styles.weakCard}>
-                                                <div style={styles.weakRank}>#{i + 1}</div>
-                                                <div style={styles.weakInfo}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                                        <span style={styles.weakChapter}>{td.topic}</span>
-                                                        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, fontWeight: 700, ...badgeStyle }}>{label}</span>
-                                                    </div>
-                                                    <div style={styles.weakSubject}>{td.subject} {td.subtopic && td.subtopic !== 'General' ? `• ${td.subtopic}` : ''}</div>
-                                                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
-                                                        Accuracy: <strong>{td.accuracy_rate}%</strong> ({td.correct_in_topic}/{td.attempted_in_topic}) | Attempt Rate: <strong>{td.attempt_rate}%</strong> ({td.attempted_in_topic}/{td.total_in_topic})
-                                                    </div>
-                                                </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <div style={styles.weakCount}>{td.incorrect_in_topic} wrong</div>
-                                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>⏱️ {td.avg_time_per_topic_question}s / Q</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </>
-                        ) : data.weakAreas?.length > 0 ? (
+                        {data.weakAreas?.length > 0 ? (
                             <>
                                 <p style={styles.weakNote}>These chapters had the most incorrect answers. Focus your revision here:</p>
                                 <div style={styles.weakList}>
@@ -207,10 +185,18 @@ export default function Scorecard() {
                                         <div key={i} style={styles.weakCard}>
                                             <div style={styles.weakRank}>#{i + 1}</div>
                                             <div style={styles.weakInfo}>
-                                                <div style={styles.weakChapter}>{w.chapter}</div>
+                                                <div style={styles.weakChapter}>
+                                                    {w.chapter} {w.concept && w.concept !== 'General' ? `• ${w.concept}` : ''}
+                                                </div>
                                                 <div style={styles.weakSubject}>{w.subject}</div>
+                                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                                    ❌ {w.incorrect || 0} wrong • ⏭️ {w.unattempted || 0} skipped {w.accuracy !== undefined ? `(${w.accuracy}% accuracy)` : ''}
+                                                </div>
                                             </div>
-                                            <div style={styles.weakCount}>{w.incorrect} wrong</div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <div style={styles.weakCount}>{w.totalWeak || (w.incorrect + (w.unattempted || 0))} missed</div>
+                                                {w.avgTimePerQuestion ? <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>⏱️ {w.avgTimePerQuestion}s avg</div> : null}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -231,14 +217,10 @@ export default function Scorecard() {
                         )}
                         <div style={styles.reviewList}>
                             {data.breakdown?.map((q, i) => {
-                                const attempted = q.is_attempted !== undefined
-                                    ? q.is_attempted
-                                    : (q.selectedOption !== null && q.selectedOption !== '');
-
-                                let isCorrect = q.is_correct !== undefined ? q.is_correct : false;
+                                const attempted = q.selectedOption !== null && q.selectedOption !== '';
+                                let isCorrect = false;
                                 let isWrong = false;
-
-                                if (q.is_correct === undefined && attempted && !data.answerKeyHidden) {
+                                if (attempted && !data.answerKeyHidden) {
                                     // 1. Numerical match with tolerance
                                     const tolerance = q.numericalTolerance || 0;
                                     const parsedSelected = parseFloat(q.selectedOption);
@@ -270,16 +252,13 @@ export default function Scorecard() {
                                             }
                                         }
                                     }
-                                }
-
-                                if (attempted && !data.answerKeyHidden) {
                                     isWrong = !isCorrect;
                                 }
                                 return (
                                     <div key={q._id} style={{ ...styles.reviewCard, borderLeft: `4px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
                                         <div style={styles.reviewQHeader}>
                                             <span style={styles.reviewQNum}>Q{i + 1}</span>
-                                            <span style={styles.reviewSubject}>{q.subject} | {q.chapter}</span>
+                                            <span style={styles.reviewSubject}>{q.subject} | {q.chapter}{q.concept && q.concept !== 'General' ? ` • ${q.concept}` : ''}</span>
                                             <span style={styles.timeBadge}>⏱️ {formatSeconds(q.timeTaken || 0)}</span>
                                             {!attempted && <span style={styles.badge('#9ca3af')}>Skipped</span>}
                                             {attempted && !data.answerKeyHidden && isCorrect && <span style={styles.badgeGreen}>✅ Correct</span>}
@@ -352,30 +331,6 @@ export default function Scorecard() {
                                 <div style={styles.timeSummaryLabel}>Average Time Per Question</div>
                             </div>
                         </div>
-
-                        {data.panic_questions?.length > 0 && (
-                            <div style={{ marginTop: 24, padding: 16, background: '#fff1f2', borderRadius: 12, border: '1.5px solid #fda4af' }}>
-                                <h4 style={{ margin: '0 0 8px', color: '#be123c', fontSize: 15, fontWeight: 700 }}>
-                                    ⚠️ Time-Drain Mistakes (Panic Analysis)
-                                </h4>
-                                <p style={{ margin: '0 0 12px', fontSize: 13, color: '#9f1239' }}>
-                                    These questions consumed more than twice your average question time (&gt;{data.panic_questions[0]?.threshold_seconds}s) and resulted in an incorrect answer:
-                                </p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {data.panic_questions.map((pq, idx) => (
-                                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '10px 14px', borderRadius: 8, border: '1px solid #fecdd3' }}>
-                                            <div>
-                                                <span style={{ fontWeight: 700, color: '#1e293b' }}>{pq.subject_id}</span>
-                                                <span style={{ color: '#64748b', fontSize: 13, marginLeft: 8 }}>{pq.topic_id}</span>
-                                            </div>
-                                            <div style={{ fontWeight: 800, color: '#e11d48' }}>
-                                                ⏱️ {pq.time_spent_seconds}s (Threshold: {pq.threshold_seconds}s)
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
 
                         <h4 style={{ ...styles.sectionTitle, marginTop: 24 }}>Questions Taking the Most Time</h4>
                         {(() => {

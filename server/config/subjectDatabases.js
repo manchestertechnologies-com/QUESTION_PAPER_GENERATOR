@@ -6,7 +6,6 @@ dotenv.config();
 /**
  * 8 Dedicated Subject Databases Configuration
  * Each subject and class has its own isolated Supabase PostgreSQL database.
- * Totaling 77,853 questions across all 8 dedicated databases.
  */
 const DB_CONFIGS = {
     math_11: {
@@ -15,9 +14,8 @@ const DB_CONFIGS = {
         klass: '11',
         name: 'Mathematics Class 11',
         projectId: 'lhnwhbhnexxifuuqnzho',
-        envVar: 'SUPABASE_DB_MATH_11_URL',
-        altEnvVar: 'DB_MATH_11_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLmxobndoYmhuZXh4aWZ1dXFuemhvOlN1YkNsYXNzMTFNYXRoc0Bhd3MtMC1hcC1zb3V0aGVhc3QtMS5wb29sZXIuc3VwYWJhc2UuY29tOjU0MzIvcG9zdGdyZXM='
+        envVar: 'DB_MATH_11_URL',
+        defaultUrl: 'postgresql://postgres.lhnwhbhnexxifuuqnzho:SubClass11Maths@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
     },
     math_12: {
         key: 'math_12',
@@ -25,9 +23,8 @@ const DB_CONFIGS = {
         klass: '12',
         name: 'Mathematics Class 12',
         projectId: 'lukbqotnuxoznnrsdqvz',
-        envVar: 'SUPABASE_DB_MATH_12_URL',
-        altEnvVar: 'DB_MATH_12_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLmx1a2Jxb3RudXhvem5ucnNkcXZ6OlN1YkNsYXNzMTJNYXRoc0Bhd3MtMC1hcC1zb3V0aGVhc3QtMS5wb29sZXIuc3VwYWJhc2UuY29tOjU0MzIvcG9zdGdyZXM='
+        envVar: 'DB_MATH_12_URL',
+        defaultUrl: 'postgresql://postgres.lukbqotnuxoznnrsdqvz:SubClass12Maths@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
     },
     chem_11: {
         key: 'chem_11',
@@ -35,9 +32,8 @@ const DB_CONFIGS = {
         klass: '11',
         name: 'Chemistry Class 11',
         projectId: 'tloqcflffxrrlbxyphtb',
-        envVar: 'SUPABASE_DB_CHEM_11_URL',
-        altEnvVar: 'DB_CHEM_11_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLnRsb3FjZmxmZnhycmxieHlwaHRiOlN1YkNsYXNzMTFDaGVtaXN0cnlAYXdzLTAtYXAtbm9ydGhlYXN0LTEucG9vbGVyLnN1cGFiYXNlLmNvbTo1NDMyL3Bvc3RncmVz'
+        envVar: 'DB_CHEM_11_URL',
+        defaultUrl: 'postgresql://postgres.tloqcflffxrrlbxyphtb:SubClass11Chemistry@aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres'
     },
     chem_12: {
         key: 'chem_12',
@@ -45,9 +41,8 @@ const DB_CONFIGS = {
         klass: '12',
         name: 'Chemistry Class 12',
         projectId: 'dptruxcqfapmcmbxyobx',
-        envVar: 'SUPABASE_DB_CHEM_12_URL',
-        altEnvVar: 'DB_CHEM_12_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLmRwdHJ1eGNxZmFwbWNtYnh5b2J4OlN1YkNsYXNzMTJDaGVtaXN0cnlAYXdzLTAtYXAtc291dGhlYXN0LTEucG9vbGVyLnN1cGFiYXNlLmNvbTo1NDMyL3Bvc3RncmVz'
+        envVar: 'DB_CHEM_12_URL',
+        defaultUrl: 'postgresql://postgres.dptruxcqfapmcmbxyobx:SubClass12Chemistry@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
     },
     bio_11: {
         key: 'bio_11',
@@ -55,9 +50,8 @@ const DB_CONFIGS = {
         klass: '11',
         name: 'Biology Class 11',
         projectId: 'tcoaxdpzvzssnkclpvkt',
-        envVar: 'SUPABASE_DB_BIO_11_URL',
-        altEnvVar: 'DB_BIO_11_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLnRjb2F4ZHB6dnpzc25rY2xwdmt0OlN1YkNsYXNzMTFCaW9sb2d5QGF3cy0wLWFwLXNvdXRoZWFzdC0yLnBvb2xlci5zdXBhYmFzZS5jb206NTQzMi9wb3N0Z3Jlcw=='
+        envVar: 'DB_BIO_11_URL',
+        defaultUrl: 'postgresql://postgres.tcoaxdpzvzssnkclpvkt:SubClass11Biology@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres'
     },
     bio_12: {
         key: 'bio_12',
@@ -65,9 +59,8 @@ const DB_CONFIGS = {
         klass: '12',
         name: 'Biology Class 12',
         projectId: 'zxxvxddkncoluvidbtpf',
-        envVar: 'SUPABASE_DB_BIO_12_URL',
-        altEnvVar: 'DB_BIO_12_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLnp4eHZ4ZGRrbmNvbHV2aWRidHBmOlN1YkNsYXNzMTJCaW9sb2d5QGF3cy0wLWFwLXNvdXRoZWFzdC0yLnBvb2xlci5zdXBhYmFzZS5jb206NTQzMi9wb3N0Z3Jlcw=='
+        envVar: 'DB_BIO_12_URL',
+        defaultUrl: 'postgresql://postgres.zxxvxddkncoluvidbtpf:SubClass12Biology@aws-0-ap-southeast-2.pooler.supabase.com:5432/postgres'
     },
     phy_11: {
         key: 'phy_11',
@@ -75,9 +68,8 @@ const DB_CONFIGS = {
         klass: '11',
         name: 'Physics Class 11',
         projectId: 'pfnlbyjsjxttdachegne',
-        envVar: 'SUPABASE_DB_PHY_11_URL',
-        altEnvVar: 'DB_PHY_11_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLnBmbmxieWpzanh0dGRhY2hlZ25lOlN1YkNsYXNzMTFQaHlzaWNzQGF3cy0wLWFwLW5vcnRoZWFzdC0yLnBvb2xlci5zdXBhYmFzZS5jb206NTQzMi9wb3N0Z3Jlcw=='
+        envVar: 'DB_PHY_11_URL',
+        defaultUrl: 'postgresql://postgres.pfnlbyjsjxttdachegne:SubClass11Physics@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres'
     },
     phy_12: {
         key: 'phy_12',
@@ -85,17 +77,27 @@ const DB_CONFIGS = {
         klass: '12',
         name: 'Physics Class 12',
         projectId: 'fnbgbtvnqmccpvgpphua',
-        envVar: 'SUPABASE_DB_PHY_12_URL',
-        altEnvVar: 'DB_PHY_12_URL',
-        b64Conn: 'cG9zdGdyZXNxbDovL3Bvc3RncmVzLmZuYmdidHZucW1jY3B2Z3BwaHVhOlN1YkNsYXNzMTJQaHlzaWNzQGF3cy0wLWFwLXNvdXRoZWFzdC0xLnBvb2xlci5zdXBhYmFzZS5jb206NTQzMi9wb3N0Z3Jlcw=='
+        envVar: 'DB_PHY_12_URL',
+        defaultUrl: 'postgresql://postgres.fnbgbtvnqmccpvgpphua:SubClass12Physics@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres'
     }
 };
+
+const { createClient } = require('@supabase/supabase-js');
+
+const QBP_CONTROL_CONFIG = {
+    key: 'qbp_control',
+    name: 'QBP Control (PYQ & Grand Tests)',
+    projectId: 'hjjgjcvpqgcebuokjque',
+    url: process.env.DB_QBP_CONTROL_URL || 'https://hjjgjcvpqgcebuokjque.supabase.co',
+    secretKey: process.env.DB_QBP_CONTROL_KEY || Buffer.from('c2Jfc2VjcmV0X1hCNGtoZEZoUjNPNFBaZnM3VUx5N2dfamRaMHZaaGc=', 'base64').toString('ascii')
+};
+
+const qbpControlSupabase = createClient(QBP_CONTROL_CONFIG.url, QBP_CONTROL_CONFIG.secretKey);
 
 const pools = new Map();
 
 for (const [key, cfg] of Object.entries(DB_CONFIGS)) {
-    const defaultUrl = Buffer.from(cfg.b64Conn, 'base64').toString('utf8');
-    const connStr = process.env[cfg.envVar] || process.env[cfg.altEnvVar] || defaultUrl;
+    const connStr = process.env[cfg.envVar] || cfg.defaultUrl;
     const pool = new Pool({
         connectionString: connStr,
         ssl: { rejectUnauthorized: false },
@@ -114,21 +116,436 @@ for (const [key, cfg] of Object.entries(DB_CONFIGS)) {
     });
 }
 
+const CLASS_11_BOTANY_CHAPTERS = [
+    'The Living World',
+    'Biological Classification',
+    'Plant Kingdom',
+    'Morphology of Flowering Plants',
+    'Anatomy of Flowering Plants',
+    'Cell: The Unit of Life',
+    'Cell Cycle and Cell Division',
+    'Photosynthesis in Higher Plants',
+    'Respiration in Plants',
+    'Plant Growth and Development'
+];
+
+const CLASS_11_ZOOLOGY_CHAPTERS = [
+    'Animal Kingdom',
+    'Structural Organisation in Animals',
+    'Biomolecules',
+    'Breathing and Exchange of Gases',
+    'Body Fluids and Circulation',
+    'Excretory Products and Their Elimination',
+    'Locomotion and Movement',
+    'Neural Control and Coordination',
+    'Chemical Coordination and Integration'
+];
+
+const CLASS_12_BOTANY_CHAPTERS = [
+    'Sexual Reproduction in Flowering Plants',
+    'Principles of Inheritance and Variation',
+    'Molecular Basis of Inheritance',
+    'Microbes in Human Welfare',
+    'Biotechnology: Principles and Processes',
+    'Biotechnology and Its Applications',
+    'Organisms and Populations',
+    'Ecosystem',
+    'Biodiversity and Conservation'
+];
+
+const CLASS_12_ZOOLOGY_CHAPTERS = [
+    'Human Reproduction',
+    'Reproductive Health',
+    'Evolution',
+    'Human Health and Disease'
+];
+
+const BOTANY_CHAPTERS = [
+    ...CLASS_11_BOTANY_CHAPTERS,
+    ...CLASS_12_BOTANY_CHAPTERS
+];
+
+const ZOOLOGY_CHAPTERS = [
+    ...CLASS_11_ZOOLOGY_CHAPTERS,
+    ...CLASS_12_ZOOLOGY_CHAPTERS
+];
+
+const BIOLOGY_SYLLABUS = {
+    class_11: {
+        botany: [
+            {
+                chapter: 'The Living World',
+                concepts: [
+                    'Diversity in the Living World',
+                    'Taxonomic Categories'
+                ]
+            },
+            {
+                chapter: 'Biological Classification',
+                concepts: [
+                    'Kingdom Monera',
+                    'Kingdom Protista',
+                    'Kingdom Fungi',
+                    'Kingdom Plantae',
+                    'Kingdom Animalia',
+                    'Viruses, Viroids, Prions and Lichens'
+                ]
+            },
+            {
+                chapter: 'Plant Kingdom',
+                concepts: [
+                    'Algae',
+                    'Bryophytes',
+                    'Pteridophytes',
+                    'Gymnosperms',
+                    'Angiosperms'
+                ]
+            },
+            {
+                chapter: 'Morphology of Flowering Plants',
+                concepts: [
+                    'The Root',
+                    'The Stem',
+                    'The Leaf',
+                    'The Inflorescence',
+                    'The Flower',
+                    'The Fruit',
+                    'The Seed',
+                    'Semi-technical Description of a Typical Flowering Plant',
+                    'Description of Some Important Families'
+                ]
+            },
+            {
+                chapter: 'Anatomy of Flowering Plants',
+                concepts: [
+                    'The Tissue System',
+                    'Anatomy of Dicotyledonous and Monocotyledonous Plants'
+                ]
+            },
+            {
+                chapter: 'Cell: The Unit of Life',
+                concepts: [
+                    'What is a Cell?',
+                    'Cell Theory',
+                    'An Overview of Cell',
+                    'Prokaryotic Cells',
+                    'Eukaryotic Cells'
+                ]
+            },
+            {
+                chapter: 'Cell Cycle and Cell Division',
+                concepts: [
+                    'Cell Cycle',
+                    'M Phase',
+                    'Significance of Mitosis',
+                    'Meiosis',
+                    'Significance of Meiosis'
+                ]
+            },
+            {
+                chapter: 'Photosynthesis in Higher Plants',
+                concepts: [
+                    'What do we Know?',
+                    'Early Experiments',
+                    'Where does Photosynthesis take place?',
+                    'How many Pigments are involved in Photosynthesis?',
+                    'What is Light Reaction?',
+                    'The Electron Transport',
+                    'Where are the ATP and NADPH Used?',
+                    'The C4 Pathway',
+                    'Photorespiration',
+                    'Factors affecting Photosynthesis'
+                ]
+            },
+            {
+                chapter: 'Respiration in Plants',
+                concepts: [
+                    'Do Plants Breathe?',
+                    'Glycolysis',
+                    'Fermentation',
+                    'Aerobic Respiration',
+                    'The Respiratory Balance Sheet',
+                    'Amphibolic Pathway',
+                    'Respiratory Quotient'
+                ]
+            },
+            {
+                chapter: 'Plant Growth and Development',
+                concepts: [
+                    'Growth',
+                    'Differentiation, Dedifferentiation and Redifferentiation',
+                    'Development',
+                    'Plant Growth Regulators'
+                ]
+            }
+        ],
+        zoology: [
+            {
+                chapter: 'Animal Kingdom',
+                concepts: [
+                    'Basis of Classification',
+                    'Classification of Animals'
+                ]
+            },
+            {
+                chapter: 'Structural Organisation in Animals',
+                concepts: [
+                    'Organ and Organ System',
+                    'Frogs'
+                ]
+            },
+            {
+                chapter: 'Biomolecules',
+                concepts: [
+                    'How to Analyse Chemical Composition?',
+                    'Primary and Secondary Metabolites',
+                    'Biomacromolecules',
+                    'Proteins',
+                    'Polysaccharides',
+                    'Nucleic Acids',
+                    'Structure of Proteins',
+                    'Enzymes'
+                ]
+            },
+            {
+                chapter: 'Breathing and Exchange of Gases',
+                concepts: [
+                    'Respiratory Organs',
+                    'Mechanism of Breathing',
+                    'Exchange of Gases',
+                    'Transport of Gases',
+                    'Regulation of Respiration',
+                    'Disorders of Respiratory System'
+                ]
+            },
+            {
+                chapter: 'Body Fluids and Circulation',
+                concepts: [
+                    'Blood',
+                    'Lymph (Tissue Fluid)',
+                    'Circulatory Pathways',
+                    'Double Circulation',
+                    'Regulation of Cardiac Activity',
+                    'Disorders of Circulatory System'
+                ]
+            },
+            {
+                chapter: 'Excretory Products and Their Elimination',
+                concepts: [
+                    'Human Excretory System',
+                    'Urine Formation',
+                    'Function of the Tubules',
+                    'Mechanism of Concentration of the Filtrate',
+                    'Regulation of Kidney Function',
+                    'Micturition',
+                    'Role of Other Organs in Excretion',
+                    'Disorders of the Excretory System'
+                ]
+            },
+            {
+                chapter: 'Locomotion and Movement',
+                concepts: [
+                    'Types of Movement',
+                    'Muscle',
+                    'Skeletal System',
+                    'Joints',
+                    'Disorders of Muscular and Skeletal System'
+                ]
+            },
+            {
+                chapter: 'Neural Control and Coordination',
+                concepts: [
+                    'Neural System',
+                    'Human Neural System',
+                    'Neuron as Structural and Functional Unit of Neural System',
+                    'Central Neural System'
+                ]
+            },
+            {
+                chapter: 'Chemical Coordination and Integration',
+                concepts: [
+                    'Endocrine Glands and Hormones',
+                    'Human Endocrine System',
+                    'Hormones of Heart, Kidney and Gastrointestinal Tract',
+                    'Mechanism of Hormone Action'
+                ]
+            }
+        ]
+    },
+    class_12: {
+        botany: [
+            {
+                chapter: 'Sexual Reproduction in Flowering Plants',
+                concepts: [
+                    'Flower – A Fascinating Organ of Angiosperms',
+                    'Pre-fertilisation: Structures and Events',
+                    'Double Fertilisation',
+                    'Post-fertilisation: Structures and Events',
+                    'Apomixis and Polyembryony'
+                ]
+            },
+            {
+                chapter: 'Principles of Inheritance and Variation',
+                concepts: [
+                    "Mendel's Laws of Inheritance",
+                    'Inheritance of One Gene',
+                    'Inheritance of Two Genes',
+                    'Polygenic Inheritance',
+                    'Pleiotropy',
+                    'Sex Determination',
+                    'Mutation',
+                    'Genetic Disorders'
+                ]
+            },
+            {
+                chapter: 'Molecular Basis of Inheritance',
+                concepts: [
+                    'The DNA',
+                    'The Search for Genetic Material',
+                    'RNA World',
+                    'Replication',
+                    'Transcription',
+                    'Genetic Code',
+                    'Translation',
+                    'Regulation of Gene Expression',
+                    'Human Genome Project',
+                    'DNA Fingerprinting'
+                ]
+            },
+            {
+                chapter: 'Microbes in Human Welfare',
+                concepts: [
+                    'Microbes in Household Products',
+                    'Microbes in Industrial Products',
+                    'Microbes in Sewage Treatment',
+                    'Microbes in Production of Biogas',
+                    'Microbes as Biocontrol Agents',
+                    'Microbes as Biofertilisers'
+                ]
+            },
+            {
+                chapter: 'Biotechnology: Principles and Processes',
+                concepts: [
+                    'Principles of Biotechnology',
+                    'Tools of Recombinant DNA Technology',
+                    'Processes of Recombinant DNA Technology'
+                ]
+            },
+            {
+                chapter: 'Biotechnology and Its Applications',
+                concepts: [
+                    'Biotechnological Applications in Agriculture',
+                    'Biotechnological Applications in Medicine',
+                    'Transgenic Animals',
+                    'Ethical Issues'
+                ]
+            },
+            {
+                chapter: 'Organisms and Populations',
+                concepts: [
+                    'Populations'
+                ]
+            },
+            {
+                chapter: 'Ecosystem',
+                concepts: [
+                    'Ecosystem – Structure and Function',
+                    'Productivity',
+                    'Decomposition',
+                    'Energy Flow',
+                    'Ecological Pyramids'
+                ]
+            },
+            {
+                chapter: 'Biodiversity and Conservation',
+                concepts: [
+                    'Biodiversity',
+                    'Biodiversity Conservation'
+                ]
+            }
+        ],
+        zoology: [
+            {
+                chapter: 'Human Reproduction',
+                concepts: [
+                    'The Male Reproductive System',
+                    'The Female Reproductive System',
+                    'Gametogenesis',
+                    'Menstrual Cycle',
+                    'Fertilisation and Implantation',
+                    'Pregnancy and Embryonic Development',
+                    'Parturition and Lactation'
+                ]
+            },
+            {
+                chapter: 'Reproductive Health',
+                concepts: [
+                    'Reproductive Health – Problems and Strategies',
+                    'Population Explosion and Birth Control',
+                    'Medical Termination of Pregnancy (MTP)',
+                    'Sexually Transmitted Infections (STIs)',
+                    'Infertility'
+                ]
+            },
+            {
+                chapter: 'Evolution',
+                concepts: [
+                    'Origin of Life',
+                    'Evolution of Life Forms – A Theory',
+                    'What are the Evidences for Evolution?',
+                    'What is Adaptive Radiation?',
+                    'Biological Evolution',
+                    'Mechanism of Evolution',
+                    'Hardy-Weinberg Principle',
+                    'A Brief Account of Evolution',
+                    'Origin and Evolution of Man'
+                ]
+            },
+            {
+                chapter: 'Human Health and Disease',
+                concepts: [
+                    'Common Diseases in Humans',
+                    'Immunity',
+                    'AIDS',
+                    'Cancer',
+                    'Drugs and Alcohol Abuse'
+                ]
+            }
+        ]
+    }
+};
+
+function canonicalizeChapter(name) {
+    if (!name || typeof name !== 'string') return '';
+    const clean = name.trim();
+    const lower = clean.toLowerCase().replace(/[^a-z0-9]/g, '');
+    
+    // Check all syllabus chapters
+    for (const ch of [...BOTANY_CHAPTERS, ...ZOOLOGY_CHAPTERS]) {
+        if (ch.toLowerCase().replace(/[^a-z0-9]/g, '') === lower) {
+            return ch;
+        }
+    }
+    return clean;
+}
+
 function normalizeSubject(sub) {
     if (!sub || typeof sub !== 'string') return null;
     const clean = sub.trim().toLowerCase();
     if (clean.includes('math')) return 'Mathematics';
     if (clean.includes('physic')) return 'Physics';
     if (clean.includes('chem')) return 'Chemistry';
-    if (clean.includes('bio') || clean.includes('botan') || clean.includes('zool')) return 'Biology';
+    if (clean.includes('botany')) return 'Botany';
+    if (clean.includes('zoology')) return 'Zoology';
+    if (clean.includes('bio')) return 'Biology';
     return sub.trim();
 }
 
 function normalizeClass(klass) {
     if (!klass) return null;
     if (Array.isArray(klass)) {
-        const has11 = klass.some(k => String(k).includes('11') || String(k).toLowerCase().includes('i'));
-        const has12 = klass.some(k => String(k).includes('12') || String(k).toLowerCase().includes('ii'));
+        const has11 = klass.some(k => String(k).includes('11'));
+        const has12 = klass.some(k => String(k).includes('12'));
         if (has11 && has12) return 'both';
         if (has11) return '11';
         if (has12) return '12';
@@ -136,8 +553,8 @@ function normalizeClass(klass) {
     }
     const str = String(klass).toLowerCase();
     if (str.includes('both') || (str.includes('11') && str.includes('12'))) return 'both';
-    if (str.includes('11') || str.includes('i')) return '11';
-    if (str.includes('12') || str.includes('ii')) return '12';
+    if (str.includes('11')) return '11';
+    if (str.includes('12')) return '12';
     return null;
 }
 
@@ -149,7 +566,7 @@ function getPoolForTarget(subject, klass = '12') {
     let prefix = 'phy';
     if (normSub === 'Mathematics') prefix = 'math';
     else if (normSub === 'Chemistry') prefix = 'chem';
-    else if (normSub === 'Biology') prefix = 'bio';
+    else if (normSub === 'Biology' || normSub === 'Botany' || normSub === 'Zoology') prefix = 'bio';
     else if (normSub === 'Physics') prefix = 'phy';
 
     const key = `${prefix}_${effectiveKlass}`;
@@ -157,17 +574,48 @@ function getPoolForTarget(subject, klass = '12') {
 }
 
 function getPoolsForQuery(subject, klass) {
-    const normSub = normalizeSubject(subject);
-    const normKlass = normalizeClass(klass);
-
     const all = Array.from(pools.values());
-
     let filtered = all;
 
-    if (normSub) {
-        filtered = filtered.filter(p => p.subject.toLowerCase() === normSub.toLowerCase());
+    if (subject) {
+        const subList = Array.isArray(subject)
+            ? subject
+            : String(subject).split(',').map(s => s.trim()).filter(Boolean);
+
+        const matchedSubjects = new Set();
+        subList.forEach(s => {
+            const raw = s.toUpperCase().trim();
+            if (raw === 'PCM') {
+                matchedSubjects.add('physics');
+                matchedSubjects.add('chemistry');
+                matchedSubjects.add('mathematics');
+            } else if (raw === 'PCB') {
+                matchedSubjects.add('physics');
+                matchedSubjects.add('chemistry');
+                matchedSubjects.add('biology');
+            } else if (raw === 'PCMB' || raw === 'MIXED' || raw === 'ALL' || raw === 'ALL SUBJECTS') {
+                matchedSubjects.add('physics');
+                matchedSubjects.add('chemistry');
+                matchedSubjects.add('mathematics');
+                matchedSubjects.add('biology');
+            } else {
+                const norm = normalizeSubject(s);
+                if (norm) {
+                    if (['Botany', 'Zoology', 'Biology'].includes(norm)) {
+                        matchedSubjects.add('biology');
+                    } else {
+                        matchedSubjects.add(norm.toLowerCase());
+                    }
+                }
+            }
+        });
+
+        if (matchedSubjects.size > 0) {
+            filtered = filtered.filter(p => matchedSubjects.has(p.subject.toLowerCase()));
+        }
     }
 
+    const normKlass = normalizeClass(klass);
     if (normKlass && normKlass !== 'both') {
         filtered = filtered.filter(p => p.klass === normKlass);
     }
@@ -181,7 +629,17 @@ function getAllPools() {
 
 module.exports = {
     DB_CONFIGS,
+    QBP_CONTROL_CONFIG,
+    qbpControlSupabase,
     pools,
+    CLASS_11_BOTANY_CHAPTERS,
+    CLASS_11_ZOOLOGY_CHAPTERS,
+    CLASS_12_BOTANY_CHAPTERS,
+    CLASS_12_ZOOLOGY_CHAPTERS,
+    BOTANY_CHAPTERS,
+    ZOOLOGY_CHAPTERS,
+    BIOLOGY_SYLLABUS,
+    canonicalizeChapter,
     normalizeSubject,
     normalizeClass,
     getPoolForTarget,

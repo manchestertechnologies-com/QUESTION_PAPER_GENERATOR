@@ -14,6 +14,9 @@ const path = require('path');
 const fs = require('fs');
 const cookieParser = require('cookie-parser');
 
+const connectDB = require('./config/db');
+
+
 // ── Security Middleware
 const helmet = require('helmet');
 const mongoSanitize = require('./middleware/mongoSanitize');
@@ -26,13 +29,12 @@ const adminRoutes = require('./routes/admin.js');
 const questionRoutes = require('./routes/questions.js');
 const paperRoutes = require('./routes/papers.js');
 const templateRoutes = require('./routes/templates.js');
-const examRoutes = require('./routes/exams.js');
-const labRoutes = require('./routes/lab.js');
 const grandTestRoutes = require('./routes/grandTests.js');
 const previousYearPaperRoutes = require('./routes/previousYearPapers.js');
 const examBlueprintRoutes = require('./routes/examBlueprints.js');
 const notificationRoutes = require('./routes/notifications.js');
-const testModuleRoutes = require('./routes/testModule.js');
+const examRoutes = require('./routes/exams.js');
+const labRoutes = require('./routes/lab.js');
 const omrRoutes = require('./routes/omr.js');
 
 dotenv.config();
@@ -44,16 +46,7 @@ const app = express();
 // ─────────────────────────────────────────────────────────────────────────────
 app.use(helmet({
     crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: process.env.NODE_ENV === 'test' ? {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "*"],
-            styleSrc: ["'self'", "'unsafe-inline'", "*"],
-            imgSrc: ["'self'", "data:", "blob:", "*"],
-            connectSrc: ["'self'", "*"],
-            fontSrc: ["'self'", "data:", "*"]
-        }
-    } : false
+    contentSecurityPolicy: false
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,8 +66,8 @@ app.use(cors({
 // ─────────────────────────────────────────────────────────────────────────────
 // Body Parsing — Strict size limits
 // ─────────────────────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +96,8 @@ app.use('/uploads', express.static(uploadsDir));
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.json({
-        message: 'QPG System API is running',
+        institution: 'Manchester Technologies',
+        message: 'Manchester Technologies Question Paper Generator API is running',
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '2.0.0'
@@ -113,8 +107,9 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
     const dbState = ['disconnected', 'connected', 'connecting', 'disconnecting'];
     res.json({
+        institution: 'Manchester Technologies',
         status: 'ok',
-        db: dbState[mongoose.connection.readyState] || 'unknown',
+        db: dbState[mongoose.connection.readyState] || 'supabase_postgres',
         uptime: Math.floor(process.uptime()),
         version: '2.0.0',
         timestamp: new Date().toISOString()
@@ -129,13 +124,12 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/papers', paperRoutes);
 app.use('/api/templates', templateRoutes);
-app.use('/api/exams', examRoutes);
-app.use('/api/lab', labRoutes);
 app.use('/api/grand-tests', grandTestRoutes);
 app.use('/api/previous-year-papers', previousYearPaperRoutes);
 app.use('/api/exam-blueprints', examBlueprintRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/test-module', testModuleRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/lab', labRoutes);
 app.use('/api/omr', omrRoutes);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -156,17 +150,41 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== 'test') {
-    mongoose.connect(process.env.MONGO_URI)
-        .then(() => {
-            console.log('✅ MongoDB Connected');
-            app.listen(PORT, '0.0.0.0', () => {
-                console.log(`✅ Server running on port ${PORT}`);
-            });
-        })
-        .catch(err => {
-            console.error('❌ MongoDB connection failed:', err.message);
-            process.exit(1);
+    // ── Async startup: await MongoDB, then start listening ──────────────────
+    (async () => {
+        // 1. Warm up Supabase PostgreSQL pool (subject question databases)
+        try {
+            const pool = require('./config/postgres');
+            await pool.query('SELECT 1');
+            console.log('✅ Supabase PostgreSQL Connected for Manchester Technologies');
+            const storage = require('./services/postgresStorage');
+            await storage.seedDefaultBlueprints();
+        } catch (pgErr) {
+            console.warn('⚠️ Supabase PostgreSQL connection notice:', pgErr.message);
+        }
+
+        // 2. Connect MongoDB Atlas — background sync & secondary persistence
+        mongoose.set('bufferCommands', false);
+        if (process.env.MONGO_URI) {
+            try {
+                await mongoose.connect(process.env.MONGO_URI, {
+                    serverSelectionTimeoutMS: 5000
+                });
+                console.log('✅ MongoDB Atlas Connected (Manchester Technologies database)');
+            } catch (mongoErr) {
+                // Log error but don't crash — Postgres routes are fully operational
+                console.warn('⚠️ MongoDB connection notice:', mongoErr.message);
+            }
+        } else {
+            console.warn('⚠️ MONGO_URI not set — operating with PostgreSQL primary engine.');
+        }
+
+        // 3. Start the HTTP server
+        app.listen(PORT, '0.0.0.0', () => {
+            const dbStatus = mongoose.connection.readyState === 1 ? 'MongoDB ✅' : 'MongoDB ❌';
+            console.log(`✅ Manchester Technologies QPG Server running on port ${PORT} | ${dbStatus}`);
         });
+    })();
 }
 
 module.exports = app; // Exported for supertest

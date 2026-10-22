@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
-import FourDotLoader from '../../components/FourDotLoader';
 
 export default function StudentLabPortal() {
     const navigate = useNavigate();
@@ -57,32 +56,56 @@ export default function StudentLabPortal() {
         return () => clearInterval(poll);
     }, [fetchExams]);
 
-    // ── Handle Student Login / Registration ──
-    const handleStudentLogin = (e) => {
-        e.preventDefault();
-        const trimmedName = studentName.trim();
-        const trimmedReg = regNo.trim().toUpperCase();
+    const [verifying, setVerifying] = useState(false);
 
-        if (!trimmedName || !trimmedReg) {
-            setError('Please enter both your Student Full Name and Register Number.');
+    // ── Handle Student Login / Registration via Official Database ──
+    const handleStudentLogin = async (e) => {
+        e.preventDefault();
+        const trimmedReg = regNo.trim().toUpperCase().replace(/[\s\-_]/g, '');
+
+        if (!trimmedReg) {
+            setError('Please enter your official Student Enrollment Number.');
             return;
         }
 
-        const info = {
-            studentName: trimmedName,
-            rollNumber: trimmedReg,
-            class: studentClass,
-            studentEmail: `${trimmedReg.toLowerCase()}@student.sapthagiri.edu`
-        };
-
-        localStorage.setItem('student_info', JSON.stringify(info));
-        setSavedStudent(info);
-        setIsLoggedIn(true);
+        setVerifying(true);
         setError('');
+
+        try {
+            const res = await api.get(`/api/lab/student/${encodeURIComponent(trimmedReg)}`);
+            const s = res.data;
+            const classNum = s.classLevel?.includes('I-PUC') && !s.classLevel?.includes('II') ? '11' : '12';
+
+            const info = {
+                studentName: s.name,
+                rollNumber: s.rollNumber || trimmedReg,
+                enrollmentNo: s.enrollmentNo || trimmedReg,
+                section: s.section || '',
+                class: classNum,
+                classLevel: s.classLevel || (classNum === '11' ? 'I-PUC' : 'II-PUC'),
+                studentEmail: s.email || `${trimmedReg.toLowerCase()}@student.sapthagiri.edu`
+            };
+
+            localStorage.setItem('student_info', JSON.stringify(info));
+            setSavedStudent(info);
+            setStudentName(s.name);
+            setStudentClass(classNum);
+            setIsLoggedIn(true);
+            setError('');
+        } catch (err) {
+            console.error('Student verification error:', err);
+            const errorMsg = err.response?.data?.msg || `Access Denied: Enrollment Number "${trimmedReg}" was not found in Manchester Technologies records. Only enrolled students are allowed to access examinations.`;
+            setError(errorMsg);
+            setIsLoggedIn(false);
+        } finally {
+            setVerifying(false);
+        }
     };
 
     const handleSwitchStudent = () => {
         setIsLoggedIn(false);
+        setSavedStudent(null);
+        localStorage.removeItem('student_info');
     };
 
     // ── Helper: Format Countdown ──
@@ -196,11 +219,11 @@ export default function StudentLabPortal() {
                 <div className="max-w-6xl mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-3.5">
                         <div className="w-12 h-12 rounded-xl bg-white p-1 flex items-center justify-center shadow-lg border border-amber-400/30">
-                            <img src="/ManchesterLogo.jpeg" alt="Manchester College Crest" className="w-full h-full object-contain rounded-lg" />
+                            <img src="/ManchesterLogo.jpeg" alt="Manchester Technologies Crest" className="w-full h-full object-contain rounded-lg" />
                         </div>
                         <div>
                             <h1 className="text-base font-extrabold tracking-wide text-white uppercase">
-                                Sapthagiri Pre University College
+                                Manchester Technologies
                             </h1>
                             <p className="text-xs text-amber-400 font-semibold tracking-wider flex items-center gap-2">
                                 <span>Davanagere • The Land of Opportunity</span>
@@ -254,57 +277,33 @@ export default function StudentLabPortal() {
                             <form onSubmit={handleStudentLogin} className="space-y-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                                        Registration / Roll Number *
+                                        Student Enrollment Number *
                                     </label>
                                     <input
                                         type="text"
                                         required
                                         autoFocus
-                                        placeholder="e.g. 24SC0149 or PU2025001"
+                                        placeholder="Enter your enrollment number"
                                         value={regNo}
-                                        onChange={(e) => setRegNo(e.target.value.toUpperCase())}
-                                        className="w-full px-4 py-3 rounded-xl bg-[#071328] border border-slate-700 text-white placeholder-slate-500 font-mono font-semibold focus:outline-none focus:border-amber-400 transition"
+                                        onChange={(e) => setRegNo(e.target.value.trim().toUpperCase())}
+                                        className="w-full px-4 py-3 rounded-xl bg-[#071328] border border-slate-700 text-white placeholder-slate-600 font-mono font-semibold focus:outline-none focus:border-amber-400 transition"
                                     />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                                        Candidate Full Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        required
-                                        placeholder="e.g. Rahul Sharma"
-                                        value={studentName}
-                                        onChange={(e) => setStudentName(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl bg-[#071328] border border-slate-700 text-white placeholder-slate-500 font-medium focus:outline-none focus:border-amber-400 transition"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                                        Class / Standard
-                                    </label>
-                                    <select
-                                        value={studentClass}
-                                        onChange={(e) => setStudentClass(e.target.value)}
-                                        className="w-full px-4 py-3 rounded-xl bg-[#071328] border border-slate-700 text-white font-medium focus:outline-none focus:border-amber-400 transition"
-                                    >
-                                        <option value="12">2nd PUC (Class 12)</option>
-                                        <option value="11">1st PUC (Class 11)</option>
-                                    </select>
+                                    <p className="text-[11px] text-slate-400 mt-1.5">
+                                        Enter your official Student Enrollment Number from college register.
+                                    </p>
                                 </div>
 
                                 <button
                                     type="submit"
-                                    className="w-full mt-6 py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-wider uppercase text-sm shadow-xl shadow-amber-500/20 active:scale-[0.99] transition cursor-pointer"
+                                    disabled={verifying}
+                                    className="w-full mt-6 py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black tracking-wider uppercase text-sm shadow-xl shadow-amber-500/20 active:scale-[0.99] transition cursor-pointer disabled:opacity-50"
                                 >
-                                    Proceed to Examination Room →
+                                    {verifying ? 'Verifying Enrollment...' : 'Verify & Enter Examination Portal →'}
                                 </button>
                             </form>
 
                             <div className="mt-6 pt-4 border-t border-slate-800 text-center text-[11px] text-slate-400">
-                                🔒 Dedicated Lab Portal • Manchester PU College Davanagere
+                                🔒 Dedicated Lab Portal • Manchester Technologies Davanagere
                             </div>
                         </div>
                     </div>
@@ -318,14 +317,23 @@ export default function StudentLabPortal() {
                                     👨‍🎓
                                 </div>
                                 <div>
-                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Active Student Terminal</div>
-                                    <div className="text-lg font-black text-white flex items-center gap-2">
+                                    <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Verified Student Terminal</div>
+                                    <div className="text-lg font-black text-white flex items-center gap-2 flex-wrap">
                                         <span>{savedStudent.studentName}</span>
                                         <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                                            {savedStudent.rollNumber}
+                                            Enrollment: {savedStudent.enrollmentNo || savedStudent.rollNumber}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-slate-400 font-medium">Class: {savedStudent.class || '12'}th PUC</div>
+                                    <div className="text-xs text-slate-300 font-medium mt-0.5 flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-400 font-semibold border border-slate-700">
+                                            {savedStudent.classLevel || `${savedStudent.class}th PUC`}
+                                        </span>
+                                        {savedStudent.section && (
+                                            <span className="text-slate-400">
+                                                Section: <strong className="text-white">{savedStudent.section}</strong>
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -363,7 +371,8 @@ export default function StudentLabPortal() {
                         {/* Loading State */}
                         {loading ? (
                             <div className="py-20 text-center">
-                                <FourDotLoader size="lg" text="Synchronizing Exam Schedules..." />
+                                <div className="w-10 h-10 border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin mx-auto mb-3" />
+                                <p className="text-xs text-slate-400 tracking-wider uppercase font-semibold">Synchronizing Exam Schedules...</p>
                             </div>
                         ) : visibleExams.length === 0 ? (
                             /* No exams visible yet */
@@ -491,7 +500,7 @@ export default function StudentLabPortal() {
 
             {/* Footer */}
             <footer className="border-t border-slate-800/80 bg-[#071328]/90 py-4 px-6 text-center text-xs text-slate-500">
-                Sapthagiri Pre University College, Davanagere • Autonomous Examination Terminal
+                Manchester Technologies, Davanagere • Autonomous Examination Terminal
             </footer>
         </div>
     );

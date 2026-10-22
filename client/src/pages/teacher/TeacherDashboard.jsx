@@ -13,13 +13,11 @@ import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, Routes, Route, Link, useLocation } from 'react-router-dom';
 import AddQuestion from './AddQuestion';
 import SavedPapers from './SavedPapers';
-import FourDotLoader from '../../components/FourDotLoader';
 import TemplateCart from './TemplateCart';
 import GrandTestList from '../admin/GrandTestList';
 import PreviousYearPapers from '../admin/PreviousYearPapers';
 import AssignmentGenerator from './AssignmentGenerator';
 import TeacherOmr from './omr/TeacherOmr';
-import DailyQuestionsBadge from '../../components/DailyQuestionsBadge';
 import api from '../../api';
 
 // ── Teacher Notification Bell Component ──────────────────────────────────────
@@ -210,8 +208,9 @@ const TeacherAssignmentsSection = () => {
 
     if (loading) {
         return (
-            <div className="mb-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-xs flex items-center justify-center">
-                <FourDotLoader size="sm" text="Checking assignments..." />
+            <div className="mb-4 p-4 bg-white rounded-2xl border border-gray-100 shadow-xs flex items-center justify-center gap-2.5">
+                <div className="w-4 h-4 border-2 border-navy border-t-gold rounded-full animate-spin"></div>
+                <span className="text-xs font-bold text-slate/60">Checking assignments...</span>
             </div>
         );
     }
@@ -301,113 +300,15 @@ const TeacherDashboardHome = () => {
     const { user } = useContext(AuthContext);
     const hasOmr = Boolean(user?.role === 'admin' || user?.omrAccess || user?.omr_access);
 
-    const quotas = user?.quotas || {
-        assessment: { used: 0, max: 2, maxQuestions: 60 },
-        jee: { used: 0, max: 2, maxQuestions: 240 },
-        neet: { used: 0, max: 2, maxQuestions: 240 },
-        cet: { used: 0, max: 2, maxQuestions: 240 }
-    };
-
     return (
         <div className="animate-fade-in-up">
-            {/* ── WELCOME & INSTITUTION BRANDING CARD ── */}
-            <div className="mb-5 bg-white p-5 sm:p-6 rounded-2xl shadow-xs border-l-4 border-navy relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-gold/20 text-navy tracking-widest">
-                            {user?.institutionName || 'Manchester College'}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-400">
-                            • {user?.subject || 'PCMB'} Faculty
-                        </span>
-                    </div>
-                    <h3 className="font-black text-xl text-navy">Welcome, {user?.name || 'Faculty Member'}</h3>
-                    <p className="text-slate/70 font-medium text-xs max-w-2xl leading-relaxed mt-1">
-                        Generate official institutional assessments and entrance question papers under <strong>{user?.institutionName || 'Manchester College'}</strong>.
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <Link
-                        to="/teacher/create-paper"
-                        className="bg-navy text-gold hover:bg-gold hover:text-navy px-5 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow-md flex items-center gap-2 cursor-pointer"
-                    >
-                        <span>+</span>
-                        <span>Generate Paper</span>
-                    </Link>
-                </div>
+            <div className="mb-5 bg-white p-5 sm:p-6 rounded-2xl shadow-xs border-l-4 border-navy relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-gold/5 rounded-full -mr-12 -mt-12"></div>
+                <h3 className="font-black text-xl text-navy mb-1.5">Welcome to your Workspace</h3>
+                <p className="text-slate/70 font-medium text-xs max-w-2xl leading-relaxed">
+                    Access your subject's question bank, generate standardized institutional papers, and complete assigned exam papers for your department.
+                </p>
             </div>
-
-            {/* ── TRIAL GENERATION QUOTA TRACKER BANNER ── */}
-            {user?.isTrial !== false && (
-                <div className="mb-6 bg-gradient-to-r from-slate-900 to-navy text-white p-5 rounded-2xl shadow-lg border border-gold/30">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3 mb-3">
-                        <div className="flex items-center gap-2.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-gold animate-pulse"></span>
-                            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gold">
-                                Live Trial Generation Quotas
-                            </h3>
-                        </div>
-                        <span className="text-[10px] text-white/60 font-bold uppercase tracking-widest">
-                            Persistent Database Tracking • PDF Export Only
-                        </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {/* Assessment */}
-                        <div className="bg-white/10 p-3 rounded-xl border border-white/10">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-gold">
-                                <span>📝 Assessment</span>
-                                <span className={quotas.assessment?.used >= (quotas.assessment?.max || 2) ? 'text-rose-400' : 'text-emerald-400'}>
-                                    {quotas.assessment?.used >= (quotas.assessment?.max || 2) ? 'Limit Reached' : `${(quotas.assessment?.max || 2) - (quotas.assessment?.used || 0)} Left`}
-                                </span>
-                            </div>
-                            <div className="text-sm font-black text-white mt-1">
-                                {quotas.assessment?.used || 0} / {quotas.assessment?.max || 2} <span className="text-[10px] text-white/50 font-medium">Papers (Max 60 Qs)</span>
-                            </div>
-                        </div>
-
-                        {/* JEE */}
-                        <div className="bg-white/10 p-3 rounded-xl border border-white/10">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-gold">
-                                <span>⚡ JEE Standard</span>
-                                <span className={quotas.jee?.used >= (quotas.jee?.max || 2) ? 'text-rose-400' : 'text-emerald-400'}>
-                                    {quotas.jee?.used >= (quotas.jee?.max || 2) ? 'Limit Reached' : `${(quotas.jee?.max || 2) - (quotas.jee?.used || 0)} Left`}
-                                </span>
-                            </div>
-                            <div className="text-sm font-black text-white mt-1">
-                                {quotas.jee?.used || 0} / {quotas.jee?.max || 2} <span className="text-[10px] text-white/50 font-medium">Papers (Max 240 Qs)</span>
-                            </div>
-                        </div>
-
-                        {/* NEET */}
-                        <div className="bg-white/10 p-3 rounded-xl border border-white/10">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-gold">
-                                <span>🧬 NEET Standard</span>
-                                <span className={quotas.neet?.used >= (quotas.neet?.max || 2) ? 'text-rose-400' : 'text-emerald-400'}>
-                                    {quotas.neet?.used >= (quotas.neet?.max || 2) ? 'Limit Reached' : `${(quotas.neet?.max || 2) - (quotas.neet?.used || 0)} Left`}
-                                </span>
-                            </div>
-                            <div className="text-sm font-black text-white mt-1">
-                                {quotas.neet?.used || 0} / {quotas.neet?.max || 2} <span className="text-[10px] text-white/50 font-medium">Papers (Max 240 Qs)</span>
-                            </div>
-                        </div>
-
-                        {/* CET */}
-                        <div className="bg-white/10 p-3 rounded-xl border border-gold/30 bg-gold/5">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-gold">
-                                <span>🎯 CET Standard</span>
-                                <span className={quotas.cet?.used >= (quotas.cet?.max || 2) ? 'text-rose-400' : 'text-emerald-400'}>
-                                    {quotas.cet?.used >= (quotas.cet?.max || 2) ? 'Limit Reached' : `${(quotas.cet?.max || 2) - (quotas.cet?.used || 0)} Left`}
-                                </span>
-                            </div>
-                            <div className="text-sm font-black text-white mt-1">
-                                {quotas.cet?.used || 0} / {quotas.cet?.max || 2} <span className="text-[10px] text-white/50 font-medium">Papers (Max 240 Qs)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* ── ASSIGNMENTS & NOTIFICATIONS SECTION ── */}
             <TeacherAssignmentsSection />
@@ -558,7 +459,7 @@ const TeacherDashboard = () => {
                                     <img src="/ManchesterLogo.jpeg" alt="Logo" className="w-full h-full object-contain rounded-lg" />
                                 </div>
                                 <div>
-                                    <h2 className="text-sm font-black uppercase tracking-tight text-white leading-none">Manchester PU College</h2>
+                                    <h2 className="text-sm font-black uppercase tracking-tight text-white leading-none">Manchester Technologies</h2>
                                     <span className="text-[10px] text-amber-400 font-extrabold uppercase tracking-widest mt-1 block">Faculty Navigation Menu</span>
                                 </div>
                             </div>
@@ -573,9 +474,6 @@ const TeacherDashboard = () => {
 
                         {/* Navigation Options List */}
                         <div className="p-4 space-y-5 overflow-y-auto max-h-[calc(100vh-180px)]">
-                            {/* Live Questions Added Today Widget */}
-                            <DailyQuestionsBadge variant="sidebar" />
-
                             {navItems.map((group, gIdx) => (
                                 <div key={gIdx}>
                                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400/70 px-3 block mb-2">
@@ -681,11 +579,11 @@ const TeacherDashboard = () => {
                         onClick={() => navigate('/teacher/dashboard')}
                     >
                         <div className="w-10 h-10 flex items-center justify-center shadow-lg bg-white rounded-xl p-1 border-2 border-amber-400">
-                            <img src="/ManchesterLogo.jpeg" alt="Manchester PU College" className="w-full h-full object-contain rounded-lg" />
+                            <img src="/ManchesterLogo.jpeg" alt="Manchester Technologies" className="w-full h-full object-contain rounded-lg" />
                         </div>
                         <div className="flex flex-col">
                             <h1 className="text-base font-black tracking-tight uppercase leading-tight text-white">
-                                Manchester PU College
+                                Manchester Technologies
                             </h1>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {user?.subject && logoMap[user.subject] && (
@@ -696,11 +594,6 @@ const TeacherDashboard = () => {
                                 </span>
                             </div>
                         </div>
-                    </div>
-
-                    {/* LIVE CORNER BADGE: Questions Added Today */}
-                    <div className="hidden md:flex ml-2">
-                        <DailyQuestionsBadge variant="header" />
                     </div>
                 </div>
 

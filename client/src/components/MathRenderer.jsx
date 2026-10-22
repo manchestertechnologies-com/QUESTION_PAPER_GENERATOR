@@ -38,52 +38,120 @@ const KATEX_CONFIG = {
 };
 
 /**
+ * Fallback to clean Unicode math if KaTeX encounters an unrecoverable syntax issue
+ */
+function formatCleanUnicodeMath(str) {
+    if (!str) return '';
+    return str
+        .replace(/\\frac\s*\{([^}]+)\}\s*\{([^}]+)\}/g, '$1/$2')
+        .replace(/\\frac\s+([a-zA-Z0-9])\s+([a-zA-Z0-9])/g, '$1/$2')
+        .replace(/\\times/g, '×')
+        .replace(/\\pm/g, '±')
+        .replace(/\\mp/g, '∓')
+        .replace(/\\div/g, '÷')
+        .replace(/\\cdot/g, '·')
+        .replace(/\\sqrt\s*\{([^}]+)\}/g, '√($1)')
+        .replace(/\\mathrm\s*\{([^}]+)\}/g, '$1')
+        .replace(/\\text\s*\{([^}]+)\}/g, '$1')
+        .replace(/\\mathbf\s*\{([^}]+)\}/g, '$1')
+        .replace(/\\([a-zA-Z]+)/g, '')
+        .replace(/[{}]/g, '')
+        .trim();
+}
+
+/**
+ * Safely render math with KaTeX, intercepting any errors so red katex-error spans never leak onto papers
+ */
+function safeRenderKatex(rawMath, displayMode = false) {
+    if (!rawMath) return '';
+    let math = String(rawMath)
+        .replace(/&#x27;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+
+    // Strip leading / trailing quotes or stray punctuation that break math mode
+    math = math.replace(/^['"`:,;]+/, '').replace(/['"`:,;]+$/, '').trim();
+
+    // Auto-fix broken missing \frac syntax e.g. \sigma}2\epsilon_0 -> \frac{\sigma}{2\epsilon_0}
+    math = math.replace(/(?:^|\s)(?:\\([a-zA-Z]+)|([a-zA-Z0-9]+))\}(?:\{([^}]+)\}|([^\s}]+))/g, (m, sym, plain, denomBrace, denomPlain) => {
+        const num = sym ? `\\${sym}` : plain;
+        const den = denomBrace || denomPlain;
+        return ` \\frac{${num}}{${den}}`;
+    });
+
+    // Auto-fix unbraced fractions e.g. \frac em -> \frac{e}{m}
+    math = math.replace(/\\frac\s+([a-zA-Z0-9])\s+([a-zA-Z0-9])\b/g, '\\frac{$1}{$2}');
+    math = math.replace(/\\frac\s+([a-zA-Z0-9])([a-zA-Z0-9])\b/g, '\\frac{$1}{$2}');
+
+    try {
+        const rendered = katex.renderToString(math, {
+            displayMode,
+            throwOnError: false,
+            output: 'htmlAndMathml'
+        });
+        // If KaTeX produced a parse error span, suppress it and return clean fallback text
+        if (rendered.includes('class="katex-error"') || rendered.includes('color:#cc0000')) {
+            return `<span class="inline-math font-medium">${formatCleanUnicodeMath(math)}</span>`;
+        }
+        return rendered;
+    } catch {
+        return `<span class="inline-math font-medium">${formatCleanUnicodeMath(math)}</span>`;
+    }
+}
+
+/**
  * Converts a raw text string with LaTeX math delimiters into rendered HTML.
  */
 function processMathOnly(text) {
     if (!text || typeof text !== 'string') return '';
 
-    // 0) Strip internal QPV / QBP / DIFFICULTY tags
+    // 0) Strip HTML entities and internal metadata tags
     let result = text
+        .replace(/&#x27;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/<span\s+class=["']katex-error["'][^>]*>[\s\S]*?<\/span>/gi, '')
         .replace(/\[(?:QPV_|QBP_)?DIFFICULTY:\s*[^\]]+\]/gi, '')
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
+        .replace(/\s*\[\s*(?:JEE|NEET|CET|AIPMT|CBSE|KCET|BITSAT|AIIMS|MHT-?CET|IIT|ADVANCED|MAIN)[\s\w\-,\(\)]*\d{4}\s*\]\s*$/i, '')
+        .replace(/\s*\[\s*\d+\s*(?:Marks?|M)?\s*\]\s*$/i, '')
+        .replace(/\s*\[\s*[A-Za-z]{1,5}\s*[-.]?\s*\d{1,5}\s*\]\s*$/i, '')
+        .replace(/\s*\[\s*[A-Za-z0-9_\-]{2,8}\s*\]\s*$/i, '')
+        .replace(/\s*Reference\s+case\s+R_?\{?[0-9a-zA-Z_\s]+\}?[0-9a-zA-Z_\s]*\.?/gi, '')
+        .replace(/\s*Reference\s+case\b[^\.\n]*\.?/gi, '')
         .trim();
 
-    // 1) Render display math: $$...$$ (rendered inline-block to preserve sentence flow)
-    result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => {
-        try {
-            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
-        } catch {
-            return math;
-        }
+    // 0.5) Auto-fix broken missing \frac syntax e.g. \sigma}2\epsilon_0 -> \frac{\sigma}{2\epsilon_0}
+    result = result.replace(/(?:^|\s)(?:\\([a-zA-Z]+)|([a-zA-Z0-9]+))\}(?:\{([^}]+)\}|([^\s}]+))/g, (m, sym, plain, denomBrace, denomPlain) => {
+        const num = sym ? `\\${sym}` : plain;
+        const den = denomBrace || denomPlain;
+        return ` \\frac{${num}}{${den}}`;
     });
 
-    // 2) Render display math: \[...\]
-    result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => {
-        try {
-            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
-        } catch {
-            return math;
-        }
-    });
+    // 1) Auto-wrap naked LaTeX math commands if not surrounded by $
+    const nakedLatexRegex = /(?<!\$)\\(?:frac|sqrt|pm|times|div|leq|geq|neq|approx|rightarrow|infty|sum|int|partial|theta|alpha|beta|gamma|lambda|omega|Delta|mu|sigma|epsilon|rho|phi|pi|tau|psi|eta|nu|xi|cdot|circ|text)\b[^{$\n]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?!\$)/g;
+    result = result.replace(nakedLatexRegex, (match) => `$${match}$`);
 
-    // 3) Render inline math: $...$ (single dollar)
-    result = result.replace(/\$([^$\n]+?)\$/g, (_match, math) => {
-        try {
-            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
-        } catch {
-            return math;
-        }
-    });
+    // 2) Render display math: $$...$$
+    result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => safeRenderKatex(math, false));
 
-    // 4) Render inline math: \(...\)
-    result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => {
-        try {
-            return katex.renderToString(math.trim(), { displayMode: false, throwOnError: false, output: 'html' });
-        } catch {
-            return math;
-        }
-    });
+    // 3) Render display math: \[...\]
+    result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => safeRenderKatex(math, false));
+
+    // 4) Render inline math: $...$ (handles multiline inline math cleanly)
+    result = result.replace(/\$([\s\S]+?)\$/g, (_match, math) => safeRenderKatex(math, false));
+
+    // 5) Render inline math: \(...\)
+    result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => safeRenderKatex(math, false));
 
     return result;
 }

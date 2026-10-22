@@ -13,12 +13,20 @@ export default function ExamInstructions() {
     const [timeLeftToStart, setTimeLeftToStart] = useState(null); // seconds until start
 
     useEffect(() => {
+        if (!studentInfo || !studentInfo.rollNumber) {
+            navigate('/lab-exam');
+            return;
+        }
         const emailParam = encodeURIComponent(studentInfo.studentEmail || '');
         const rollParam = encodeURIComponent(studentInfo.rollNumber || '');
         api.get(`/api/exams/${examId}/take?email=${emailParam}&rollNumber=${rollParam}`)
             .then(r => { setExam(r.data); setLoading(false); })
-            .catch(() => { setLoading(false); });
-    }, [examId]);
+            .catch(err => {
+                setLoading(false);
+                alert(err.response?.data?.msg || 'Access Denied: Only officially enrolled students are permitted to take this exam.');
+                navigate('/lab-exam');
+            });
+    }, [examId, studentInfo, navigate]);
 
     useEffect(() => {
         if (!exam || !exam.start_time) {
@@ -70,7 +78,7 @@ export default function ExamInstructions() {
             <div style={styles.topBar}>
                 <div style={{ ...styles.systemName, display: 'flex', alignItems: 'center' }}>
                     <img src="/ManchesterLogo.jpeg" alt="Sapthagiri Logo" style={{ height: 26, width: 26, marginRight: 10, objectFit: 'contain', borderRadius: 4 }} />
-                    Sapthagiri Pre University College, Davanagere — CBT Examination Portal
+                    Manchester Technologies, Davanagere — CBT Examination Portal
                 </div>
                 <div style={styles.topRight}>
                     <div style={styles.studentInfoBox}>

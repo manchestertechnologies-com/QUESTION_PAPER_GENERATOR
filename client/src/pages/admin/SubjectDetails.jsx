@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
 import api from '../../api';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
-import FourDotLoader from '../../components/FourDotLoader';
 
 const SubjectDetails = () => {
     const { subject } = useParams();
@@ -150,8 +149,9 @@ const SubjectDetails = () => {
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center gap-3">
-                    <FourDotLoader size="md" text={`Loading ${subject} Division...`} />
+                <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
+                    <div className="w-6 h-6 border-2 border-navy border-t-gold rounded-full animate-spin"></div>
+                    <span className="text-sm font-black text-navy uppercase tracking-widest">Loading {subject} Division...</span>
                 </div>
             </div>
         );

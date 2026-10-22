@@ -15,18 +15,14 @@ export const AuthProvider = ({ children }) => {
 
                 if (savedUser) {
                     try {
-                        const parsedUser = JSON.parse(savedUser);
-                        setUser(parsedUser);
-                        // Instant unblock: user is restored in 0 milliseconds!
-                        setLoading(false);
+                        setUser(JSON.parse(savedUser));
                     } catch {
                         localStorage.removeItem('user');
                     }
                 }
 
-                if (savedToken) {
-                    // Non-blocking background revalidation
-                    api.get('/api/auth/me', { skipLoader: true }).then(res => {
+                if (savedToken || savedUser) {
+                    const fetchMe = api.get('/api/auth/me').then(res => {
                         if (res.data?.user) {
                             setUser(res.data.user);
                             localStorage.setItem('user', JSON.stringify(res.data.user));
@@ -35,14 +31,15 @@ export const AuthProvider = ({ children }) => {
                         localStorage.removeItem('token');
                         localStorage.removeItem('user');
                         setUser(null);
-                    }).finally(() => {
-                        setLoading(false);
                     });
-                } else {
-                    setLoading(false);
+
+                    // Max 3.5s wait so other laptops on cold-start never freeze
+                    const timeout = new Promise(resolve => setTimeout(resolve, 3500));
+                    await Promise.race([fetchMe, timeout]);
                 }
             } catch (err) {
                 console.error('[AUTH INIT ERROR]:', err);
+            } finally {
                 setLoading(false);
             }
         };
@@ -50,27 +47,9 @@ export const AuthProvider = ({ children }) => {
         initAuth();
     }, []);
 
-
     const login = async (email, password) => {
         try {
-            const normalizedEmail = (email || '').trim().toLowerCase();
-            let res;
-            try {
-                res = await api.post('/api/auth/login', { email: normalizedEmail, password });
-            } catch (firstErr) {
-                // If backend has not completed redeployment yet, bridge master admin login
-                if (normalizedEmail === 'manchestertechnologies@gmail.com' && password === 'Manchester') {
-                    res = await api.post('/api/auth/login', { email: 'college@gmail.com', password: '123456' });
-                    if (res?.data?.user) {
-                        res.data.user.email = 'manchestertechnologies@gmail.com';
-                        res.data.user.name = 'Manchester Master Admin';
-                        res.data.user.institutionName = 'Manchester Technologies';
-                    }
-                } else {
-                    throw firstErr;
-                }
-            }
-
+            const res = await api.post('/api/auth/login', { email, password });
             if (res.data.token) {
                 localStorage.setItem('token', res.data.token);
             }
