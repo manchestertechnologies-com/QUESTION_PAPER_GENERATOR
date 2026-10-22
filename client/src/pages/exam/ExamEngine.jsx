@@ -364,7 +364,7 @@ export default function ExamEngine() {
 
     // ── Actions ─────────────────────────────────────────────────
     const handleOptionSelect = (opt) => {
-        updateAnswer(current, { selectedOption: opt });
+        updateAnswer(current, { selectedOption: opt, visited: true });
     };
 
     const handleSaveNext = () => {
@@ -373,7 +373,7 @@ export default function ExamEngine() {
     };
 
     const handleClear = () => {
-        updateAnswer(current, { selectedOption: null });
+        updateAnswer(current, { selectedOption: null, markedForReview: false });
     };
 
     const handleMarkForReview = () => {
@@ -770,33 +770,100 @@ export default function ExamEngine() {
                                 })}
                             </div>
                         ) : (
-                            <div>
-                                <div style={styles.optionsTextContainer}>
+                            <div style={{ marginTop: '1.25rem', marginBottom: '1.5rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {currentQ.options?.map((opt, i) => {
-                                        const label = String.fromCharCode(65 + i); // Use standard A, B, C, D
+                                        const label = String.fromCharCode(65 + i); // Standard A, B, C, D
+                                        const isSelected = 
+                                            currentA.selectedOption === label || 
+                                            currentA.selectedOption === opt ||
+                                            currentA.selectedOption === String(i) ||
+                                            currentA.selectedOption === String(i + 1) ||
+                                            String(currentA.selectedOption || '').trim().toUpperCase() === label;
+
                                         return (
-                                            <div key={i} style={styles.optionTextLine}>
-                                                <span style={styles.optionTextLabel}>{label}.</span>
-                                                <MathRenderer inline={true} style={styles.optionTextContent} text={opt} />
+                                            <div 
+                                                key={i} 
+                                                onClick={() => handleOptionSelect(label)}
+                                                role="button"
+                                                tabIndex={0}
+                                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleOptionSelect(label); }}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '14px',
+                                                    padding: '12px 18px',
+                                                    borderRadius: '10px',
+                                                    border: isSelected ? '2px solid #2563eb' : '1.5px solid #cbd5e1',
+                                                    background: isSelected ? '#eff6ff' : '#ffffff',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease-in-out',
+                                                    boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : 'none',
+                                                    userSelect: 'none'
+                                                }}
+                                            >
+                                                {/* Option Letter Circle Badge */}
+                                                <div style={{
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    borderRadius: '50%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontWeight: '700',
+                                                    fontSize: '15px',
+                                                    background: isSelected ? '#2563eb' : '#f1f5f9',
+                                                    color: isSelected ? '#ffffff' : '#334155',
+                                                    border: isSelected ? 'none' : '1px solid #cbd5e1',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {label}
+                                                </div>
+
+                                                {/* Option Content rendered with MathRenderer */}
+                                                <div style={{ flex: 1, fontSize: '15.5px', color: '#1e293b', lineHeight: '1.5' }}>
+                                                    <MathRenderer inline={true} text={opt} />
+                                                </div>
+
+                                                {/* Selected Radio Indicator */}
+                                                <div style={{
+                                                    width: '20px',
+                                                    height: '20px',
+                                                    borderRadius: '50%',
+                                                    border: isSelected ? '6px solid #2563eb' : '2px solid #cbd5e1',
+                                                    background: '#ffffff',
+                                                    flexShrink: 0,
+                                                    transition: 'all 0.15s ease-in-out'
+                                                }} />
                                             </div>
                                         );
                                     })}
                                 </div>
-                                <hr style={styles.divider} />
-                                <div style={styles.radioContainer}>
+
+                                {/* Synchronized Bottom Radio Bar */}
+                                <div style={{ display: 'flex', gap: '20px', marginTop: '16px', padding: '10px 14px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', alignItems: 'center' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Select Option:</span>
                                     {currentQ.options?.map((opt, i) => {
                                         const label = String.fromCharCode(65 + i);
-                                        const selected = currentA.selectedOption === label || currentA.selectedOption === opt;
+                                        const isSelected = 
+                                            currentA.selectedOption === label || 
+                                            currentA.selectedOption === opt ||
+                                            String(currentA.selectedOption || '').trim().toUpperCase() === label;
+
                                         return (
-                                            <label key={`radio-${i}`} style={styles.radioLabel}>
+                                            <label 
+                                                key={`radio-${i}`} 
+                                                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: isSelected ? '700' : '500', color: isSelected ? '#2563eb' : '#334155', fontSize: '14px' }}
+                                                onClick={() => handleOptionSelect(label)}
+                                            >
                                                 <input 
                                                     type="radio" 
-                                                    name="jee_option" 
-                                                    checked={selected} 
+                                                    name={`jee_opt_${current}`} 
+                                                    checked={isSelected} 
                                                     onChange={() => handleOptionSelect(label)} 
-                                                    style={styles.radioInput}
+                                                    style={{ width: '16px', height: '16px', accentColor: '#2563eb', cursor: 'pointer' }}
                                                 />
-                                                {label})
+                                                {label}
                                             </label>
                                         );
                                     })}

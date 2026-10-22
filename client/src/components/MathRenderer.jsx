@@ -43,17 +43,36 @@ const KATEX_CONFIG = {
 function formatCleanUnicodeMath(str) {
     if (!str) return '';
     return str
-        .replace(/\\frac\s*\{([^}]+)\}\s*\{([^}]+)\}/g, '$1/$2')
-        .replace(/\\frac\s+([a-zA-Z0-9])\s+([a-zA-Z0-9])/g, '$1/$2')
+        .replace(/\\(?:dfrac|frac)\s*\{([^}]+)\}\s*\{([^}]+)\}/g, '($1)/($2)')
+        .replace(/\\(?:dfrac|frac)\s+([a-zA-Z0-9])\s+([a-zA-Z0-9])/g, '$1/$2')
+        .replace(/\\sqrt\s*\{([^}]+)\}/g, '√($1)')
+        .replace(/\\(?:mathrm|text|mathbf|mathit|mathsf)\s*\{([^}]+)\}/g, '$1')
         .replace(/\\times/g, '×')
         .replace(/\\pm/g, '±')
         .replace(/\\mp/g, '∓')
         .replace(/\\div/g, '÷')
         .replace(/\\cdot/g, '·')
-        .replace(/\\sqrt\s*\{([^}]+)\}/g, '√($1)')
-        .replace(/\\mathrm\s*\{([^}]+)\}/g, '$1')
-        .replace(/\\text\s*\{([^}]+)\}/g, '$1')
-        .replace(/\\mathbf\s*\{([^}]+)\}/g, '$1')
+        .replace(/\\Omega/g, 'Ω')
+        .replace(/\\mu/g, 'μ')
+        .replace(/\\pi/g, 'π')
+        .replace(/\\theta/g, 'θ')
+        .replace(/\\alpha/g, 'α')
+        .replace(/\\beta/g, 'β')
+        .replace(/\\gamma/g, 'γ')
+        .replace(/\\Delta/g, 'Δ')
+        .replace(/\\lambda/g, 'λ')
+        .replace(/\\sigma/g, 'σ')
+        .replace(/\\epsilon/g, 'ε')
+        .replace(/\\omega/g, 'ω')
+        .replace(/\\phi/g, 'φ')
+        .replace(/\\infty/g, '∞')
+        .replace(/\\leq/g, '≤')
+        .replace(/\\geq/g, '≥')
+        .replace(/\\neq/g, '≠')
+        .replace(/\\approx/g, '≈')
+        .replace(/\\rightarrow/g, '→')
+        .replace(/\\degree/g, '°')
+        .replace(/\^\\circ/g, '°')
         .replace(/\\([a-zA-Z]+)/g, '')
         .replace(/[{}]/g, '')
         .trim();
@@ -84,9 +103,14 @@ function safeRenderKatex(rawMath, displayMode = false) {
         return ` \\frac{${num}}{${den}}`;
     });
 
-    // Auto-fix unbraced fractions e.g. \frac em -> \frac{e}{m}
-    math = math.replace(/\\frac\s+([a-zA-Z0-9])\s+([a-zA-Z0-9])\b/g, '\\frac{$1}{$2}');
-    math = math.replace(/\\frac\s+([a-zA-Z0-9])([a-zA-Z0-9])\b/g, '\\frac{$1}{$2}');
+    // Auto-balance \left without matching \right
+    const leftCount = (math.match(/\\left\b/g) || []).length;
+    const rightCount = (math.match(/\\right\b/g) || []).length;
+    if (leftCount > rightCount) {
+        for (let i = 0; i < (leftCount - rightCount); i++) {
+            math += ' \\right.';
+        }
+    }
 
     try {
         const rendered = katex.renderToString(math, {
@@ -94,7 +118,6 @@ function safeRenderKatex(rawMath, displayMode = false) {
             throwOnError: false,
             output: 'htmlAndMathml'
         });
-        // If KaTeX produced a parse error span, suppress it and return clean fallback text
         if (rendered.includes('class="katex-error"') || rendered.includes('color:#cc0000')) {
             return `<span class="inline-math font-medium">${formatCleanUnicodeMath(math)}</span>`;
         }
@@ -105,7 +128,7 @@ function safeRenderKatex(rawMath, displayMode = false) {
 }
 
 /**
- * Converts a raw text string with LaTeX math delimiters into rendered HTML.
+ * Converts a raw text string with LaTeX math delimiters into rendered HTML without breaking existing math.
  */
 function processMathOnly(text) {
     if (!text || typeof text !== 'string') return '';
@@ -130,30 +153,34 @@ function processMathOnly(text) {
         .replace(/\s*Reference\s+case\b[^\.\n]*\.?/gi, '')
         .trim();
 
-    // 0.5) Auto-fix broken missing \frac syntax e.g. \sigma}2\epsilon_0 -> \frac{\sigma}{2\epsilon_0}
-    result = result.replace(/(?:^|\s)(?:\\([a-zA-Z]+)|([a-zA-Z0-9]+))\}(?:\{([^}]+)\}|([^\s}]+))/g, (m, sym, plain, denomBrace, denomPlain) => {
-        const num = sym ? `\\${sym}` : plain;
-        const den = denomBrace || denomPlain;
-        return ` \\frac{${num}}{${den}}`;
-    });
+    // Split text by existing math blocks: $$...$$, \[...\], $...$, \(...\)
+    const mathRegex = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$[\s\S]+?\$|\\\([\s\S]*?\\\))/g;
+    const parts = result.split(mathRegex);
 
-    // 1) Auto-wrap naked LaTeX math commands if not surrounded by $
-    const nakedLatexRegex = /(?<!\$)\\(?:frac|sqrt|pm|times|div|leq|geq|neq|approx|rightarrow|infty|sum|int|partial|theta|alpha|beta|gamma|lambda|omega|Delta|mu|sigma|epsilon|rho|phi|pi|tau|psi|eta|nu|xi|cdot|circ|text)\b[^{$\n]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})*(?!\$)/g;
-    result = result.replace(nakedLatexRegex, (match) => `$${match}$`);
+    return parts.map(part => {
+        if (!part) return '';
+        // If it is an existing display math block: $$...$$ or \[...\]
+        if (part.startsWith('$$') && part.endsWith('$$') && part.length >= 4) {
+            return safeRenderKatex(part.slice(2, -2), true);
+        }
+        if (part.startsWith('\\[') && part.endsWith('\\]') && part.length >= 4) {
+            return safeRenderKatex(part.slice(2, -2), true);
+        }
+        // If it is an existing inline math block: $...$ or \(...\)
+        if (part.startsWith('$') && part.endsWith('$') && part.length >= 2) {
+            return safeRenderKatex(part.slice(1, -1), false);
+        }
+        if (part.startsWith('\\(') && part.endsWith('\\)') && part.length >= 4) {
+            return safeRenderKatex(part.slice(2, -2), false);
+        }
 
-    // 2) Render display math: $$...$$
-    result = result.replace(/\$\$([\s\S]*?)\$\$/g, (_match, math) => safeRenderKatex(math, false));
+        // It is plain text outside $ blocks: check if it contains naked LaTeX math commands
+        if (/\\(?:dfrac|frac|sqrt|pm|mp|times|div|cdot|circ|bullet|leq|geq|neq|approx|equiv|sim|propto|rightarrow|leftarrow|leftrightarrow|Rightarrow|Leftarrow|Leftrightarrow|infty|sum|prod|int|partial|nabla|Delta|theta|alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Lambda|Sigma|Psi|Omega|Phi|Xi|Theta|mathrm|mathbf|mathit|mathsf|mathtt|text|textbf|textit|vec|hat|dot|ddot|bar|tilde|degree|sin|cos|tan|cot|sec|csc|log|ln|exp)\b/.test(part)) {
+            return safeRenderKatex(part, false);
+        }
 
-    // 3) Render display math: \[...\]
-    result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_match, math) => safeRenderKatex(math, false));
-
-    // 4) Render inline math: $...$ (handles multiline inline math cleanly)
-    result = result.replace(/\$([\s\S]+?)\$/g, (_match, math) => safeRenderKatex(math, false));
-
-    // 5) Render inline math: \(...\)
-    result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, math) => safeRenderKatex(math, false));
-
-    return result;
+        return part;
+    }).join('');
 }
 
 const MathRenderer = ({
