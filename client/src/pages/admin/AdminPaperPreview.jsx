@@ -45,6 +45,27 @@ const AdminPaperPreview = () => {
     const [showAnalysisModal, setShowAnalysisModal] = useState(false);
     const [showAnswerKeyModal, setShowAnswerKeyModal] = useState(false);
     const [showSolutionsModal, setShowSolutionsModal] = useState(false);
+    const [launchingCBT, setLaunchingCBT] = useState(false);
+
+    const handleLaunchCBT = async () => {
+        if (!selectedPaper) return;
+        setLaunchingCBT(true);
+        try {
+            const res = await api.post('/api/exams/from-paper', {
+                paperId: selectedPaper._id || selectedPaper.id,
+                title: selectedPaper.title || `${selectedPaper.subject || 'Assessment'} Online CBT Exam`,
+                duration_minutes: selectedPaper.duration_minutes || selectedPaper.duration || 180,
+            });
+            alert('✅ Success! Paper successfully published as a Live Online CBT Exam!');
+            navigate('/admin/dashboard/exams');
+        } catch (err) {
+            console.error('Launch CBT Error:', err);
+            alert('Failed to launch CBT exam: ' + (err.response?.data?.msg || err.message));
+        } finally {
+            setLaunchingCBT(false);
+        }
+    };
+
 
     useEffect(() => {
         const fetchData = async () => {
