@@ -10,6 +10,13 @@ const auth = require('../middleware/auth');
 const checkRole = require('../middleware/role');
 const { detectLabIp } = require('../middleware/labIp');
 const supabaseQuestions = require('../services/supabaseQuestions');
+const {
+    calculateAssessmentAnalytics,
+    calculateServerTimerState,
+    deriveQuestionStatus,
+    isResponseValid,
+    QUESTION_STATUS
+} = require('../services/cbtAssessmentEngine');
 
 // ─────────────────────────────────────────────────────────────────
 const { createNotification } = require('./notifications');
@@ -715,6 +722,418 @@ router.get('/public/live', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// PUBLIC / STUDENT: Get all active / live / scheduled exams for student lab portal
+// GET /api/exams/lab-active
+// ─────────────────────────────────────────────────────────────────
+router.get('/lab-active', async (req, res) => {
+    try {
+        const now = new Date();
+
+        // 1. Transition scheduled -> live
+        await OnlineExam.updateMany(
+            { status: 'scheduled', start_time: { $lte: now } },
+            { $set: { status: 'live' } }
+        );
+
+        // 2. Transition live -> ended
+        await OnlineExam.updateMany(
+            { status: 'live', end_time: { $lte: now } },
+            { $set: { status: 'ended' } }
+        );
+
+        const query = {
+            isOnlineVisible: { $ne: false },
+            status: { $in: ['live', 'scheduled', 'ended'] }
+        };
+
+        const exams = await OnlineExam.find(query)
+            .select('title examType duration_minutes start_time end_time instructions status questions classes isOnlineVisible is_ip_restricted allowedStudents')
+            .sort({ status: 1, start_time: 1, createdAt: -1 });
+
+        const result = exams.map(e => ({
+            _id: e._id,
+            id: e._id,
+            title: e.title,
+            examType: e.examType,
+            duration_minutes: e.duration_minutes || 180,
+            durationMinutes: e.duration_minutes || 180,
+            start_time: e.start_time,
+            end_time: e.end_time,
+            instructions: e.instructions,
+            status: e.status,
+            questionsCount: Array.isArray(e.questions) ? e.questions.length : 0,
+            classes: e.classes || [],
+            isOnlineVisible: e.isOnlineVisible !== false,
+            allowedStudents: e.allowedStudents || []
+        }));
+
+        res.json({ exams: result });
+    } catch (err) {
+        console.error('Error fetching lab active exams:', err);
+        res.status(500).json({ msg: 'Server error fetching lab active exams' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Quick Toggle Online Exam Visibility (Enable / Hide)
+// PUT /api/exams/:id/toggle-online-visibility
+// ─────────────────────────────────────────────────────────────────
+router.put('/:id/toggle-online-visibility', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        const currentlyActive = exam.isOnlineVisible !== false && exam.status !== 'draft' && exam.status !== 'archived';
+
+        if (currentlyActive) {
+            // Toggle to Hidden
+            exam.isOnlineVisible = false;
+            exam.status = 'draft';
+        } else {
+            // Toggle to Enabled / Live
+            exam.isOnlineVisible = true;
+            const now = new Date();
+            const duration = exam.duration_minutes || 180;
+
+            if (exam.start_time && new Date(exam.start_time) > now) {
+                exam.status = 'scheduled';
+                if (!exam.end_time) {
+                    exam.end_time = new Date(new Date(exam.start_time).getTime() + duration * 60 * 1000);
+                }
+            } else {
+                exam.status = 'live';
+                if (!exam.start_time || exam.status === 'ended') {
+                    exam.start_time = now;
+                    exam.end_time = new Date(now.getTime() + duration * 60 * 1000);
+                }
+            }
+        }
+
+        exam.updatedAt = new Date();
+        await exam.save();
+
+        res.json({
+            msg: exam.isOnlineVisible && exam.status !== 'draft'
+                ? `🟢 Exam "${exam.title}" is now LIVE & visible to students!`
+                : `⚪ Exam "${exam.title}" is now hidden from students.`,
+            isOnlineVisible: exam.isOnlineVisible,
+            status: exam.status,
+            exam
+        });
+    } catch (err) {
+        console.error('Error toggling online visibility:', err);
+        res.status(500).json({ msg: 'Server error toggling visibility', error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: 1-Click Generate Question Papers & Online Exams for All 4 Formats (NEET, JEE, CET, Assessment)
+// POST /api/exams/batch-generate-all-four
+// ─────────────────────────────────────────────────────────────────
+router.post('/batch-generate-all-four', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const {
+            baseTitle,
+            classes,
+            duration_minutes = 180,
+            start_time,
+            end_time,
+            isLive = true,
+            selectedExams = ['NEET', 'JEE', 'CET', 'Assessment']
+        } = req.body;
+
+        const titlePrefix = (baseTitle || 'Grand Mock Examination 2026').trim();
+        const selectedClass = Array.isArray(classes) && classes.length > 0 ? classes[0] : (classes || '12');
+        const defaultClasses = Array.isArray(classes) ? classes : [selectedClass];
+
+        const defaultInstructions = (type) =>
+            `Institutional ${type} Examination. Total duration: ${duration_minutes} minutes. Please read all questions carefully.`;
+
+        // Helper to query question pool for given subject & count
+        const fetchSubjectQuestions = async (subject, targetCount) => {
+            try {
+                // 1. Try Supabase question bank
+                const filters = {
+                    subject,
+                    classes: selectedClass,
+                    limit: Math.max(targetCount, 50)
+                };
+                const resSupa = await supabaseQuestions.getQuestions(filters, 1, Math.max(targetCount * 2, 70));
+                let qs = resSupa.questions || [];
+
+                // Fallback without class constraint if needed
+                if (qs.length < targetCount) {
+                    const fallbackRes = await supabaseQuestions.getQuestions({ subject }, 1, 100);
+                    const extra = (fallbackRes.questions || []).filter(q => !qs.some(existing => (existing._id || existing.id) === (q._id || q.id)));
+                    qs = [...qs, ...extra];
+                }
+
+                // If Botany/Zoology requested and few questions, query Biology
+                if (qs.length < targetCount && (subject.toLowerCase() === 'botany' || subject.toLowerCase() === 'zoology')) {
+                    const bioRes = await supabaseQuestions.getQuestions({ subject: 'Biology' }, 1, 100);
+                    const extraBio = (bioRes.questions || []).filter(q => !qs.some(existing => (existing._id || existing.id) === (q._id || q.id)));
+                    qs = [...qs, ...extraBio];
+                }
+
+                // Check MongoDB Question model fallback
+                if (qs.length < targetCount) {
+                    const mongoQs = await Question.find({ subject: new RegExp(subject, 'i') }).limit(targetCount * 2).lean();
+                    const extraMongo = (mongoQs || []).filter(q => !qs.some(existing => (existing._id || existing.id).toString() === q._id.toString()));
+                    qs = [...qs, ...extraMongo];
+                }
+
+                return qs.slice(0, targetCount).map((q, idx) => ({
+                    _id: q._id || q.id,
+                    questionId: q._id || q.id || q.questionId,
+                    subject: q.subject || subject,
+                    chapter: q.chapter || 'General',
+                    concept: q.concept || q.topic || 'General',
+                    subConcept: q.subConcept || '',
+                    level: q.level || 'medium',
+                    questionText: q.questionText || q.question || '',
+                    options: Array.isArray(q.options) ? q.options : [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean),
+                    answer: q.answer || q.correct_option || 'A',
+                    solutionText: q.solutionText || q.solution_text || '',
+                    statements: Array.isArray(q.statements) ? q.statements : [],
+                    assertion: q.assertion || '',
+                    reason: q.reason || '',
+                    imageUrl: q.imageUrl || q.image_url || null,
+                    marks: q.type === 'NUMERICAL' ? 4 : (subject === 'CET' ? 1 : 4),
+                    negativeMarks: q.type === 'NUMERICAL' ? 0 : (subject === 'CET' ? 0 : 1),
+                    type: q.type || 'MCQ'
+                }));
+            } catch (err) {
+                console.error(`Batch fetch error for ${subject}:`, err.message);
+                return [];
+            }
+        };
+
+        // Cache subject question pools for efficiency
+        const [physicsPool, chemistryPool, mathPool, botanyPool, zoologyPool, biologyPool] = await Promise.all([
+            fetchSubjectQuestions('Physics', 65),
+            fetchSubjectQuestions('Chemistry', 65),
+            fetchSubjectQuestions('Mathematics', 65),
+            fetchSubjectQuestions('Botany', 50),
+            fetchSubjectQuestions('Zoology', 50),
+            fetchSubjectQuestions('Biology', 65)
+        ]);
+
+        const bioCombined = botanyPool.length >= 40 && zoologyPool.length >= 40
+            ? [...botanyPool, ...zoologyPool]
+            : (biologyPool.length > 0 ? biologyPool : [...botanyPool, ...zoologyPool]);
+
+        const createdExams = [];
+        const createdPapers = [];
+
+        const now = new Date();
+        const effectiveStart = start_time ? new Date(start_time) : now;
+        const effectiveEnd = end_time ? new Date(end_time) : new Date(effectiveStart.getTime() + duration_minutes * 60 * 1000);
+        const examStatus = isLive ? 'live' : (start_time && new Date(start_time) > now ? 'scheduled' : 'live');
+
+        // ── 1. NEET ──
+        if (selectedExams.includes('NEET')) {
+            const neetPhysics = physicsPool.slice(0, 45).map(q => ({ ...q, sectionName: 'Physics - Section A' }));
+            const neetChemistry = chemistryPool.slice(0, 45).map(q => ({ ...q, sectionName: 'Chemistry - Section A' }));
+            const neetBotany = (botanyPool.length >= 45 ? botanyPool.slice(0, 45) : bioCombined.slice(0, 45)).map(q => ({ ...q, subject: 'Botany', sectionName: 'Botany - Section A' }));
+            const neetZoology = (zoologyPool.length >= 45 ? zoologyPool.slice(0, 45) : bioCombined.slice(45, 90)).map(q => ({ ...q, subject: 'Zoology', sectionName: 'Zoology - Section A' }));
+            const neetQuestions = [...neetPhysics, ...neetChemistry, ...neetBotany, ...neetZoology];
+
+            const neetPaper = new Paper({
+                title: `${titlePrefix} (NEET Full Assessment)`,
+                subject: 'PCB (NEET Pattern)',
+                classes: defaultClasses,
+                teacherId: req.user.id,
+                questions: neetQuestions,
+                questionObjects: neetQuestions,
+                duration: `${duration_minutes} Minutes`,
+                status: 'Approved',
+                pattern: [
+                    { sectionName: 'Physics - Section A', numQuestions: neetPhysics.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Chemistry - Section A', numQuestions: neetChemistry.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Botany - Section A', numQuestions: neetBotany.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Zoology - Section A', numQuestions: neetZoology.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } }
+                ]
+            });
+            await neetPaper.save();
+            createdPapers.push(neetPaper);
+
+            const neetExam = new OnlineExam({
+                title: `${titlePrefix} - NEET Grand Mock`,
+                examType: 'NEET',
+                classes: defaultClasses,
+                mergedPaperId: neetPaper._id,
+                sourcePapers: [neetPaper._id],
+                questions: neetQuestions,
+                sections: neetPaper.pattern,
+                instructions: defaultInstructions('NEET'),
+                duration_minutes,
+                start_time: effectiveStart,
+                end_time: effectiveEnd,
+                status: examStatus,
+                isOnlineVisible: true,
+                examMode: 'ONLINE',
+                createdBy: req.user.id
+            });
+            await neetExam.save();
+            createdExams.push(neetExam);
+        }
+
+        // ── 2. JEE ──
+        if (selectedExams.includes('JEE')) {
+            const jeePhysics = physicsPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Physics - Section A' }));
+            const jeeChemistry = chemistryPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Chemistry - Section A' }));
+            const jeeMath = mathPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Mathematics - Section A' }));
+            const jeeQuestions = [...jeePhysics, ...jeeChemistry, ...jeeMath];
+
+            const jeePaper = new Paper({
+                title: `${titlePrefix} (JEE Main Assessment)`,
+                subject: 'PCM (JEE Pattern)',
+                classes: defaultClasses,
+                teacherId: req.user.id,
+                questions: jeeQuestions,
+                questionObjects: jeeQuestions,
+                duration: `${duration_minutes} Minutes`,
+                status: 'Approved',
+                pattern: [
+                    { sectionName: 'Physics - Section A', numQuestions: jeePhysics.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Chemistry - Section A', numQuestions: jeeChemistry.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Mathematics - Section A', numQuestions: jeeMath.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } }
+                ]
+            });
+            await jeePaper.save();
+            createdPapers.push(jeePaper);
+
+            const jeeExam = new OnlineExam({
+                title: `${titlePrefix} - JEE Main Mock`,
+                examType: 'JEE',
+                classes: defaultClasses,
+                mergedPaperId: jeePaper._id,
+                sourcePapers: [jeePaper._id],
+                questions: jeeQuestions,
+                sections: jeePaper.pattern,
+                instructions: defaultInstructions('JEE Main'),
+                duration_minutes,
+                start_time: effectiveStart,
+                end_time: effectiveEnd,
+                status: examStatus,
+                isOnlineVisible: true,
+                examMode: 'ONLINE',
+                createdBy: req.user.id
+            });
+            await jeeExam.save();
+            createdExams.push(jeeExam);
+        }
+
+        // ── 3. CET / KCET ──
+        if (selectedExams.includes('CET')) {
+            const cetPhysics = physicsPool.slice(0, 60).map(q => ({ ...q, marks: 1, negativeMarks: 0, sectionName: 'Physics - Section A' }));
+            const cetChemistry = chemistryPool.slice(0, 60).map(q => ({ ...q, marks: 1, negativeMarks: 0, sectionName: 'Chemistry - Section A' }));
+            const cetMath = mathPool.slice(0, 60).map(q => ({ ...q, marks: 1, negativeMarks: 0, sectionName: 'Mathematics - Section A' }));
+            const cetBio = (biologyPool.length >= 60 ? biologyPool.slice(0, 60) : bioCombined.slice(0, 60)).map(q => ({ ...q, marks: 1, negativeMarks: 0, sectionName: 'Biology - Section A' }));
+            const cetQuestions = [...cetPhysics, ...cetChemistry, ...cetMath, ...cetBio];
+
+            const cetPaper = new Paper({
+                title: `${titlePrefix} (CET Unified PCMB Assessment)`,
+                subject: 'PCMB (CET Pattern)',
+                classes: defaultClasses,
+                teacherId: req.user.id,
+                questions: cetQuestions,
+                questionObjects: cetQuestions,
+                duration: `${duration_minutes} Minutes`,
+                status: 'Approved',
+                pattern: [
+                    { sectionName: 'Physics - Section A', numQuestions: cetPhysics.length, markingRules: { correct: 1, incorrect: 0, unattempted: 0 } },
+                    { sectionName: 'Chemistry - Section A', numQuestions: cetChemistry.length, markingRules: { correct: 1, incorrect: 0, unattempted: 0 } },
+                    { sectionName: 'Mathematics - Section A', numQuestions: cetMath.length, markingRules: { correct: 1, incorrect: 0, unattempted: 0 } },
+                    { sectionName: 'Biology - Section A', numQuestions: cetBio.length, markingRules: { correct: 1, incorrect: 0, unattempted: 0 } }
+                ]
+            });
+            await cetPaper.save();
+            createdPapers.push(cetPaper);
+
+            const cetExam = new OnlineExam({
+                title: `${titlePrefix} - CET Grand Assessment`,
+                examType: 'CET',
+                classes: defaultClasses,
+                mergedPaperId: cetPaper._id,
+                sourcePapers: [cetPaper._id],
+                questions: cetQuestions,
+                sections: cetPaper.pattern,
+                instructions: defaultInstructions('CET'),
+                duration_minutes,
+                start_time: effectiveStart,
+                end_time: effectiveEnd,
+                status: examStatus,
+                isOnlineVisible: true,
+                examMode: 'ONLINE',
+                createdBy: req.user.id
+            });
+            await cetExam.save();
+            createdExams.push(cetExam);
+        }
+
+        // ── 4. Assessment / Board ──
+        if (selectedExams.includes('Assessment')) {
+            const assessPhysics = physicsPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Physics Section' }));
+            const assessChem = chemistryPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Chemistry Section' }));
+            const assessMath = mathPool.slice(0, 25).map(q => ({ ...q, sectionName: 'Mathematics Section' }));
+            const assessBio = (biologyPool.length >= 25 ? biologyPool.slice(0, 25) : bioCombined.slice(0, 25)).map(q => ({ ...q, sectionName: 'Biology Section' }));
+            const assessQuestions = [...assessPhysics, ...assessChem, ...assessMath, ...assessBio];
+
+            const assessPaper = new Paper({
+                title: `${titlePrefix} (Institutional Board Assessment)`,
+                subject: 'PCMB (Board Assessment)',
+                classes: defaultClasses,
+                teacherId: req.user.id,
+                questions: assessQuestions,
+                questionObjects: assessQuestions,
+                duration: `${duration_minutes} Minutes`,
+                status: 'Approved',
+                pattern: [
+                    { sectionName: 'Physics Section', numQuestions: assessPhysics.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Chemistry Section', numQuestions: assessChem.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Mathematics Section', numQuestions: assessMath.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } },
+                    { sectionName: 'Biology Section', numQuestions: assessBio.length, markingRules: { correct: 4, incorrect: -1, unattempted: 0 } }
+                ]
+            });
+            await assessPaper.save();
+            createdPapers.push(assessPaper);
+
+            const assessExam = new OnlineExam({
+                title: `${titlePrefix} - Institutional Assessment`,
+                examType: 'CET',
+                classes: defaultClasses,
+                mergedPaperId: assessPaper._id,
+                sourcePapers: [assessPaper._id],
+                questions: assessQuestions,
+                sections: assessPaper.pattern,
+                instructions: defaultInstructions('Institutional Assessment'),
+                duration_minutes,
+                start_time: effectiveStart,
+                end_time: effectiveEnd,
+                status: examStatus,
+                isOnlineVisible: true,
+                examMode: 'ONLINE',
+                createdBy: req.user.id
+            });
+            await assessExam.save();
+            createdExams.push(assessExam);
+        }
+
+        res.status(201).json({
+            msg: `🎉 Successfully created ${createdPapers.length} Question Papers & ${createdExams.length} Online Exams across all selected formats!`,
+            papersCount: createdPapers.length,
+            examsCount: createdExams.length,
+            exams: createdExams,
+            papers: createdPapers
+        });
+    } catch (err) {
+        console.error('Batch generation error:', err);
+        res.status(500).json({ msg: 'Server error generating batch exam papers', error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // ADMIN: List all online exams
 // GET /api/exams
 // ─────────────────────────────────────────────────────────────────
@@ -816,7 +1235,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
         
         const isPreview = req.query.preview === 'true';
-        if (!isPreview && !['live', 'scheduled'].includes(exam.status)) {
+        if (!isPreview && (!['live', 'scheduled'].includes(exam.status) || exam.isOnlineVisible === false)) {
             return res.status(403).json({ msg: 'Exam is not currently available.' });
         }
 
@@ -877,19 +1296,100 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
             }
         }
 
-        // Check for existing active session
+        const durationMinutes = exam.duration_minutes || exam.durationMinutes || 180;
+
+        // Check for existing active session (Reconnection / Resumption)
         const existing = await ExamSession.findOne({
             examId: req.params.id,
-            studentEmail,
+            $or: [
+                { studentEmail: studentEmail || '___nonexistent___' },
+                { rollNumber: rollNumber || '___nonexistent___' }
+            ],
             submitted: false
         });
-        if (existing) return res.json({ msg: 'Session resumed', session: existing });
+
+        if (existing) {
+            const timerState = calculateServerTimerState(existing.startTime, durationMinutes);
+
+            // If timer expired while disconnected, auto-submit session (Module 1)
+            if (timerState.is_expired) {
+                const ExamBlueprint = require('../models/ExamBlueprint.js');
+                let bp = null;
+                if (exam.blueprintId) {
+                    try { bp = await ExamBlueprint.findById(exam.blueprintId); } catch (_) {}
+                }
+
+                const analytics = calculateAssessmentAnalytics({
+                    exam,
+                    submittedAnswers: existing.attempts && existing.attempts.length > 0 ? existing.attempts : (existing.answers || []),
+                    blueprint: bp
+                });
+
+                existing.attempts = analytics.attempts;
+                existing.answers = analytics.attempts.map(a => ({
+                    questionId: a.questionId,
+                    selectedOption: a.user_response,
+                    markedForReview: a.markedForReview,
+                    visited: a.visited,
+                    timeTaken: a.time_spent_seconds
+                }));
+                existing.summary = analytics.summary;
+                existing.topic_diagnostics = analytics.topic_diagnostics;
+                existing.panic_questions = analytics.panic_questions;
+                existing.score = analytics.summary.total_score;
+                existing.totalQuestions = analytics.summary.total_questions;
+                existing.attempted = analytics.summary.total_attempted;
+                existing.correct = analytics.summary.total_correct;
+                existing.incorrect = analytics.summary.total_incorrect;
+                existing.unattempted = analytics.summary.total_unattempted;
+                existing.weakAreas = analytics.weak_areas_legacy;
+                existing.submitted = true;
+                existing.endTime = new Date();
+                await existing.save();
+
+                return res.json({
+                    msg: 'Exam session timer expired. Exam auto-submitted.',
+                    session: existing,
+                    server_timer: timerState,
+                    is_auto_submitted: true
+                });
+            }
+
+            return res.json({
+                msg: 'Session resumed',
+                session: existing,
+                server_timer: timerState
+            });
+        }
 
         const studentId = rollNumber || studentEmail || 'anonymous';
         let examQuestions = exam.questions;
         if (exam.shuffleQuestions) {
             examQuestions = seededShuffle(exam.questions, `${studentId}-${exam._id}`);
         }
+
+        const now = new Date();
+        const initialTimerState = calculateServerTimerState(now, durationMinutes, now);
+
+        const initialAttempts = examQuestions.map(q => ({
+            question_id: (q._id || q.questionId || '').toString(),
+            subject_id: (q.subject || 'General').trim(),
+            topic_id: (q.chapter || q.topic || 'General').trim(),
+            subtopic_id: (q.concept || q.subConcept || 'General').trim(),
+            difficulty_level: (q.level || 'medium').toLowerCase().trim(),
+            user_response: null,
+            correct_response: q.answer !== undefined ? q.answer : '',
+            is_attempted: false,
+            is_correct: false,
+            time_spent_seconds: 0,
+            status: QUESTION_STATUS.UNVISITED,
+            // Auxiliary fields for backward compatibility
+            questionId: q._id,
+            selectedOption: null,
+            markedForReview: false,
+            visited: false,
+            timeTaken: 0
+        }));
 
         const session = new ExamSession({
             examId: req.params.id,
@@ -899,60 +1399,87 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
             rollNumber: rollNumber || '',
             fromLabIp: req.isLabIp,
             clientIp: req.clientIp,
-            startTime: new Date(),
-            answers: examQuestions.map(q => ({
-                questionId: q._id,
+            startTime: now,
+            attempts: initialAttempts,
+            answers: initialAttempts.map(a => ({
+                questionId: a.questionId,
                 selectedOption: null,
                 markedForReview: false,
-                visited: false
+                visited: false,
+                timeTaken: 0
             })),
             totalQuestions: examQuestions.length
         });
 
         await session.save();
-        res.status(201).json({ msg: 'Session started', session });
+        res.status(201).json({
+            msg: 'Session started',
+            session,
+            server_timer: initialTimerState
+        });
     } catch (err) {
-        console.error(err.message);
+        console.error('Session start error:', err.message);
         res.status(500).json({ msg: 'Server Error' });
     }
 });
 
 // ─────────────────────────────────────────────────────────────────
-// STUDENT: Submit exam
+// STUDENT: Server Clock Synchronization
+// GET /api/exams/:id/time-sync
+// ─────────────────────────────────────────────────────────────────
+router.get('/:id/time-sync', async (req, res) => {
+    try {
+        const { sessionId } = req.query;
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        let startTime = new Date();
+        if (sessionId) {
+            const session = await ExamSession.findById(sessionId);
+            if (session && session.startTime) {
+                startTime = session.startTime;
+            }
+        }
+
+        const durationMinutes = exam.duration_minutes || exam.durationMinutes || 180;
+        const timerState = calculateServerTimerState(startTime, durationMinutes);
+
+        res.json({
+            server_time: timerState.server_now,
+            server_timer: timerState
+        });
+    } catch (err) {
+        console.error('Time sync error:', err);
+        res.status(500).json({ msg: 'Server Error syncing clock' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// STUDENT: Submit exam (Idempotent & Comprehensive Scoring Engine)
 // POST /api/exams/:id/submit
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/submit', detectLabIp, async (req, res) => {
     try {
-        const { sessionId, answers } = req.body;
+        const { sessionId, answers, idempotencyKey } = req.body;
+        if (!sessionId) return res.status(400).json({ msg: 'Session ID is required' });
 
         const session = await ExamSession.findById(sessionId);
         if (!session) return res.status(404).json({ msg: 'Session not found' });
-        if (session.submitted) return res.json({ msg: 'Already submitted', session, sessionId: session._id });
 
-        const exam = await OnlineExam.findById(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
-
-        // Build answer map from submission
-        const answerMap = {};
-        if (answers && Array.isArray(answers)) {
-            answers.forEach(a => { answerMap[a.questionId] = a; });
-        }
-
-        // Section attempts bookkeeping for JEE/NEET optional rules
-        const sectionAttemptsCounts = {}; // Track number of graded questions in this section
-        const allowedSections = {}; // Map section name to allowed count
-        if (exam.sections && Array.isArray(exam.sections)) {
-            exam.sections.forEach(sec => {
-                if (sec.allowedToAnswer > 0) {
-                    allowedSections[sec.sectionName] = sec.allowedToAnswer;
-                    sectionAttemptsCounts[sec.sectionName] = 0;
-                }
+        // Module 4: Idempotency protection against duplicate/concurrent submissions
+        if (session.submitted) {
+            return res.status(200).json({
+                msg: 'Already submitted',
+                session,
+                sessionId: session._id,
+                summary: session.summary,
+                topic_diagnostics: session.topic_diagnostics,
+                panic_questions: session.panic_questions
             });
         }
 
-        // Compute analytics
-        let score = 0, correct = 0, incorrect = 0, unattempted = 0;
-        const weakMap = {};
+        const exam = await OnlineExam.findById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
 
         const ExamBlueprint = require('../models/ExamBlueprint.js');
         let blueprint = null;
@@ -964,124 +1491,59 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             console.error('Failed to load blueprint for grading:', e);
         }
 
-        const processedAnswers = exam.questions.map(q => {
-            const sid = q._id.toString();
-            const submitted = answerMap[sid];
-            let selected = submitted?.selectedOption || null;
-            const markedForReview = submitted?.markedForReview || false;
-            const timeTaken = submitted?.timeTaken || 0;
-
-            const secName = q.sectionName;
-            const isAttempted = selected !== null && selected !== '';
-            
-            if (isAttempted && secName && allowedSections[secName] !== undefined) {
-                const maxAllowed = allowedSections[secName];
-                if (sectionAttemptsCounts[secName] >= maxAllowed) {
-                    // Exceeded the allowed answers for this choice section! Ignore this answer.
-                    selected = null;
-                } else {
-                    sectionAttemptsCounts[secName]++;
-                }
-            }
-
-            // Load marking rules (fallback to JEE standard 4, -1, 0)
-            let correctMarks = 4;
-            let incorrectMarks = -1;
-            let unattemptedMarks = 0;
-
-            if (blueprint) {
-                const bpSubject = blueprint.subjects.find(s => s.subjectName.toLowerCase().trim() === (q.subject || '').toLowerCase().trim());
-                if (bpSubject && bpSubject.sections) {
-                    const bpSection = bpSubject.sections.find(sec => (sec.sectionName || '').toLowerCase().trim() === (q.sectionName || '').toLowerCase().trim());
-                    if (bpSection && bpSection.markingRules) {
-                        correctMarks = bpSection.markingRules.correct !== undefined ? bpSection.markingRules.correct : 4;
-                        incorrectMarks = bpSection.markingRules.incorrect !== undefined ? bpSection.markingRules.incorrect : -1;
-                        unattemptedMarks = bpSection.markingRules.unattempted !== undefined ? bpSection.markingRules.unattempted : 0;
-                    }
-                }
-            }
-
-            let result = 'unattempted';
-            if (selected !== null && selected !== '') {
-                let isCorrect = false;
-
-                // 1. Numerical match with tolerance
-                const tolerance = q.numericalTolerance || 0;
-                const parsedSelected = parseFloat(selected);
-                const parsedAnswer = parseFloat(q.answer);
-                if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
-                    if (Math.abs(parsedSelected - parsedAnswer) <= (tolerance + 1e-9)) {
-                        isCorrect = true;
-                    }
-                }
-
-                // 2. Exact match
-                if (!isCorrect && selected.toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
-                    isCorrect = true;
-                }
-
-                // 3. Option index / letter match
-                if (!isCorrect && q.options && q.options.length > 0) {
-                    const letters = ['A', 'B', 'C', 'D'];
-                    const selectedIdx = letters.indexOf(selected.toString().toUpperCase());
-                    if (selectedIdx !== -1 && q.options[selectedIdx]) {
-                        if (q.options[selectedIdx].toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
-                            isCorrect = true;
-                        }
-                    }
-                    const correctIdx = letters.indexOf(q.answer.toString().toUpperCase());
-                    if (correctIdx !== -1 && q.options[correctIdx]) {
-                        if (selected.toString().trim().toLowerCase() === q.options[correctIdx].toString().trim().toLowerCase()) {
-                            isCorrect = true;
-                        }
-                    }
-                }
-
-                if (isCorrect) {
-                    score += correctMarks;
-                    correct++;
-                    result = 'correct';
-                } else {
-                    score += incorrectMarks;
-                    incorrect++;
-                    result = 'incorrect';
-                    // Track weak areas
-                    const key = `${q.subject}::${q.chapter}`;
-                    if (!weakMap[key]) weakMap[key] = { subject: q.subject, chapter: q.chapter, incorrect: 0 };
-                    weakMap[key].incorrect++;
-                }
-            } else {
-                score += unattemptedMarks;
-                unattempted++;
-            }
-
-            return { questionId: q._id, selectedOption: selected, markedForReview, visited: submitted ? true : false, timeTaken };
+        // Execute Comprehensive Analytics Engine (Modules 1, 2, 3, 4)
+        const analytics = calculateAssessmentAnalytics({
+            exam,
+            submittedAnswers: Array.isArray(answers) && answers.length > 0 ? answers : (session.attempts || session.answers || []),
+            blueprint
         });
 
-        const weakAreas = Object.values(weakMap).sort((a, b) => b.incorrect - a.incorrect);
+        session.attempts = analytics.attempts;
+        session.answers = analytics.attempts.map(a => ({
+            questionId: a.questionId,
+            selectedOption: a.user_response,
+            markedForReview: a.markedForReview,
+            visited: a.visited,
+            timeTaken: a.time_spent_seconds
+        }));
+        session.summary = analytics.summary;
+        session.topic_diagnostics = analytics.topic_diagnostics;
+        session.panic_questions = analytics.panic_questions;
 
-        session.answers = processedAnswers;
+        // Populate legacy attributes for backward compatibility with existing views
+        session.score = analytics.summary.total_score;
+        session.totalQuestions = analytics.summary.total_questions;
+        session.attempted = analytics.summary.total_attempted;
+        session.correct = analytics.summary.total_correct;
+        session.incorrect = analytics.summary.total_incorrect;
+        session.unattempted = analytics.summary.total_unattempted;
+        session.weakAreas = analytics.weak_areas_legacy;
+
         session.endTime = new Date();
         session.submitted = true;
-        session.score = score;
-        session.correct = correct;
-        session.incorrect = incorrect;
-        session.unattempted = unattempted;
-        session.attempted = correct + incorrect;
-        session.weakAreas = weakAreas;
         session.fromLabIp = req.isLabIp;
         session.clientIp = req.clientIp;
+        if (idempotencyKey) session.submissionIdempotencyKey = idempotencyKey;
 
         await session.save();
-        res.json({ msg: 'Exam submitted successfully', sessionId: session._id });
+
+        res.json({
+            msg: 'Exam submitted successfully',
+            sessionId: session._id,
+            score: session.score,
+            summary: session.summary,
+            topic_diagnostics: session.topic_diagnostics,
+            panic_questions: session.panic_questions,
+            attempts: session.attempts
+        });
     } catch (err) {
-        console.error(err.message);
-        res.status(500).json({ msg: 'Server Error' });
+        console.error('Submit evaluation error:', err);
+        res.status(500).json({ msg: 'Server Error evaluating submission' });
     }
 });
 
 // ─────────────────────────────────────────────────────────────────
-// STUDENT: Get scorecard (IP-conditional answer key)
+// STUDENT: Get scorecard (with Comprehensive Topic Diagnostics)
 // GET /api/exams/:id/scorecard/:sessionId
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
@@ -1108,25 +1570,36 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
         });
 
         const breakdown = exam.questions.map(q => {
-            const ans = session.answers.find(a => a.questionId?.toString() === q._id?.toString());
+            const qIdStr = q._id ? q._id.toString() : '';
+            const att = session.attempts?.find(a => (a.question_id || a.questionId)?.toString() === qIdStr)
+                || session.answers?.find(a => a.questionId?.toString() === qIdStr);
             const origQ = q.questionId ? originalQuestionsMap[q.questionId.toString()] : null;
+
+            const selectedResp = att?.user_response !== undefined ? att.user_response : (att?.selectedOption || null);
+            const isAttempted = isResponseValid(selectedResp);
+
             const entry = {
                 _id: q._id,
                 questionId: q.questionId,
                 questionText: q.questionText,
                 subject: q.subject,
                 chapter: q.chapter,
+                concept: q.concept,
                 options: q.options,
-                selectedOption: ans?.selectedOption || null,
-                markedForReview: ans?.markedForReview || false,
-                timeTaken: ans?.timeTaken || 0,
-                solutionText: origQ?.solutionText || '',
+                selectedOption: selectedResp,
+                user_response: selectedResp,
+                markedForReview: Boolean(att?.markedForReview),
+                visited: Boolean(att?.visited),
+                timeTaken: att?.time_spent_seconds !== undefined ? att.time_spent_seconds : (att?.timeTaken || 0),
+                time_spent_seconds: att?.time_spent_seconds !== undefined ? att.time_spent_seconds : (att?.timeTaken || 0),
+                is_attempted: isAttempted,
+                is_correct: Boolean(att?.is_correct),
+                status: att?.status || (isAttempted ? QUESTION_STATUS.ANSWERED : QUESTION_STATUS.UNVISITED),
+                solutionText: origQ?.solutionText || q.solutionText || '',
                 solutionImageUrl: origQ?.solutionImageUrl || '',
-                type: q.type || 'MCQ'
+                type: q.type || 'MCQ',
+                correctAnswer: q.answer
             };
-
-            // Always expose correct answer since answerKeyHidden is false
-            entry.correctAnswer = q.answer;
 
             return entry;
         });
@@ -1145,12 +1618,16 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             incorrect: session.incorrect,
             unattempted: session.unattempted,
             weakAreas: session.weakAreas,
+            summary: session.summary,
+            topic_diagnostics: session.topic_diagnostics,
+            panic_questions: session.panic_questions,
+            attempts: session.attempts,
             isLabSession: isLab,
-            answerKeyHidden: false, // User requested answers to be shown after submission
+            answerKeyHidden: false,
             breakdown
         });
     } catch (err) {
-        console.error(err.message);
+        console.error('Scorecard retrieval error:', err.message);
         res.status(500).json({ msg: 'Server Error' });
     }
 });
@@ -1385,18 +1862,52 @@ router.post('/:id/session/save-progress', async (req, res) => {
         if (!session) return res.status(404).json({ msg: 'Session not found' });
         if (session.submitted) return res.status(400).json({ msg: 'Cannot save progress for submitted exam' });
 
+        const serverTimer = calculateServerTimerState(session.startTime, session.durationMinutes);
+
         if (answers && Array.isArray(answers)) {
             session.answers = answers.map(a => ({
-                questionId: a.questionId,
-                selectedOption: a.selectedOption || null,
-                markedForReview: a.markedForReview || false,
-                visited: a.visited || false,
-                timeTaken: a.timeTaken || 0
+                questionId: a.questionId || a.question_id,
+                selectedOption: a.selectedOption !== undefined ? a.selectedOption : a.user_response,
+                markedForReview: Boolean(a.markedForReview || a.marked_for_review),
+                visited: Boolean(a.visited),
+                timeTaken: Math.max(0, parseFloat(a.timeTaken !== undefined ? a.timeTaken : a.time_spent_seconds) || 0)
             }));
+
+            session.attempts = answers.map(a => {
+                const userResponse = a.user_response !== undefined ? a.user_response : a.selectedOption;
+                const visited = Boolean(a.visited);
+                const markedForReview = Boolean(a.markedForReview || a.marked_for_review);
+                const timeSpent = Math.max(0, parseFloat(a.time_spent_seconds !== undefined ? a.time_spent_seconds : a.timeTaken) || 0);
+                const status = a.status || deriveQuestionStatus(visited, userResponse, markedForReview);
+
+                return {
+                    question_id: (a.question_id || a.questionId || '').toString(),
+                    subject_id: (a.subject_id || a.subject || '').trim(),
+                    topic_id: (a.topic_id || a.topic || a.chapter || '').trim(),
+                    subtopic_id: (a.subtopic_id || a.subtopic || a.concept || '').trim(),
+                    difficulty_level: (a.difficulty_level || a.level || 'medium').toLowerCase().trim(),
+                    user_response: userResponse,
+                    correct_response: a.correct_response || '',
+                    is_attempted: isResponseValid(userResponse),
+                    is_correct: Boolean(a.is_correct),
+                    time_spent_seconds: timeSpent,
+                    status: status,
+                    questionId: a.questionId || a.question_id,
+                    selectedOption: userResponse,
+                    markedForReview: markedForReview,
+                    visited: visited,
+                    timeTaken: timeSpent
+                };
+            });
         }
 
         await session.save();
-        res.json({ msg: 'Progress autosaved successfully', session });
+        res.json({
+            msg: 'Progress autosaved successfully',
+            server_timer: serverTimer,
+            savedAttemptsCount: session.attempts.length,
+            session
+        });
     } catch (err) {
         console.error('Autosave error:', err);
         res.status(500).json({ msg: 'Server Error during autosave' });

@@ -3,6 +3,7 @@ node_modules
 dist
 build
 # uploads/ removed to allow production images
+server/uploads/template-*
 .DS_Store
 qpg-clone/
 .venv

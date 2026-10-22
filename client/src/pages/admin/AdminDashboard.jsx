@@ -59,6 +59,17 @@ const DashboardHome = () => {
         }
     });
 
+    // Batch 4 Exams Generation State
+    const [showBatchModal, setShowBatchModal] = useState(false);
+    const [batchLoading, setBatchLoading] = useState(false);
+    const [batchForm, setBatchForm] = useState({
+        baseTitle: 'Grand Mock Examination 2026',
+        classes: '12',
+        duration_minutes: 180,
+        selectedExams: ['NEET', 'JEE', 'CET', 'Assessment'],
+        isLive: true
+    });
+
     // Active selected exam ID (defaults to first exam when loaded)
     const [selectedExamId, setSelectedExamId] = useState(null);
 
@@ -118,6 +129,21 @@ const DashboardHome = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    const handleBatchGenerate = async () => {
+        if (!batchForm.baseTitle.trim()) return alert('Please enter a base title for the examinations.');
+        if (batchForm.selectedExams.length === 0) return alert('Please select at least one exam format.');
+        setBatchLoading(true);
+        try {
+            const res = await api.post('/api/exams/batch-generate-all-four', batchForm);
+            alert(res.data.msg || '🎉 Successfully generated all 4 examinations & question papers!');
+            setShowBatchModal(false);
+            fetchData();
+        } catch (e) {
+            alert(e.response?.data?.msg || 'Failed to batch generate exams');
+        }
+        setBatchLoading(false);
+    };
 
     const handleCommissionSubmit = async (e) => {
         e.preventDefault();
@@ -251,7 +277,15 @@ const DashboardHome = () => {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                        onClick={() => setShowBatchModal(true)}
+                        className="bg-emerald-700 text-white hover:bg-emerald-800 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md flex items-center gap-2 border-2 border-emerald-400 cursor-pointer"
+                        title="1-Click batch generate Question Papers and Online CBT Exams for all 4 patterns (NEET, JEE, CET & Board Assessment)"
+                    >
+                        <span className="text-base">⚡</span>
+                        <span>Generate All 4 Exams</span>
+                    </button>
                     <button
                         onClick={() => setShowMergeModal(true)}
                         className="bg-navy text-gold hover:bg-slate-900 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md flex items-center gap-2 border-2 border-gold cursor-pointer"
@@ -843,6 +877,153 @@ const DashboardHome = () => {
                         navigate('/admin/dashboard/cbt-exams');
                     }}
                 />
+            )}
+
+            {/* ── MODAL: 1-CLICK GENERATE ALL 4 EXAM PAPERS ── */}
+            {showBatchModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col border-b-8 border-emerald-500 animate-fade-in-up overflow-hidden my-auto">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-slate-900 text-white">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-emerald-400 font-black text-lg">⚡</span>
+                                    <h3 className="text-xl font-black tracking-tight text-white">Generate All 4 Exams at Once</h3>
+                                </div>
+                                <p className="text-xs text-slate-300 font-medium mt-1">
+                                    Instantly compile Question Papers & Online CBTs for NEET, JEE, CET & Board Assessment.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setShowBatchModal(false)}
+                                className="text-slate-400 hover:text-white bg-slate-800 rounded-full w-9 h-9 flex items-center justify-center text-lg font-bold transition cursor-pointer"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto space-y-5">
+                            <div>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    Common Base Exam Title
+                                </label>
+                                <input
+                                    type="text"
+                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-navy focus:border-emerald-500 focus:outline-none"
+                                    placeholder="e.g. Manchester College Grand Mock 2026"
+                                    value={batchForm.baseTitle}
+                                    onChange={e => setBatchForm(f => ({ ...f, baseTitle: e.target.value }))}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                        Target Standard
+                                    </label>
+                                    <select
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-navy focus:border-emerald-500 focus:outline-none bg-white"
+                                        value={batchForm.classes}
+                                        onChange={e => setBatchForm(f => ({ ...f, classes: e.target.value }))}
+                                    >
+                                        <option value="12">Class 12 / 2nd PU (Complete Syllabus)</option>
+                                        <option value="11">Class 11 / 1st PU (Complete Syllabus)</option>
+                                        <option value="both">Both Class 11 & 12 (Integrated)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                        Duration Per Exam (Min)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-bold text-navy focus:border-emerald-500 focus:outline-none"
+                                        value={batchForm.duration_minutes}
+                                        onChange={e => setBatchForm(f => ({ ...f, duration_minutes: Number(e.target.value) || 180 }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">
+                                    Select Formats to Generate
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {[
+                                        { id: 'NEET', name: '🧬 NEET (180 Qs)', desc: 'Physics (45), Chem (45), Botany (45), Zoology (45)' },
+                                        { id: 'JEE', name: '⚡ JEE Main (75 Qs)', desc: 'Physics (25), Chem (25), Mathematics (25)' },
+                                        { id: 'CET', name: '🎯 CET / KCET (240 Qs)', desc: 'Physics (60), Chem (60), Math (60), Bio (60)' },
+                                        { id: 'Assessment', name: '📚 Board Assessment (100 Qs)', desc: 'PCMB Unified Institutional Exam' }
+                                    ].map(ex => {
+                                        const isChecked = batchForm.selectedExams.includes(ex.id);
+                                        return (
+                                            <div
+                                                key={ex.id}
+                                                onClick={() => setBatchForm(f => ({
+                                                    ...f,
+                                                    selectedExams: isChecked
+                                                        ? f.selectedExams.filter(x => x !== ex.id)
+                                                        : [...f.selectedExams, ex.id]
+                                                }))}
+                                                className={`p-3.5 rounded-xl border-2 transition cursor-pointer ${
+                                                    isChecked
+                                                        ? 'border-emerald-500 bg-emerald-50/70'
+                                                        : 'border-gray-200 bg-gray-50/60 hover:bg-gray-100'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2.5">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={() => {}}
+                                                        className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+                                                    />
+                                                    <span className={`text-xs font-black ${isChecked ? 'text-emerald-950' : 'text-navy'}`}>
+                                                        {ex.name}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-500 font-medium mt-1 ml-6">
+                                                    {ex.desc}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-xs text-emerald-900 font-medium flex items-start gap-3">
+                                <span className="text-base">🚀</span>
+                                <div>
+                                    <strong className="font-bold">Dual Creation Engine:</strong> This will create 4 official Master Question Papers (ready for A4 Print, Analysis & Answer Key) and 4 live Online CBT Exams immediately visible on Student Lab Portals.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 p-5 border-t border-gray-100 bg-gray-50">
+                            <button
+                                type="button"
+                                onClick={() => setShowBatchModal(false)}
+                                className="px-6 py-2.5 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-100 transition cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleBatchGenerate}
+                                disabled={batchLoading || batchForm.selectedExams.length === 0}
+                                className="px-8 py-2.5 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition shadow-lg cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {batchLoading ? (
+                                    <>
+                                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                        <span>Generating All 4 Exams...</span>
+                                    </>
+                                ) : (
+                                    <span>🚀 Generate All 4 Exams Now</span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* ── MODAL: VIEW FULL EXAM PAPER (PREVIEW QUESTIONS) ── */}

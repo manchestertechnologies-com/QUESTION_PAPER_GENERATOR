@@ -677,6 +677,16 @@ export default function ExamManagement() {
     // Grand Test exam creation state
     const [selectedGTId, setSelectedGTId] = useState('');
 
+    // Batch 4 Exams Generation State
+    const [showBatchModal, setShowBatchModal] = useState(false);
+    const [batchForm, setBatchForm] = useState({
+        baseTitle: 'Grand Mock Examination 2026',
+        classes: '12',
+        duration_minutes: 180,
+        selectedExams: ['NEET', 'JEE', 'CET', 'Assessment'],
+        isLive: true
+    });
+
     // Config edit state
     const [configForm, setConfigForm] = useState({
         start_time: '', end_time: '', duration_minutes: 180, instructions: '', status: '', allowedStudents: '',
@@ -783,6 +793,22 @@ export default function ExamManagement() {
             fetchExams();
         } catch (e) {
             setMsg(e.response?.data?.msg || 'Failed to create exam from Grand Test');
+        }
+        setLoading(false);
+    };
+
+    const handleBatchGenerate = async () => {
+        if (!batchForm.baseTitle.trim()) return setMsg('Please enter a base title for the examinations.');
+        if (batchForm.selectedExams.length === 0) return setMsg('Please select at least one exam format.');
+        setLoading(true);
+        try {
+            const res = await api.post('/api/exams/batch-generate-all-four', batchForm);
+            setMsg(res.data.msg || '🎉 Successfully generated all 4 examinations!');
+            setShowBatchModal(false);
+            fetchExams();
+            fetchPapers();
+        } catch (e) {
+            setMsg(e.response?.data?.msg || 'Failed to batch generate exams');
         }
         setLoading(false);
     };
@@ -911,6 +937,26 @@ export default function ExamManagement() {
                     >
                         <span>🖥️</span>
                         <span>Copy Student Lab Link (/lab-exam)</span>
+                    </button>
+                    <button
+                        onClick={() => setShowBatchModal(true)}
+                        style={{
+                            padding: '10px 18px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '12px',
+                            fontWeight: 800,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(16,185,129,0.25)'
+                        }}
+                    >
+                        <span>⚡</span>
+                        <span>Create All 4 Exams at Once</span>
                     </button>
                     <button style={styles.primaryBtn} onClick={() => setShowMergeModal(true)}>
                         ⊕ Generate Composite Exam
@@ -1255,6 +1301,129 @@ export default function ExamManagement() {
                             <button style={styles.cancelBtn} onClick={() => setShowConfigModal(null)}>Cancel</button>
                             <button style={styles.primaryBtn} onClick={handleConfigSave} disabled={loading}>
                                 {loading ? 'Saving...' : '💾 Save Changes'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Batch All 4 Exams Generation Modal ── */}
+            {showBatchModal && (
+                <div style={styles.modalOverlay}>
+                    <div style={{ ...styles.modal, maxWidth: 640 }}>
+                        <div style={{ ...styles.modalHeader, background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', color: '#fff' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, color: '#38bdf8' }}>
+                                    <span>⚡</span> 1-Click Generate All 4 Exam Papers & CBTs
+                                </h3>
+                                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#94a3b8' }}>
+                                    Instantly compile official A4 question papers & live CBT online exams for NEET, JEE, CET & Board Assessment.
+                                </p>
+                            </div>
+                            <button style={{ ...styles.closeBtn, background: '#334155', color: '#fff' }} onClick={() => setShowBatchModal(false)}>✕</button>
+                        </div>
+                        <div style={styles.modalBody}>
+                            <label style={styles.label}>Common Base Title</label>
+                            <input
+                                style={styles.input}
+                                placeholder="e.g. Manchester College All-India Grand Mock 2026"
+                                value={batchForm.baseTitle}
+                                onChange={e => setBatchForm(f => ({ ...f, baseTitle: e.target.value }))}
+                            />
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 10 }}>
+                                <div>
+                                    <label style={styles.label}>Target Academic Standard</label>
+                                    <select
+                                        style={styles.input}
+                                        value={batchForm.classes}
+                                        onChange={e => setBatchForm(f => ({ ...f, classes: e.target.value }))}
+                                    >
+                                        <option value="12">Class 12 / 2nd PU (Complete Syllabus)</option>
+                                        <option value="11">Class 11 / 1st PU (Complete Syllabus)</option>
+                                        <option value="both">Both Class 11 & 12 (Integrated)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label style={styles.label}>Duration Per Exam (min)</label>
+                                    <input
+                                        style={styles.input}
+                                        type="number"
+                                        value={batchForm.duration_minutes}
+                                        onChange={e => setBatchForm(f => ({ ...f, duration_minutes: Number(e.target.value) || 180 }))}
+                                    />
+                                </div>
+                            </div>
+
+                            <label style={{ ...styles.label, marginTop: 16 }}>Select Exam Formats to Generate</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
+                                {[
+                                    { id: 'NEET', name: '🧬 NEET (180 Qs)', desc: 'Physics (45), Chem (45), Botany (45), Zoology (45)' },
+                                    { id: 'JEE', name: '⚡ JEE Main (75 Qs)', desc: 'Physics (25), Chem (25), Mathematics (25)' },
+                                    { id: 'CET', name: '🎯 CET / KCET (240 Qs)', desc: 'Physics (60), Chem (60), Math (60), Bio (60)' },
+                                    { id: 'Assessment', name: '📚 Board Assessment (100 Qs)', desc: 'PCMB Unified Institutional Exam' }
+                                ].map(ex => {
+                                    const isChecked = batchForm.selectedExams.includes(ex.id);
+                                    return (
+                                        <div
+                                            key={ex.id}
+                                            onClick={() => setBatchForm(f => ({
+                                                ...f,
+                                                selectedExams: isChecked
+                                                    ? f.selectedExams.filter(x => x !== ex.id)
+                                                    : [...f.selectedExams, ex.id]
+                                            }))}
+                                            style={{
+                                                padding: '12px 14px',
+                                                borderRadius: 10,
+                                                border: isChecked ? '2px solid #10b981' : '1.5px solid #e2e8f0',
+                                                background: isChecked ? '#f0fdf4' : '#f8fafc',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => {}}
+                                                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                                                />
+                                                <span style={{ fontWeight: 800, fontSize: 13, color: isChecked ? '#065f46' : '#334155' }}>
+                                                    {ex.name}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4, marginLeft: 24 }}>
+                                                {ex.desc}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div style={{ marginTop: 16, padding: '12px 14px', background: '#ecfdf5', borderRadius: 10, border: '1px solid #a7f3d0' }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46' }}>
+                                    ✨ Instant Conduction & Print Ready:
+                                </div>
+                                <div style={{ fontSize: 11, color: '#047857', marginTop: 2 }}>
+                                    This will create 4 separate high-yield Question Papers (with Answer Keys & Solutions) and 4 live CBT Online Exams immediately visible on Student Lab Portals (/lab-exam).
+                                </div>
+                            </div>
+                        </div>
+                        <div style={styles.modalFooter}>
+                            <button style={styles.cancelBtn} onClick={() => setShowBatchModal(false)}>Cancel</button>
+                            <button
+                                style={{
+                                    ...styles.primaryBtn,
+                                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    padding: '12px 24px',
+                                    fontWeight: 800,
+                                    boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                                }}
+                                onClick={handleBatchGenerate}
+                                disabled={loading || batchForm.selectedExams.length === 0}
+                            >
+                                {loading ? '⏳ Generating All Papers & Exams...' : '🚀 Generate All 4 Exams Now'}
                             </button>
                         </div>
                     </div>
