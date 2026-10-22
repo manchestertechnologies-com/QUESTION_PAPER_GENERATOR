@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 
@@ -8,7 +8,14 @@ export default function ExamInstructions() {
     const [exam, setExam] = useState(null);
     const [agreed, setAgreed] = useState(false);
     const [loading, setLoading] = useState(true);
-    const studentInfo = JSON.parse(localStorage.getItem('student_info') || '{}');
+    const studentInfo = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('student_info') || '{}');
+        } catch (e) {
+            return {};
+        }
+    }, []);
+    const initRan = useRef(false);
 
     const [timeLeftToStart, setTimeLeftToStart] = useState(null); // seconds until start
 
@@ -17,6 +24,8 @@ export default function ExamInstructions() {
             navigate('/lab-exam');
             return;
         }
+        if (initRan.current) return;
+        initRan.current = true;
         const fetchExam = async () => {
             const emailParam = encodeURIComponent(studentInfo.studentEmail || '');
             const rollParam = encodeURIComponent(studentInfo.rollNumber || '');
@@ -44,7 +53,7 @@ export default function ExamInstructions() {
             }
         };
         fetchExam();
-    }, [examId, studentInfo, navigate]);
+    }, [examId, navigate]);
 
     useEffect(() => {
         if (!exam || !exam.start_time) {

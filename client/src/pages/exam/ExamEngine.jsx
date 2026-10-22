@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
@@ -69,7 +69,14 @@ function getState(q) {
 export default function ExamEngine() {
     const { examId } = useParams();
     const navigate = useNavigate();
-    const studentInfo = JSON.parse(localStorage.getItem('student_info') || '{}');
+    const studentInfo = useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('student_info') || '{}');
+        } catch (e) {
+            return {};
+        }
+    }, []);
+    const initRan = useRef(false);
 
     const [exam, setExam] = useState(null);
     const [session, setSession] = useState(null);
@@ -107,6 +114,8 @@ export default function ExamEngine() {
 
     // ── Load exam and start session ─────────────────────────────
     useEffect(() => {
+        if (initRan.current) return;
+        initRan.current = true;
         const init = async () => {
             if (!studentInfo || !studentInfo.rollNumber) {
                 navigate('/lab-exam');
@@ -217,7 +226,7 @@ export default function ExamEngine() {
         };
         init();
         return () => clearInterval(timerRef.current);
-    }, [examId, studentInfo, navigate]);
+    }, [examId, navigate]);
 
     // ── Malpractice and Security Controls ─────────────────────────
     useEffect(() => {
@@ -318,17 +327,18 @@ export default function ExamEngine() {
 
     // ── Local Storage & Autosave Progress sync ──────────────────
     useEffect(() => {
-        if (!session?._id || answers.length === 0) return;
+        const sid = session?._id || session?.id;
+        if (!sid || answers.length === 0) return;
         
         // 1. Sync immediately to localStorage
-        const storageKey = `exam_answers_${examId}_${session._id}`;
+        const storageKey = `exam_answers_${examId}_${sid}`;
         localStorage.setItem(storageKey, JSON.stringify(answers));
 
         // 2. Debounced sync to database
         const timer = setTimeout(async () => {
             try {
                 await api.post(`/api/exams/${examId}/session/save-progress`, {
-                    sessionId: session._id,
+                    sessionId: sid,
                     answers
                 }, { skipLoader: true });
             } catch (err) {
@@ -337,7 +347,7 @@ export default function ExamEngine() {
         }, 3000); // debounce 3 seconds
 
         return () => clearTimeout(timer);
-    }, [answers, session?._id, examId]);
+    }, [answers, session?._id, session?.id, examId]);
 
     const formatTime = (secs) => {
         const h = Math.floor(secs / 3600);
@@ -352,7 +362,17 @@ export default function ExamEngine() {
     const updateAnswer = (idx, patch) => {
         const dwell = questionDwellTimeRef.current[idx] || 0;
         questionDwellTimeRef.current[idx] = 0;
-        setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, ...patch, timeTaken: (a.timeTaken || 0) + dwell } : a));
+        setAnswers(prev => {
+            const updated = prev.map((a, i) => i === idx ? { ...a, ...patch, timeTaken: (a.timeTaken || 0) + dwell } : a);
+            try {
+                const sid = session?._id || session?.id;
+                if (sid) {
+                    const storageKey = `exam_answers_${examId}_${sid}`;
+                    localStorage.setItem(storageKey, JSON.stringify(updated));
+                }
+            } catch (e) {}
+            return updated;
+        });
     };
 
     const goTo = (idx) => {
@@ -539,10 +559,13 @@ export default function ExamEngine() {
             let redirectSessionId = activeSessionId;
             try {
                 const res = await api.post(`/api/exams/${examId}/submit`, {
-                    sessionId: session?._id,
+                    sessionId: session?._id || session?.id,
                     answers: finalAnswers
                 });
-                if (res.data?.sessionId) redirectSessionId = res.data.sessionId;
+                if (res.data?.sessionId) {
+                    redirectSessionId = res.data.sessionId;
+                    localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(localScorecard));
+                }
             } catch (submitErr) {
                 console.warn('Backend submit notice:', submitErr.message);
             }
@@ -854,7 +877,6 @@ export default function ExamEngine() {
                                             <label 
                                                 key={`radio-${i}`} 
                                                 style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: isSelected ? '700' : '500', color: isSelected ? '#2563eb' : '#334155', fontSize: '14px' }}
-                                                onClick={() => handleOptionSelect(label)}
                                             >
                                                 <input 
                                                     type="radio" 
