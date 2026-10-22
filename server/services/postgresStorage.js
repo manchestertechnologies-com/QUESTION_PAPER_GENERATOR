@@ -18,6 +18,7 @@ function mapExamRow(r) {
         duration_minutes: r.duration_minutes,
         status: r.status || 'draft',
         shuffleQuestions: r.shuffle_questions,
+        isOnlineVisible: r.is_online_visible !== false,
         examMode: r.exam_mode || 'ONLINE',
         sections: r.sections || [],
         subjectAssignments: (r.subject_assignments || []).map((sa, idx) => ({

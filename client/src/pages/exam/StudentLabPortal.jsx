@@ -38,7 +38,7 @@ export default function StudentLabPortal() {
     // ── Fetch active exams from public lab endpoint ──
     const fetchExams = useCallback(async () => {
         try {
-            const res = await api.get('/api/exams/lab-active');
+            const res = await api.get('/api/exams/lab-active', { skipLoader: true });
             setExams(res.data.exams || []);
             setError('');
         } catch (err) {
@@ -400,6 +400,7 @@ export default function StudentLabPortal() {
                                     const { timing } = exam;
                                     const isLive = timing.status === 'live';
                                     const isWaiting = timing.status === 'waiting_5min';
+                                    const isScheduled = timing.status === 'scheduled';
                                     const isConcluded = timing.status === 'concluded';
 
                                     return (

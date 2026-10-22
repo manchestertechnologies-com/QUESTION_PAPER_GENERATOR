@@ -16,6 +16,7 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import MathRenderer from '../../components/MathRenderer';
 import TeacherOmr from '../teacher/omr/TeacherOmr';
 import CreatePaper from '../teacher/CreatePaper';
+import GenerateAllFourModal from '../../components/GenerateAllFourModal';
 import api from '../../api';
 
 const DashboardHome = () => {
@@ -42,6 +43,7 @@ const DashboardHome = () => {
 
     // Commission Exam Modal state
     const [showCommissionModal, setShowCommissionModal] = useState(false);
+    const [showFourExamsModal, setShowFourExamsModal] = useState(false);
     const [commissionForm, setCommissionForm] = useState({
         title: '',
         examType: 'CET',
@@ -676,6 +678,14 @@ const DashboardHome = () => {
                 )}
             </div>
 
+            <GenerateAllFourModal 
+                isOpen={showFourExamsModal} 
+                onClose={() => setShowFourExamsModal(false)} 
+                onSuccess={() => {
+                    api.get('/api/exams/commissioned', { skipLoader: true }).then(r => setCommissionedExams(r.data || [])).catch(() => {});
+                }} 
+            />
+
             {/* ── MODAL: CREATE & COMMISSION EXAM ── */}
             {showCommissionModal && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 overflow-y-auto">
@@ -934,7 +944,7 @@ const AdminNotificationBell = () => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await api.get('/api/notifications');
+            const res = await api.get('/api/notifications', { skipLoader: true });
             setNotifications(Array.isArray(res.data) ? res.data : []);
         } catch (err) {
             console.error('Error fetching notifications:', err);

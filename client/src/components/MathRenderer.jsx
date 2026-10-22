@@ -260,4 +260,4 @@ const MathRenderer = ({
     );
 };
 
-export default MathRenderer;
+export default React.memo(MathRenderer);

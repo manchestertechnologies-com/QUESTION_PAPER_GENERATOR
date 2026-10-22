@@ -1,26 +1,15 @@
-const { Pool } = require('pg');
+const pool = require('../config/postgres');
 const bcrypt = require('bcryptjs');
 
-const poolerUrl = 'postgresql://postgres.vukxgqkrersxcasdklda:Sapthagiri1@aws-0-ap-south-1.pooler.supabase.com:5432/postgres';
-const directUrl = 'postgresql://postgres:Sapthagiri1@db.vukxgqkrersxcasdklda.supabase.co:5432/postgres';
-
 async function init() {
-    console.log('Connecting to Supabase PostgreSQL...');
-    let pool;
-    try {
-        pool = new Pool({ connectionString: poolerUrl, ssl: { rejectUnauthorized: false } });
-        await pool.query('SELECT 1');
-        console.log('✅ Connected via Supabase pooler!');
-    } catch (e) {
-        console.log('Pooler attempt failed, trying direct connection...');
-        pool = new Pool({ connectionString: directUrl, ssl: { rejectUnauthorized: false } });
-        await pool.query('SELECT 1');
-        console.log('✅ Connected via direct URL!');
-    }
+    console.log('Connecting to active PostgreSQL database via server/config/postgres...');
+    await pool.query('SELECT 1');
+    console.log('✅ Connected to active PostgreSQL database!');
 
     // 1. Users Table
     await pool.query(`
-        CREATE TABLE IF NOT EXISTS public.users (
+        ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+    CREATE TABLE IF NOT EXISTS public.users (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255) NOT NULL,
             email VARCHAR(255) UNIQUE NOT NULL,
@@ -188,11 +177,13 @@ async function init() {
             subject_assignments JSONB DEFAULT '[]'::jsonb,
             classes JSONB DEFAULT '["12"]'::jsonb,
             allowed_students JSONB DEFAULT '[]'::jsonb,
+            is_online_visible BOOLEAN DEFAULT TRUE,
             created_by VARCHAR(255),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_online_exams_status ON public.online_exams(status);
+        ALTER TABLE public.online_exams ADD COLUMN IF NOT EXISTS is_online_visible BOOLEAN DEFAULT TRUE;
     `);
     console.log('✅ Created online_exams table');
 
@@ -237,6 +228,10 @@ async function init() {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         CREATE INDEX IF NOT EXISTS idx_students_roll ON public.students(roll_number);
+        ALTER TABLE public.students ADD COLUMN IF NOT EXISTS enrollment_no VARCHAR(100);
+        ALTER TABLE public.students ADD COLUMN IF NOT EXISTS sats_no VARCHAR(100);
+        ALTER TABLE public.students ADD COLUMN IF NOT EXISTS class_level VARCHAR(50) DEFAULT 'II-PUC';
+        CREATE INDEX IF NOT EXISTS idx_students_enrollment ON public.students(enrollment_no);
     `);
     console.log('✅ Created students table');
 
@@ -279,13 +274,13 @@ async function init() {
     const existingAdmin = await pool.query('SELECT * FROM public.users WHERE email = $1', [adminEmail]);
     if (existingAdmin.rows.length === 0) {
         await pool.query(`
-            INSERT INTO public.users (name, email, password, role, subject)
-            VALUES ($1, $2, $3, $4, $5)
-        `, ['Sapthagiri Admin', adminEmail, hashedPassword, 'admin', 'Administration']);
+            INSERT INTO public.users (name, email, password, password_hash, role, subject)
+            VALUES ($1, $2, $3, $4, $5, $6)
+        `, ['Manchester Admin', adminEmail, hashedPassword, hashedPassword, 'admin', 'Administration']);
         console.log('✅ Seeded Admin user: ' + adminEmail);
     } else {
         await pool.query(`
-            UPDATE public.users SET password = $1 WHERE email = $2
+            UPDATE public.users SET password = $1::varchar, password_hash = $1::text WHERE email = $2
         `, [hashedPassword, adminEmail]);
         console.log('✅ Updated Admin user password: ' + adminEmail);
     }
@@ -303,13 +298,13 @@ async function init() {
         const existing = await pool.query('SELECT * FROM public.users WHERE email = $1', [f.email]);
         if (existing.rows.length === 0) {
             await pool.query(`
-                INSERT INTO public.users (name, email, password, role, subject)
-                VALUES ($1, $2, $3, 'teacher', $4)
-            `, [f.name, f.email, hashedPassword, f.subject]);
+                INSERT INTO public.users (name, email, password, password_hash, role, subject)
+                VALUES ($1, $2, $3, $4, 'teacher', $5)
+            `, [f.name, f.email, hashedPassword, hashedPassword, f.subject]);
             console.log('✅ Seeded Faculty user: ' + f.email);
         } else {
             await pool.query(`
-                UPDATE public.users SET password = $1, subject = $2 WHERE email = $3
+                UPDATE public.users SET password = $1::varchar, password_hash = $1::text, subject = $2 WHERE email = $3
             `, [hashedPassword, f.subject, f.email]);
             console.log('✅ Updated Faculty user password: ' + f.email);
         }

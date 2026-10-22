@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
+import GenerateAllFourModal from '../../components/GenerateAllFourModal';
 import { sanitize, optionLabel } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import ResizableDiagram from '../../components/ResizableDiagram';
@@ -663,6 +664,7 @@ export default function ExamManagement() {
     const [templates, setTemplates] = useState([]);
     const [grandTests, setGrandTests] = useState([]);
     const [showMergeModal, setShowMergeModal] = useState(false);
+    const [showFourExamsModal, setShowFourExamsModal] = useState(false);
     const [showConfigModal, setShowConfigModal] = useState(null); // exam id
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState('');
@@ -819,6 +821,17 @@ export default function ExamManagement() {
         setLoading(false);
     };
 
+    
+    const handleGoLiveNow = async (examId) => {
+        try {
+            const res = await api.put(`/api/exams/${examId}/go-live-now`);
+            setMsg(res.data.msg || 'Exam is now LIVE for all students!');
+            fetchExams();
+        } catch (e) {
+            setMsg(e.response?.data?.msg || 'Failed to activate exam');
+        }
+    };
+
     const handleToggleOnlineVisibility = async (examId) => {
         try {
             const res = await api.put(`/api/exams/${examId}/toggle-online-visibility`);
@@ -911,6 +924,26 @@ export default function ExamManagement() {
                     >
                         <span>🖥️</span>
                         <span>Copy Student Lab Link (/lab-exam)</span>
+                    </button>
+                                        <button
+                        onClick={() => setShowFourExamsModal(true)}
+                        style={{
+                            padding: '10px 18px',
+                            background: 'linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%)',
+                            color: '#ffffff',
+                            border: '1.5px solid #38bdf8',
+                            borderRadius: '12px',
+                            fontWeight: 900,
+                            fontSize: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)'
+                        }}
+                    >
+                        <span>⚡</span>
+                        <span>Create All 4 PCMB Papers At Once</span>
                     </button>
                     <button style={styles.primaryBtn} onClick={() => setShowMergeModal(true)}>
                         ⊕ Generate Composite Exam
@@ -1197,6 +1230,12 @@ export default function ExamManagement() {
                     </div>
                 </div>
             )}
+
+            <GenerateAllFourModal 
+                isOpen={showFourExamsModal} 
+                onClose={() => setShowFourExamsModal(false)} 
+                onSuccess={() => { fetchExams(); }} 
+            />
 
             {/* Config Modal */}
             {showConfigModal && (

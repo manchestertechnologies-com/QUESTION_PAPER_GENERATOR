@@ -29,7 +29,7 @@ const TeacherNotificationBell = () => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await api.get('/api/notifications');
+            const res = await api.get('/api/notifications', { skipLoader: true });
             if (Array.isArray(res.data)) {
                 setNotifications(res.data);
             }

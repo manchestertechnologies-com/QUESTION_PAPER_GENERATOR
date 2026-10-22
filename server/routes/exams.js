@@ -7,6 +7,7 @@ const checkRole = require('../middleware/role');
 const { detectLabIp } = require('../middleware/labIp');
 const pool = require('../config/postgres');
 const { createNotification } = require('./notifications');
+const supabaseQuestions = require('../services/supabaseQuestions');
 
 // ─────────────────────────────────────────────────────────────────
 // ADMIN: Commission a new Exam Assignment to Faculty
@@ -446,6 +447,154 @@ router.put('/:id/toggle-online-visibility', [auth, checkRole(['admin'])], async 
 // ADMIN: Create & publish an online CBT exam directly from a teacher paper
 // POST /api/exams/from-paper
 // ─────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Go Live Now (Instant activation with no schedule locks)
+// PUT /api/exams/:id/go-live-now
+// ─────────────────────────────────────────────────────────────────
+router.put('/:id/go-live-now', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const exam = await storage.getExamById(req.params.id);
+        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+
+        const updated = await storage.updateExam(req.params.id, {
+            isOnlineVisible: true,
+            status: 'live',
+            start_time: null // Clears any future schedule lock so exam is immediately 100% active
+        });
+        res.json({ msg: 'Exam is now LIVE for all students!', exam: updated });
+    } catch (err) {
+        console.error('Go live now error:', err);
+        res.status(500).json({ msg: 'Server error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Generate Papers for All Four Subjects At Once (PCMB)
+// (Physics, Chemistry, Mathematics, Biology) & Compile into CBT Online Exam
+// POST /api/exams/generate-all-four
+// ─────────────────────────────────────────────────────────────────
+router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const {
+            title,
+            examType = 'CET',
+            targetClass = '12',
+            targetPerSubject,
+            duration_minutes = 180,
+            start_time,
+            end_time,
+            instructions,
+            shuffleQuestions = true,
+            createOnlineExam = true
+        } = req.body;
+
+        if (!title) {
+            return res.status(400).json({ msg: 'Assessment title is required.' });
+        }
+
+        let countPerSub = Number(targetPerSubject);
+        if (!countPerSub || countPerSub <= 0) {
+            if (examType === 'NEET') countPerSub = 45;
+            else if (examType === 'JEE') countPerSub = 25;
+            else countPerSub = 60; // Standard CET
+        }
+
+        const subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+        const createdPapers = [];
+        const allMergedQuestions = [];
+        const sections = [];
+
+        for (const sub of subjects) {
+            try {
+                const qRes = await supabaseQuestions.getQuestions({
+                    subject: sub,
+                    classes: targetClass
+                }, 1, countPerSub);
+
+                const qList = (qRes.questions || []).map((q, idx) => ({
+                    _id: String(q.id || q._id || `${sub}_q_${idx}`),
+                    id: String(q.id || q._id || `${sub}_q_${idx}`),
+                    questionId: String(q.id || q._id || `${sub}_q_${idx}`),
+                    subject: sub,
+                    chapter: q.chapter || '',
+                    concept: q.concept || q.topic || '',
+                    subConcept: q.subConcept || '',
+                    type: q.type || 'MCQ',
+                    questionText: q.questionText || q.question || '',
+                    options: Array.isArray(q.options) ? q.options : [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean),
+                    answer: q.answer || q.correct_option || 'A',
+                    solution: q.solutionText || q.solution || '',
+                    solutionText: q.solutionText || q.solution || '',
+                    imageUrl: q.imageUrl || null,
+                    marks: examType === 'CET' ? 1 : 4,
+                    sectionName: sub
+                }));
+
+                // Save individual subject paper in public.papers
+                const paperData = {
+                    title: `${title} - ${sub}`,
+                    subject: sub,
+                    class_level: targetClass === '11' ? 'I-PUC' : 'II-PUC',
+                    classes: [targetClass],
+                    exam_type: examType,
+                    duration_minutes: Math.round((Number(duration_minutes) || 180) / 4) || 60,
+                    instructions: instructions || `${examType} Examination - ${sub} Section`,
+                    questions: qList,
+                    teacherId: req.user.id
+                };
+
+                const savedPaper = await storage.savePaper(paperData);
+                createdPapers.push(savedPaper);
+
+                allMergedQuestions.push(...qList);
+                sections.push({
+                    name: sub,
+                    sectionName: sub,
+                    subject: sub,
+                    totalQuestions: qList.length,
+                    marksPerQuestion: examType === 'CET' ? 1 : 4,
+                    negativeMarks: examType === 'CET' ? 0 : 1
+                });
+            } catch (subErr) {
+                console.error(`Error generating questions for ${sub}:`, subErr.message);
+            }
+        }
+
+        let onlineExam = null;
+        if (createOnlineExam && allMergedQuestions.length > 0) {
+            const isLive = !start_time;
+            const newExam = await storage.createExam({
+                title: title,
+                examType: examType,
+                classes: [targetClass],
+                duration_minutes: Number(duration_minutes) || 180,
+                start_time: start_time || null,
+                end_time: end_time || null,
+                instructions: instructions || `Standard Computer-Based Assessment (${examType}). Follow invigilator guidelines.`,
+                questions: allMergedQuestions,
+                totalQuestions: allMergedQuestions.length,
+                status: isLive ? 'live' : 'scheduled',
+                isOnlineVisible: true,
+                shuffleQuestions: Boolean(shuffleQuestions),
+                sections: sections,
+                sourcePapers: createdPapers.map(p => String(p._id || p.id)),
+                createdBy: req.user.id
+            });
+            onlineExam = newExam;
+        }
+
+        res.json({
+            msg: `Successfully created all 4 subject papers (${createdPapers.length} papers, ${allMergedQuestions.length} total questions)${onlineExam ? ' and launched CBT Online Exam!' : '.'}`,
+            papers: createdPapers,
+            onlineExam: onlineExam
+        });
+    } catch (err) {
+        console.error('generate-all-four error:', err);
+        res.status(500).json({ msg: 'Server error generating four papers: ' + err.message });
+    }
+});
+
 router.post('/from-paper', [auth, checkRole(['admin'])], async (req, res) => {
     try {
         const { paperId, title, duration_minutes, start_time, end_time, instructions } = req.body;

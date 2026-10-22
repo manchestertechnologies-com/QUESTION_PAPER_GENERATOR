@@ -1,31 +1,13 @@
 import React from 'react';
 
 const FourDotLoader = ({ size = 'md', text = '', fullPage = false, className = '' }) => {
-    const dotSize = size === 'sm' ? 'w-2 h-2' : size === 'lg' ? 'w-4 h-4' : 'w-3 h-3';
-    const gapSize = size === 'sm' ? 'gap-1.5' : size === 'lg' ? 'gap-3' : 'gap-2.5';
+    const spinnerSize = size === 'sm' ? 'w-4 h-4' : size === 'lg' ? 'w-8 h-8' : 'w-5 h-5';
 
     const content = (
-        <div className={`flex flex-col items-center justify-center p-4 ${className}`}>
-            <div className={`flex items-center justify-center ${gapSize}`}>
-                <span 
-                    className={`${dotSize} rounded-full bg-navy`} 
-                    style={{ animation: 'bounceDot 0.85s ease-in-out infinite 0ms' }} 
-                />
-                <span 
-                    className={`${dotSize} rounded-full bg-gold`} 
-                    style={{ animation: 'bounceDot 0.85s ease-in-out infinite 150ms' }} 
-                />
-                <span 
-                    className={`${dotSize} rounded-full bg-navy`} 
-                    style={{ animation: 'bounceDot 0.85s ease-in-out infinite 300ms' }} 
-                />
-                <span 
-                    className={`${dotSize} rounded-full bg-gold`} 
-                    style={{ animation: 'bounceDot 0.85s ease-in-out infinite 450ms' }} 
-                />
-            </div>
+        <div className={`flex flex-col items-center justify-center p-3 ${className}`}>
+            <div className={`${spinnerSize} border-2 border-slate-300 border-t-amber-500 rounded-full animate-spin`} />
             {text && (
-                <p className="mt-3 text-xs font-bold uppercase tracking-wider text-slate-500 animate-pulse text-center">
+                <p className="mt-2 text-xs font-semibold tracking-wider text-slate-500 text-center">
                     {text}
                 </p>
             )}
@@ -34,8 +16,11 @@ const FourDotLoader = ({ size = 'md', text = '', fullPage = false, className = '
 
     if (fullPage) {
         return (
-            <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-[99999] flex items-center justify-center flex-col transition-all duration-200">
-                {content}
+            <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[99999] flex items-center justify-center">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xl flex flex-col items-center">
+                    <div className="w-8 h-8 border-3 border-slate-200 border-t-amber-500 rounded-full animate-spin mb-2" />
+                    {text && <p className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">{text}</p>}
+                </div>
             </div>
         );
     }

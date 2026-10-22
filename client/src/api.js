@@ -12,9 +12,25 @@ const api = axios.create({
 let loadingCallback = (_isLoading) => {};
 export const setLoadingCallback = (cb) => { loadingCallback = cb; };
 
+const shouldSkipLoader = (config) => {
+    if (config?.skipLoader) return true;
+    const url = String(config?.url || '').toLowerCase();
+    if (
+        url.includes('notification') ||
+        url.includes('lab-active') ||
+        url.includes('save-progress') ||
+        url.includes('daily-stats') ||
+        url.includes('malpractice') ||
+        url.includes('student/')
+    ) {
+        return true;
+    }
+    return false;
+};
+
 // ── Request Interceptor: Attach token from localStorage if present ──────────
 api.interceptors.request.use((config) => {
-    if (!config.skipLoader) {
+    if (!shouldSkipLoader(config)) {
         loadingCallback(true);
     }
     const token = localStorage.getItem('token');
@@ -31,7 +47,7 @@ api.interceptors.request.use((config) => {
 // ── Response Interceptor: Handle token expiry globally ─────────────────────
 api.interceptors.response.use(
     (response) => {
-        if (!response.config?.skipLoader) {
+        if (!shouldSkipLoader(response.config)) {
             loadingCallback(false);
         }
         return response;

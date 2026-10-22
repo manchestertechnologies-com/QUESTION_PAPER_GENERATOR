@@ -80,6 +80,7 @@ export default function ExamEngine() {
     const [submitting, setSubmitting] = useState(false);
     const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
     const timerRef = useRef(null);
+    const questionDwellTimeRef = useRef({});
     const autoSubmitted = useRef(false);
     const isSubmittingOrFinished = useRef(false);
 
@@ -91,7 +92,7 @@ export default function ExamEngine() {
             await api.post(`/api/exams/${examId}/malpractice`, {
                 sessionId: session?._id || session?.id,
                 reason
-            });
+            }, { skipLoader: true });
         } catch (e) {
             console.error('Failed to report malpractice:', e);
         }
@@ -275,7 +276,7 @@ export default function ExamEngine() {
                 }
                 return t - 1;
             });
-            setAnswers(prev => prev.map((a, i) => i === current ? { ...a, timeTaken: (a.timeTaken || 0) + 1 } : a));
+            questionDwellTimeRef.current[current] = (questionDwellTimeRef.current[current] || 0) + 1;
         }, 1000);
         return () => clearInterval(timerRef.current);
     }, [timeLeft !== null, current]);
@@ -314,7 +315,9 @@ export default function ExamEngine() {
 
     // ── Palette helpers ─────────────────────────────────────────
     const updateAnswer = (idx, patch) => {
-        setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, ...patch } : a));
+        const dwell = questionDwellTimeRef.current[idx] || 0;
+        questionDwellTimeRef.current[idx] = 0;
+        setAnswers(prev => prev.map((a, i) => i === idx ? { ...a, ...patch, timeTaken: (a.timeTaken || 0) + dwell } : a));
     };
 
     const goTo = (idx) => {
@@ -354,9 +357,13 @@ export default function ExamEngine() {
         setSubmitting(true);
         clearInterval(timerRef.current);
         try {
+            const finalAnswers = answers.map((a, i) => ({
+                ...a,
+                timeTaken: (a.timeTaken || 0) + (questionDwellTimeRef.current[i] || 0)
+            }));
             const res = await api.post(`/api/exams/${examId}/submit`, {
                 sessionId: session?._id,
-                answers
+                answers: finalAnswers
             });
             try {
                 const storageKey = `exam_answers_${examId}_${session?._id}`;
