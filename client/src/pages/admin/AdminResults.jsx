@@ -87,34 +87,39 @@ export default function AdminResults() {
             if (exam && exam.questions) {
                 exam.questions.forEach((q, idx) => {
                     const qNum = idx + 1;
-                    const ans = r.answers?.find(a => a.questionId?.toString() === q._id?.toString());
-                    if (ans && ans.selectedOption !== null && ans.selectedOption !== '') {
+                    const ans = r.answers?.find(a => String(a.questionId) === String(q._id || q.id));
+                    if (ans && ans.selectedOption !== null && ans.selectedOption !== undefined && ans.selectedOption !== '') {
                         attempted.push(qNum);
                         let isCorrect = false;
                         const tolerance = q.numericalTolerance || 0;
-                        const parsedSelected = parseFloat(ans.selectedOption);
-                        const parsedAnswer = parseFloat(q.answer);
+                        const selectedStr = String(ans.selectedOption ?? '').trim();
+                        const answerStr = String(q.answer ?? q.correctAnswer ?? '').trim();
+                        const parsedSelected = parseFloat(selectedStr);
+                        const parsedAnswer = parseFloat(answerStr);
                         if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
                             if (Math.abs(parsedSelected - parsedAnswer) <= (tolerance + 1e-9)) {
                                 isCorrect = true;
                             }
                         }
-                        if (!isCorrect && ans.selectedOption.toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
+                        if (!isCorrect && selectedStr.toLowerCase() === answerStr.toLowerCase()) {
                             isCorrect = true;
                         }
-                        if (!isCorrect && q.options && q.options.length > 0) {
+                        if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
                             const letters = ['A', 'B', 'C', 'D'];
-                            const selectedIdx = letters.indexOf(ans.selectedOption.toString().toUpperCase());
-                            if (selectedIdx !== -1 && q.options[selectedIdx]) {
-                                if (q.options[selectedIdx].toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
+                            const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
+                            if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
+                                if (String(q.options[selectedIdx]).trim().toLowerCase() === answerStr.toLowerCase()) {
                                     isCorrect = true;
                                 }
                             }
-                            const correctIdx = letters.indexOf(q.answer.toString().toUpperCase());
-                            if (correctIdx !== -1 && q.options[correctIdx]) {
-                                if (ans.selectedOption.toString().trim().toLowerCase() === q.options[correctIdx].toString().trim().toLowerCase()) {
+                            const correctIdx = letters.indexOf(answerStr.toUpperCase());
+                            if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
+                                if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
                                     isCorrect = true;
                                 }
+                            }
+                            if (selectedIdx !== -1 && selectedIdx === correctIdx) {
+                                isCorrect = true;
                             }
                         }
                         if (isCorrect) {
@@ -172,34 +177,39 @@ export default function AdminResults() {
             if (exam && exam.questions) {
                 exam.questions.forEach((q, idx) => {
                     const qNum = idx + 1;
-                    const ans = r.answers?.find(a => a.questionId?.toString() === q._id?.toString());
-                    if (ans && ans.selectedOption !== null && ans.selectedOption !== '') {
+                    const ans = r.answers?.find(a => String(a.questionId) === String(q._id || q.id));
+                    if (ans && ans.selectedOption !== null && ans.selectedOption !== undefined && ans.selectedOption !== '') {
                         attempted.push(qNum);
                         let isCorrect = false;
                         const tolerance = q.numericalTolerance || 0;
-                        const parsedSelected = parseFloat(ans.selectedOption);
-                        const parsedAnswer = parseFloat(q.answer);
+                        const selectedStr = String(ans.selectedOption ?? '').trim();
+                        const answerStr = String(q.answer ?? q.correctAnswer ?? '').trim();
+                        const parsedSelected = parseFloat(selectedStr);
+                        const parsedAnswer = parseFloat(answerStr);
                         if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
                             if (Math.abs(parsedSelected - parsedAnswer) <= (tolerance + 1e-9)) {
                                 isCorrect = true;
                             }
                         }
-                        if (!isCorrect && ans.selectedOption.toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
+                        if (!isCorrect && selectedStr.toLowerCase() === answerStr.toLowerCase()) {
                             isCorrect = true;
                         }
-                        if (!isCorrect && q.options && q.options.length > 0) {
+                        if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
                             const letters = ['A', 'B', 'C', 'D'];
-                            const selectedIdx = letters.indexOf(ans.selectedOption.toString().toUpperCase());
-                            if (selectedIdx !== -1 && q.options[selectedIdx]) {
-                                if (q.options[selectedIdx].toString().trim().toLowerCase() === q.answer.toString().trim().toLowerCase()) {
+                            const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
+                            if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
+                                if (String(q.options[selectedIdx]).trim().toLowerCase() === answerStr.toLowerCase()) {
                                     isCorrect = true;
                                 }
                             }
-                            const correctIdx = letters.indexOf(q.answer.toString().toUpperCase());
-                            if (correctIdx !== -1 && q.options[correctIdx]) {
-                                if (ans.selectedOption.toString().trim().toLowerCase() === q.options[correctIdx].toString().trim().toLowerCase()) {
+                            const correctIdx = letters.indexOf(answerStr.toUpperCase());
+                            if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
+                                if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
                                     isCorrect = true;
                                 }
+                            }
+                            if (selectedIdx !== -1 && selectedIdx === correctIdx) {
+                                isCorrect = true;
                             }
                         }
                         if (isCorrect) {

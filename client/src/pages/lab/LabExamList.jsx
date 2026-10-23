@@ -15,7 +15,13 @@ export default function LabExamList() {
     });
     const navigate = useNavigate();
     const labToken = localStorage.getItem('lab_token');
-    const labUser = JSON.parse(localStorage.getItem('lab_user') || '{}');
+    const labUser = (() => {
+        try {
+            return JSON.parse(localStorage.getItem('lab_user') || '{}');
+        } catch {
+            return {};
+        }
+    })();
 
     useEffect(() => {
         if (!labToken) {

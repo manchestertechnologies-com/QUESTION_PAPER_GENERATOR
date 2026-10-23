@@ -248,14 +248,17 @@ export default function Scorecard() {
                         )}
                         <div style={styles.reviewList}>
                             {data.breakdown?.map((q, i) => {
-                                const attempted = q.selectedOption !== null && q.selectedOption !== '';
-                                let isCorrect = false;
+                                const attempted = q.selectedOption !== null && q.selectedOption !== undefined && q.selectedOption !== '';
+                                let isCorrect = Boolean(q.isCorrect);
                                 let isWrong = false;
+                                const selectedStr = String(q.selectedOption ?? '').trim();
+                                const correctStr = String(q.correctAnswer ?? q.answer ?? '').trim();
+
                                 if (attempted && !data.answerKeyHidden) {
                                     // 1. Numerical match with tolerance
                                     const tolerance = q.numericalTolerance || 0;
-                                    const parsedSelected = parseFloat(q.selectedOption);
-                                    const parsedCorrect = parseFloat(q.correctAnswer);
+                                    const parsedSelected = parseFloat(selectedStr);
+                                    const parsedCorrect = parseFloat(correctStr);
                                     if (!isNaN(parsedSelected) && !isNaN(parsedCorrect)) {
                                         if (Math.abs(parsedSelected - parsedCorrect) <= (tolerance + 1e-9)) {
                                             isCorrect = true;
@@ -263,30 +266,33 @@ export default function Scorecard() {
                                     }
 
                                     // 2. Exact match
-                                    if (!isCorrect && q.selectedOption.toString().trim().toLowerCase() === (q.correctAnswer || '').toString().trim().toLowerCase()) {
+                                    if (!isCorrect && selectedStr.toLowerCase() === correctStr.toLowerCase()) {
                                         isCorrect = true;
                                     }
 
                                     // 3. Option index / letter match fallback
-                                    if (!isCorrect && q.options && q.options.length > 0) {
+                                    if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
                                         const letters = ['A', 'B', 'C', 'D'];
-                                        const selectedIdx = letters.indexOf(q.selectedOption.toString().toUpperCase());
-                                        if (selectedIdx !== -1 && q.options[selectedIdx]) {
-                                            if (q.options[selectedIdx].toString().trim().toLowerCase() === (q.correctAnswer || '').toString().trim().toLowerCase()) {
+                                        const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
+                                        if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
+                                            if (String(q.options[selectedIdx]).trim().toLowerCase() === correctStr.toLowerCase()) {
                                                 isCorrect = true;
                                             }
                                         }
-                                        const correctIdx = letters.indexOf((q.correctAnswer || '').toString().toUpperCase());
-                                        if (correctIdx !== -1 && q.options[correctIdx]) {
-                                            if (q.selectedOption.toString().trim().toLowerCase() === q.options[correctIdx].toString().trim().toLowerCase()) {
+                                        const correctIdx = letters.indexOf(correctStr.toUpperCase());
+                                        if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
+                                            if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
                                                 isCorrect = true;
                                             }
+                                        }
+                                        if (selectedIdx !== -1 && selectedIdx === correctIdx) {
+                                            isCorrect = true;
                                         }
                                     }
                                     isWrong = !isCorrect;
                                 }
                                 return (
-                                    <div key={q._id} style={{ ...styles.reviewCard, borderLeft: `4px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
+                                    <div key={q._id || q.questionId || q.id || i} style={{ ...styles.reviewCard, borderLeft: `4px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
                                         <div style={styles.reviewQHeader}>
                                             <span style={styles.reviewQNum}>Q{i + 1}</span>
                                             <span style={styles.reviewSubject}>{q.subject} | {q.chapter}{q.concept && q.concept !== 'General' ? ` • ${q.concept}` : ''}</span>
@@ -298,14 +304,14 @@ export default function Scorecard() {
                                         </div>
                                         <MathRenderer style={styles.reviewQText} text={q.questionText} />
                                         
-                                        {q.type === 'numerical' || !q.options || q.options.length === 0 ? (
+                                        {q.type === 'numerical' || !Array.isArray(q.options) || q.options.length === 0 ? (
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400 }}>
                                                 <div style={{
                                                     ...styles.reviewOption,
                                                     background: attempted ? (isCorrect ? '#dcfce7' : '#fee2e2') : '#f9fafb',
                                                     border: attempted ? (isCorrect ? '1.5px solid #10b981' : '1.5px solid #ef4444') : '1.5px solid #e5e7eb'
                                                 }}>
-                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? q.selectedOption : 'Skipped'} />
+                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? selectedStr : 'Skipped'} />
                                                 </div>
                                                 {!data.answerKeyHidden && (
                                                     <div style={{
@@ -313,7 +319,7 @@ export default function Scorecard() {
                                                         background: '#dcfce7',
                                                         border: '1.5px solid #10b981'
                                                     }}>
-                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <MathRenderer inline={true} text={q.correctAnswer} />
+                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <MathRenderer inline={true} text={correctStr} />
                                                     </div>
                                                 )}
                                             </div>
@@ -321,15 +327,16 @@ export default function Scorecard() {
                                             <div style={styles.reviewOptions}>
                                                 {q.options?.map((opt, oi) => {
                                                     const label = (oi + 1).toString();
-                                                    const isSelected = q.selectedOption === opt;
-                                                    const isCorrectOpt = !data.answerKeyHidden && q.correctAnswer === opt;
+                                                    const optStr = typeof opt === 'object' && opt !== null ? (opt.text || JSON.stringify(opt)) : String(opt);
+                                                    const isSelected = selectedStr === optStr || selectedStr === String.fromCharCode(65 + oi) || selectedStr === String(oi) || selectedStr === String(oi + 1);
+                                                    const isCorrectOpt = !data.answerKeyHidden && (correctStr === optStr || correctStr === String.fromCharCode(65 + oi));
                                                     return (
                                                         <div key={oi} style={{
                                                             ...styles.reviewOption,
                                                             background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
                                                             border: isCorrectOpt ? '1.5px solid #10b981' : isSelected ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb'
                                                         }}>
-                                                            <span style={styles.reviewOptLabel}>{label}.</span> <MathRenderer inline={true} text={opt} />
+                                                            <span style={styles.reviewOptLabel}>{label}.</span> <MathRenderer inline={true} text={optStr} />
                                                             {isSelected && <span style={{ marginLeft: 8, fontSize: 12 }}>← Your Answer</span>}
                                                             {isCorrectOpt && <span style={{ marginLeft: 8, fontSize: 12, color: '#10b981' }}>✓ Correct</span>}
                                                         </div>

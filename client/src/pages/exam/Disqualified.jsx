@@ -4,7 +4,13 @@ import { useSearchParams } from 'react-router-dom';
 export default function Disqualified() {
     const [searchParams] = useSearchParams();
     const reason = searchParams.get('reason') || 'Window focus lost or tab switched';
-    const student = JSON.parse(localStorage.getItem('student_info') || '{}');
+    const student = (() => {
+        try {
+            return JSON.parse(localStorage.getItem('student_info') || '{}');
+        } catch {
+            return {};
+        }
+    })();
 
     useEffect(() => {
         // Enforce lockout: clean up any exam state except the malpractice lock

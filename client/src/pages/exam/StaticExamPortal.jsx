@@ -11,7 +11,13 @@ export default function StaticExamPortal() {
     const navigate = useNavigate();
 
     // Student Candidate Profile
-    const savedStudent = JSON.parse(localStorage.getItem('student_info') || '{}');
+    const savedStudent = (() => {
+        try {
+            return JSON.parse(localStorage.getItem('student_info') || '{}');
+        } catch {
+            return {};
+        }
+    })();
     const [candidateName, setCandidateName] = useState(savedStudent.studentName || '');
     const [candidateRoll, setCandidateRoll] = useState(savedStudent.rollNumber || '');
     const [candidateSection, setCandidateSection] = useState(savedStudent.section || 'A');
