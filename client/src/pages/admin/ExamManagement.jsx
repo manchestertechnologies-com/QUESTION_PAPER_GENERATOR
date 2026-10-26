@@ -736,7 +736,23 @@ export default function ExamManagement() {
         } catch (e) { /* ignore */ }
     };
 
+    const isPaperAllowedForExamType = (paper, examType) => {
+        if (!paper) return true;
+        const sub = (paper.subject || '').toLowerCase();
+        if (examType === 'NEET' && sub.includes('math')) return false;
+        if (examType === 'JEE' && (sub.includes('bio') || sub.includes('botan') || sub.includes('zool'))) return false;
+        return true;
+    };
+
     const togglePaper = (id) => {
+        const paper = papers.find(p => p._id === id);
+        if (paper && !isPaperAllowedForExamType(paper, mergeForm.examType)) {
+            if (mergeForm.examType === 'NEET') {
+                return setMsg('⚠️ NEET consists strictly of PCB (Physics, Chemistry, Biology). Mathematics papers cannot be added to NEET.');
+            } else if (mergeForm.examType === 'JEE') {
+                return setMsg('⚠️ JEE consists strictly of PCM (Physics, Chemistry, Mathematics). Biology papers cannot be added to JEE.');
+            }
+        }
         setMergeForm(f => {
             if (f.paperIds.includes(id)) return { ...f, paperIds: f.paperIds.filter(p => p !== id) };
             return { ...f, paperIds: [...f.paperIds, id] };
@@ -943,7 +959,7 @@ export default function ExamManagement() {
                         }}
                     >
                         <span>⚡</span>
-                        <span>Create All 4 PCMB Papers At Once</span>
+                        <span>Auto-Generate Full Exam (NEET / JEE / CET)</span>
                     </button>
                     <button style={styles.primaryBtn} onClick={() => setShowMergeModal(true)}>
                         ⊕ Generate Composite Exam
@@ -1152,8 +1168,19 @@ export default function ExamManagement() {
                             <label style={styles.label}>
                                 Select Papers ({mergeForm.paperIds.length} selected)
                             </label>
-                            <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 8, fontWeight: 500 }}>
-                                Merge any 2, 3, 4 or more subject papers into a single Grand Composite Exam & A4 Question Paper with continuous/section numbering and PQRS sets support (e.g. NEET: Physics, Chemistry, Botany, Zoology | CET: Physics, Chemistry, Maths, Biology | JEE: Physics, Chemistry, Maths).
+                            <div style={{ fontSize: 12, color: '#4b5563', marginBottom: 8, fontWeight: 500, lineHeight: '1.5' }}>
+                                Merge subject papers into a single Grand Composite Exam & A4 Question Paper:
+                                <div style={{ marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontSize: 11 }}>
+                                        NEET: PCB Only (Physics, Chemistry, Biology)
+                                    </span>
+                                    <span style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontSize: 11 }}>
+                                        JEE: PCM Only (Physics, Chemistry, Mathematics)
+                                    </span>
+                                    <span style={{ background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 6, fontWeight: 700, fontSize: 11 }}>
+                                        CET: PCMB (Physics, Chemistry, Mathematics, Biology)
+                                    </span>
+                                </div>
                             </div>
 
                             {/* Grand Test Papers Section */}
@@ -1196,13 +1223,27 @@ export default function ExamManagement() {
                             <div style={styles.paperList}>
                                 {papers.map(p => {
                                     const selected = mergeForm.paperIds.includes(p._id);
+                                    const allowed = isPaperAllowedForExamType(p, mergeForm.examType);
                                     return (
-                                        <div key={p._id} style={{ ...styles.paperItem, ...(selected ? styles.paperItemSelected : {}) }}
+                                        <div key={p._id} style={{ 
+                                            ...styles.paperItem, 
+                                            ...(selected ? styles.paperItemSelected : {}),
+                                            ...(!allowed ? { opacity: 0.5, cursor: 'not-allowed', background: '#f8fafc' } : {})
+                                        }}
                                             onClick={() => togglePaper(p._id)}>
-                                            <div style={styles.paperCheck}>{selected ? '✅' : '⬜'}</div>
+                                            <div style={styles.paperCheck}>
+                                                {!allowed ? '🚫' : (selected ? '✅' : '⬜')}
+                                            </div>
                                             <div>
                                                 <div style={{ fontWeight: 600 }}>{p.title}</div>
-                                                <div style={styles.paperMeta}>{p.subject} • {new Date(p.createdAt).toLocaleDateString()} • {p.questions?.length || 0} Q</div>
+                                                <div style={styles.paperMeta}>
+                                                    {p.subject} • {new Date(p.createdAt).toLocaleDateString()} • {p.questions?.length || 0} Q
+                                                    {!allowed && (
+                                                        <span style={{ color: '#ef4444', marginLeft: 8, fontWeight: 700 }}>
+                                                            ({mergeForm.examType === 'NEET' ? 'Math excluded in NEET' : 'Bio excluded in JEE'})
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     );

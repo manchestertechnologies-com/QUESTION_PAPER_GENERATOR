@@ -593,6 +593,19 @@ export default function ExamEngine() {
         return acc;
     }, {});
 
+    const subjectSections = useMemo(() => {
+        if (!exam || !Array.isArray(exam.questions)) return [];
+        const map = new Map();
+        exam.questions.forEach((q, idx) => {
+            const sub = q.subject || 'General';
+            if (!map.has(sub)) {
+                map.set(sub, { name: sub, firstIndex: idx, count: 0 });
+            }
+            map.get(sub).count += 1;
+        });
+        return Array.from(map.values());
+    }, [exam]);
+
     if (loading) return <div style={styles.center}>Loading exam...</div>;
     if (!exam) return <div style={styles.center}>Exam not available.</div>;
 
@@ -617,6 +630,42 @@ export default function ExamEngine() {
                     <span style={styles.candidateName}>👤 {studentInfo.studentName || 'Candidate'}</span>
                 </div>
             </div>
+
+            {/* Subject / Section Tabs */}
+            {subjectSections.length > 1 && (
+                <div style={styles.subjectNavBar}>
+                    <div style={styles.subjectNavLabel}>SECTIONS:</div>
+                    <div style={styles.subjectNavTabs}>
+                        {subjectSections.map(sec => {
+                            const isCurrentSubject = currentQ?.subject === sec.name;
+                            return (
+                                <button
+                                    key={sec.name}
+                                    type="button"
+                                    onClick={() => goTo(sec.firstIndex)}
+                                    style={{
+                                        ...styles.subjectNavTab,
+                                        ...(isCurrentSubject ? styles.subjectNavTabActive : {})
+                                    }}
+                                >
+                                    <span>{sec.name}</span>
+                                    <span style={{
+                                        fontSize: '11px',
+                                        padding: '1px 6px',
+                                        borderRadius: '999px',
+                                        background: isCurrentSubject ? '#001f6d' : '#e2e8f0',
+                                        color: isCurrentSubject ? '#fde047' : '#475569',
+                                        marginLeft: '6px',
+                                        fontWeight: 800
+                                    }}>
+                                        {sec.count} Qs
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             <div style={styles.body}>
                 {/* ── Left: Question Panel ── */}
@@ -1044,6 +1093,45 @@ const styles = {
     topRight: { fontSize: 13, color: '#cbd5e1' },
     candidateName: { fontWeight: 600 },
     body: { display: 'flex', flex: 1, gap: 0 },
+    subjectNavBar: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        padding: '8px 20px',
+        background: '#f8fafc',
+        borderBottom: '2px solid #e2e8f0',
+        flexWrap: 'wrap'
+    },
+    subjectNavLabel: {
+        fontSize: '11px',
+        fontWeight: 900,
+        color: '#475569',
+        letterSpacing: '0.05em'
+    },
+    subjectNavTabs: {
+        display: 'flex',
+        gap: '8px',
+        flexWrap: 'wrap'
+    },
+    subjectNavTab: {
+        display: 'flex',
+        alignItems: 'center',
+        padding: '6px 14px',
+        borderRadius: '8px',
+        border: '1.5px solid #cbd5e1',
+        background: '#ffffff',
+        color: '#1e293b',
+        fontSize: '12px',
+        fontWeight: 700,
+        cursor: 'pointer',
+        transition: 'all 0.15s ease'
+    },
+    subjectNavTabActive: {
+        background: '#001f6d',
+        color: '#ffffff',
+        borderColor: '#001f6d',
+        boxShadow: '0 2px 6px rgba(0, 31, 109, 0.25)'
+    },
     // Question Panel
     questionPanel: { flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', margin: 16, borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' },
     qHeader: { background: '#1e3a5f', color: '#fff', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', fontSize: 13 },

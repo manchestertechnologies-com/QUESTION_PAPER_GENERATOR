@@ -126,13 +126,11 @@ const DashboardHome = () => {
         try {
             let subjectsNeeded = [];
             if (commissionForm.examType === 'NEET') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
-            } else if (commissionForm.examType === 'CET') {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Botany', 'Zoology'];
+                subjectsNeeded = ['Physics', 'Chemistry', 'Biology'];
             } else if (commissionForm.examType === 'JEE') {
                 subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics'];
             } else {
-                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Botany', 'Zoology'];
+                subjectsNeeded = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
             }
 
             const isSubMatch = (tSub, sName) => {
@@ -161,7 +159,9 @@ const DashboardHome = () => {
                     teacherId: teacherObj._id || teacherObj.id,
                     teacherName: teacherObj.name,
                     teacherEmail: teacherObj.email,
-                    targetQuestions: commissionForm.targetPerSubject || 60,
+                    targetQuestions: (commissionForm.examType === 'NEET' && subName === 'Biology')
+                        ? (Number(commissionForm.targetPerSubject) === 45 ? 90 : (Number(commissionForm.targetPerSubject) * 2 || 90))
+                        : (commissionForm.targetPerSubject || 60),
                     status: 'Pending'
                 };
             });
@@ -266,6 +266,14 @@ const DashboardHome = () => {
                     >
                         <span className="text-base">⚡</span>
                         <span>Commission Exam</span>
+                    </button>
+                    <button
+                        onClick={() => setShowFourExamsModal(true)}
+                        className="bg-amber-500 hover:bg-amber-600 text-navy px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md flex items-center gap-2 cursor-pointer"
+                        title="Auto-Generate Standard Exam (NEET PCB / JEE PCM / KCET PCMB)"
+                    >
+                        <span className="text-base">🚀</span>
+                        <span>Auto-Generate Exam</span>
                     </button>
                 </div>
             </div>
@@ -728,9 +736,9 @@ const DashboardHome = () => {
                                         }}
                                         className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-3 text-sm font-bold text-navy outline-none bg-white cursor-pointer"
                                     >
-                                        <option value="CET">CET (4 Subjects: Physics, Chemistry, Maths, Biology - 60 Qs each)</option>
-                                        <option value="NEET">NEET (4 Subjects: Physics, Chemistry, Botany, Zoology - 45 Qs each)</option>
-                                        <option value="JEE">JEE (3 Subjects: Physics, Chemistry, Mathematics - 25 Qs each [20 MCQs + 5 Numerical])</option>
+                                        <option value="CET">CET (4 Subjects: Physics, Chemistry, Mathematics, Biology - 60 Qs each = 240 Qs)</option>
+                                        <option value="NEET">NEET (3 Subjects: Physics 45 Qs, Chemistry 45 Qs, Biology 90 Qs = 180 Qs [PCB Only])</option>
+                                        <option value="JEE">JEE Main (3 Subjects: Physics 25 Qs, Chemistry 25 Qs, Mathematics 25 Qs = 75 Qs [PCM Only])</option>
                                     </select>
                                 </div>
                                 <div>
@@ -754,9 +762,9 @@ const DashboardHome = () => {
 
                                 {(() => {
                                     let subs = [];
-                                    if (commissionForm.examType === 'NEET') subs = ['Physics', 'Chemistry', 'Botany', 'Zoology'];
+                                    if (commissionForm.examType === 'NEET') subs = ['Physics', 'Chemistry', 'Biology'];
                                     else if (commissionForm.examType === 'JEE') subs = ['Physics', 'Chemistry', 'Mathematics'];
-                                    else subs = ['Physics', 'Chemistry', 'Mathematics', 'Botany', 'Zoology'];
+                                    else subs = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
 
                                     return subs.map(subName => {
                                         const subTeachers = allTeachers.filter(t => {
@@ -800,7 +808,7 @@ const DashboardHome = () => {
                                                 </div>
 
                                                 <div className="text-right text-[11px] font-bold text-slate/50">
-                                                    Target: {commissionForm.targetPerSubject} Qs
+                                                    Target: {commissionForm.examType === 'NEET' && subName === 'Biology' ? (commissionForm.targetPerSubject === 45 ? 90 : (Number(commissionForm.targetPerSubject) * 2 || 90)) : commissionForm.targetPerSubject} Qs
                                                 </div>
                                             </div>
                                         );

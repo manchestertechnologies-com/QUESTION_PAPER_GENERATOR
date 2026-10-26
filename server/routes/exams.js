@@ -9,6 +9,27 @@ const pool = require('../config/postgres');
 const { createNotification } = require('./notifications');
 const supabaseQuestions = require('../services/supabaseQuestions');
 
+// Helper to enforce standard exam subject compositions:
+// NEET: strictly PCB (Physics, Chemistry, Biology) - NO Mathematics
+// JEE: strictly PCM (Physics, Chemistry, Mathematics) - NO Biology
+// CET: PCMB (Physics, Chemistry, Mathematics, Biology)
+function filterQuestionsForExamType(questions, examType) {
+    if (!Array.isArray(questions)) return [];
+    const upperType = String(examType || '').trim().toUpperCase();
+    if (upperType === 'NEET') {
+        return questions.filter(q => {
+            const sub = String(q.subject || q.sectionName || '').trim().toLowerCase();
+            return !sub.includes('math');
+        });
+    } else if (upperType === 'JEE') {
+        return questions.filter(q => {
+            const sub = String(q.subject || q.sectionName || '').trim().toLowerCase();
+            return !sub.includes('bio') && !sub.includes('botan') && !sub.includes('zool');
+        });
+    }
+    return questions;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // ADMIN: Commission a new Exam Assignment to Faculty
 // POST /api/exams/commission
@@ -207,6 +228,25 @@ router.post('/merge', [auth, checkRole(['admin'])], async (req, res) => {
 
         if (papers.length !== paperIds.length) {
             return res.status(404).json({ msg: `One or more papers not found. Expected ${paperIds.length}, found ${papers.length}.` });
+        }
+
+        // Validate subjects according to standard exam requirements:
+        // NEET: PCB only (no Mathematics allowed)
+        // JEE: PCM only (no Biology allowed)
+        const upperType = String(examType || '').trim().toUpperCase();
+        if (upperType === 'NEET') {
+            const mathPaper = papers.find(p => (p.subject || '').toLowerCase().includes('math'));
+            if (mathPaper) {
+                return res.status(400).json({ msg: `NEET consists strictly of PCB (Physics, Chemistry, Biology). Mathematics paper "${mathPaper.title}" cannot be included in a NEET assessment.` });
+            }
+        } else if (upperType === 'JEE') {
+            const bioPaper = papers.find(p => {
+                const sub = (p.subject || '').toLowerCase();
+                return sub.includes('bio') || sub.includes('botan') || sub.includes('zool');
+            });
+            if (bioPaper) {
+                return res.status(400).json({ msg: `JEE consists strictly of PCM (Physics, Chemistry, Mathematics). Biology paper "${bioPaper.title}" cannot be included in a JEE assessment.` });
+            }
         }
 
         // Merge questions from all papers preserving subject sections
@@ -493,24 +533,40 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
             return res.status(400).json({ msg: 'Assessment title is required.' });
         }
 
-        let countPerSub = Number(targetPerSubject);
-        if (!countPerSub || countPerSub <= 0) {
-            if (examType === 'NEET') countPerSub = 45;
-            else if (examType === 'JEE') countPerSub = 25;
-            else countPerSub = 60; // Standard CET
+        const upperType = String(examType || '').trim().toUpperCase();
+        let subjects = [];
+        if (upperType === 'NEET') {
+            subjects = ['Physics', 'Chemistry', 'Biology']; // Strictly PCB
+        } else if (upperType === 'JEE') {
+            subjects = ['Physics', 'Chemistry', 'Mathematics']; // Strictly PCM
+        } else {
+            subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology']; // CET: PCMB
         }
 
-        const subjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+        const getSubjectCount = (sub) => {
+            const custom = Number(targetPerSubject);
+            if (custom && custom > 0) {
+                if (upperType === 'NEET' && sub === 'Biology' && custom === 45) {
+                    return 90; // Standard NEET has 90 Biology questions (Botany + Zoology)
+                }
+                return custom;
+            }
+            if (upperType === 'NEET') return sub === 'Biology' ? 90 : 45;
+            if (upperType === 'JEE') return 25;
+            return 60; // Standard CET
+        };
+
         const createdPapers = [];
         const allMergedQuestions = [];
         const sections = [];
 
         for (const sub of subjects) {
+            const countForSub = getSubjectCount(sub);
             try {
                 const qRes = await supabaseQuestions.getQuestions({
                     subject: sub,
                     classes: targetClass
-                }, 1, countPerSub);
+                }, 1, countForSub);
 
                 const qList = (qRes.questions || []).map((q, idx) => ({
                     _id: String(q.id || q._id || `${sub}_q_${idx}`),
@@ -527,9 +583,19 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
                     solution: q.solutionText || q.solution || '',
                     solutionText: q.solutionText || q.solution || '',
                     imageUrl: q.imageUrl || null,
-                    marks: examType === 'CET' ? 1 : 4,
+                    marks: upperType === 'CET' ? 1 : 4,
                     sectionName: sub
                 }));
+
+                // Calculate duration per individual subject paper
+                let subDuration = 60;
+                if (upperType === 'NEET') {
+                    subDuration = sub === 'Biology' ? 100 : 50;
+                } else if (upperType === 'JEE') {
+                    subDuration = 60;
+                } else {
+                    subDuration = 60;
+                }
 
                 // Save individual subject paper in public.papers
                 const paperData = {
@@ -537,9 +603,9 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
                     subject: sub,
                     class_level: targetClass === '11' ? 'I-PUC' : 'II-PUC',
                     classes: [targetClass],
-                    exam_type: examType,
-                    duration_minutes: Math.round((Number(duration_minutes) || 180) / 4) || 60,
-                    instructions: instructions || `${examType} Examination - ${sub} Section`,
+                    exam_type: upperType,
+                    duration_minutes: subDuration,
+                    instructions: instructions || `${upperType} Examination - ${sub} Section`,
                     questions: qList,
                     teacherId: req.user.id
                 };
@@ -553,12 +619,19 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
                     sectionName: sub,
                     subject: sub,
                     totalQuestions: qList.length,
-                    marksPerQuestion: examType === 'CET' ? 1 : 4,
-                    negativeMarks: examType === 'CET' ? 0 : 1
+                    marksPerQuestion: upperType === 'CET' ? 1 : 4,
+                    negativeMarks: upperType === 'CET' ? 0 : 1
                 });
             } catch (subErr) {
                 console.error(`Error generating questions for ${sub}:`, subErr.message);
             }
+        }
+
+        let examDuration = Number(duration_minutes);
+        if (!examDuration || examDuration <= 0) {
+            if (upperType === 'NEET') examDuration = 200;
+            else if (upperType === 'JEE') examDuration = 180;
+            else examDuration = 180;
         }
 
         let onlineExam = null;
@@ -566,12 +639,12 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
             const isLive = !start_time;
             const newExam = await storage.createExam({
                 title: title,
-                examType: examType,
+                examType: upperType,
                 classes: [targetClass],
-                duration_minutes: Number(duration_minutes) || 180,
+                duration_minutes: examDuration,
                 start_time: start_time || null,
                 end_time: end_time || null,
-                instructions: instructions || `Standard Computer-Based Assessment (${examType}). Follow invigilator guidelines.`,
+                instructions: instructions || `Standard Computer-Based Assessment (${upperType}). Follow invigilator guidelines.`,
                 questions: allMergedQuestions,
                 totalQuestions: allMergedQuestions.length,
                 status: isLive ? 'live' : 'scheduled',
@@ -585,7 +658,7 @@ router.post('/generate-all-four', [auth, checkRole(['admin'])], async (req, res)
         }
 
         res.json({
-            msg: `Successfully created all 4 subject papers (${createdPapers.length} papers, ${allMergedQuestions.length} total questions)${onlineExam ? ' and launched CBT Online Exam!' : '.'}`,
+            msg: `Successfully created ${createdPapers.length} subject papers (${createdPapers.map(p => p.subject).join(', ')} - ${allMergedQuestions.length} total questions)${onlineExam ? ' and launched CBT Online Exam!' : '.'}`,
             papers: createdPapers,
             onlineExam: onlineExam
         });
@@ -683,6 +756,12 @@ async function hydrateExamQuestions(exam) {
             console.error('Error hydrating exam questions by id:', err.message);
         }
     }
+
+    // Apply subject compliance filter:
+    // NEET must only contain PCB (no Mathematics)
+    // JEE must only contain PCM (no Biology/Botany/Zoology)
+    // CET contains PCMB
+    questions = filterQuestionsForExamType(questions, eObj.examType || eObj.exam_type);
 
     eObj.questions = questions;
     return eObj;
@@ -795,7 +874,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             }
         }
         const studentId = rollNumber || email || 'anonymous';
-        let examQuestions = exam.questions || [];
+        let examQuestions = filterQuestionsForExamType(exam.questions || [], exam.examType);
         if (exam.shuffleQuestions) {
             examQuestions = seededShuffle(examQuestions, `${studentId}-${exam._id}`);
         }
@@ -879,7 +958,7 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
         if (existing) return res.json({ msg: 'Session resumed', session: existing });
 
         const studentId = rollNumber || studentEmail || 'anonymous';
-        let examQuestions = exam.questions || [];
+        let examQuestions = filterQuestionsForExamType(exam.questions || [], exam.examType);
         if (exam.shuffleQuestions) {
             examQuestions = seededShuffle(examQuestions, `${studentId}-${exam._id}`);
         }

@@ -16,6 +16,42 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
     const [error, setError] = useState('');
     const [result, setResult] = useState(null);
 
+    const getExamMeta = (pat) => {
+        if (pat === 'NEET') {
+            return {
+                title: 'Auto-Generate NEET Grand Assessment (PCB)',
+                subtitle: 'Physics (45 Qs) • Chemistry (45 Qs) • Biology (90 Qs) — Strictly PCB (180 Qs Total)',
+                subjects: ['Physics', 'Chemistry', 'Biology'],
+                papersCount: 3,
+                defaultDuration: 200,
+                pillBadge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+                note: 'NEET is strictly PCB (Physics, Chemistry, Biology). No Mathematics is included.'
+            };
+        } else if (pat === 'JEE') {
+            return {
+                title: 'Auto-Generate JEE Main Grand Assessment (PCM)',
+                subtitle: 'Physics (25 Qs) • Chemistry (25 Qs) • Mathematics (25 Qs) — Strictly PCM (75 Qs Total)',
+                subjects: ['Physics', 'Chemistry', 'Mathematics'],
+                papersCount: 3,
+                defaultDuration: 180,
+                pillBadge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30',
+                note: 'JEE is strictly PCM (Physics, Chemistry, Mathematics). No Biology is included.'
+            };
+        } else {
+            return {
+                title: 'Auto-Generate KCET Grand Assessment (PCMB)',
+                subtitle: 'Physics (60 Qs) • Chemistry (60 Qs) • Mathematics (60 Qs) • Biology (60 Qs) — PCMB (240 Qs Total)',
+                subjects: ['Physics', 'Chemistry', 'Mathematics', 'Biology'],
+                papersCount: 4,
+                defaultDuration: 180,
+                pillBadge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30',
+                note: 'KCET includes all 4 subjects (PCMB: Physics, Chemistry, Mathematics, Biology).'
+            };
+        }
+    };
+
+    const meta = getExamMeta(pattern);
+
     const handlePatternChange = (newPattern) => {
         setPattern(newPattern);
         if (newPattern === 'CET') {
@@ -77,10 +113,10 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                         </div>
                         <div>
                             <h3 className="text-lg font-black tracking-tight text-[#001f6d] dark:text-amber-400">
-                                1-Click: Create All 4 PCMB Papers & Launch Online Exam
+                                {meta.title}
                             </h3>
                             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                Physics • Chemistry • Mathematics • Biology created simultaneously
+                                {meta.subtitle}
                             </p>
                         </div>
                     </div>
@@ -105,7 +141,7 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                         <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300">
                             <div className="flex items-center gap-2 font-black text-sm">
                                 <span>🎉</span>
-                                <span>Success! All 4 Subject Papers & Online Exam Created</span>
+                                <span>Success! {result.papers?.length || meta.papersCount} Subject Papers & Online Exam Created</span>
                             </div>
                             <p className="text-xs mt-1 text-emerald-700 dark:text-emerald-400">
                                 {result.msg}
@@ -115,7 +151,7 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                         {/* Papers summary */}
                         <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/60">
                             <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                4 Generated Subject Papers (Saved in Papers Archive)
+                                {result.papers?.length || meta.papersCount} Generated Subject Papers (Saved in Papers Archive)
                             </div>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                                 {(result.papers || []).map((p, i) => (
@@ -175,9 +211,9 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                                     onChange={(e) => handlePatternChange(e.target.value)}
                                     className="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none"
                                 >
-                                    <option value="CET">KCET (60 Qs per subject • 240 Qs Total)</option>
-                                    <option value="NEET">NEET (45 Qs per subject • 180 Qs Total)</option>
-                                    <option value="JEE">JEE Main (25 Qs per subject • 75 Qs Total)</option>
+                                    <option value="CET">KCET (PCMB: Physics, Chem, Math, Bio • 240 Qs)</option>
+                                    <option value="NEET">NEET (PCB: Physics 45, Chem 45, Bio 90 • 180 Qs)</option>
+                                    <option value="JEE">JEE Main (PCM: Physics 25, Chem 25, Math 25 • 75 Qs)</option>
                                 </select>
                             </div>
 
@@ -193,6 +229,21 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                                     <option value="12">Class 12 (II-PUC)</option>
                                     <option value="11">Class 11 (I-PUC)</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        {/* Pattern Subject Breakdown Badge */}
+                        <div className={`p-3 rounded-xl border text-xs font-semibold ${meta.pillBadge}`}>
+                            <div className="font-bold flex items-center gap-1.5 mb-1">
+                                <span>📌</span>
+                                <span>{meta.note}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                {meta.subjects.map(s => (
+                                    <span key={s} className="px-2.5 py-1 rounded-lg bg-white/80 dark:bg-slate-850 border border-current text-[11px] font-bold">
+                                        {s}: {pattern === 'NEET' && s === 'Biology' ? 90 : targetPerSubject} Qs
+                                    </span>
+                                ))}
                             </div>
                         </div>
 
@@ -322,12 +373,12 @@ export default function GenerateAllFourModal({ isOpen, onClose, onSuccess }) {
                                 {loading ? (
                                     <>
                                         <div className="w-3.5 h-3.5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                                        <span>Generating 4 Papers...</span>
+                                        <span>Generating {meta.papersCount} Papers...</span>
                                     </>
                                 ) : (
                                     <>
                                         <span>🚀</span>
-                                        <span>Generate 4 Papers & Launch</span>
+                                        <span>Generate {meta.papersCount} {pattern} Papers & Launch</span>
                                     </>
                                 )}
                             </button>
