@@ -1062,12 +1062,12 @@ export default function ExamManagement() {
                                         )}
                                         <div style={{ ...styles.examActions, marginTop: 10 }}>
                                             <button style={styles.actionBtn} onClick={() => openConfigModal(exam)}>⚙️ Configure</button>
-                                            <button style={styles.actionBtn} onClick={() => copyShareLink(exam._id)}>🔗 Link</button>
+                                            <button style={styles.actionBtn} onClick={() => copyShareLink(exam._id || exam.id)}>🔗 Link</button>
                                             <button style={{ ...styles.actionBtn, background: '#7c3aed' }}
-                                                onClick={() => window.open(`/admin/dashboard/results?examId=${exam._id}`, '_self')}>
+                                                onClick={() => navigate(`/admin/dashboard/results?examId=${exam._id || exam.id}`)}>
                                                 📊 Results
                                             </button>
-                                            <button style={{ ...styles.actionBtn, background: '#ef4444' }} onClick={() => handleDeleteExam(exam._id)}>
+                                            <button style={{ ...styles.actionBtn, background: '#ef4444' }} onClick={() => handleDeleteExam(exam._id || exam.id)}>
                                                 Delete
                                             </button>
                                         </div>

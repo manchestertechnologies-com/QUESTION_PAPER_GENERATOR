@@ -1293,7 +1293,25 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
 router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
     try {
         const sessions = await storage.getSessionsByExam(req.params.id);
-        res.json(sessions);
+        const mapped = (sessions || []).map(s => ({
+            ...s,
+            _id: String(s._id || s.id),
+            id: s.id,
+            studentName: s.student_name || s.studentName || 'Student',
+            rollNumber: s.roll_number || s.rollNumber || '—',
+            studentEmail: s.student_email || s.studentEmail || '',
+            fromLabIp: Boolean(s.from_lab_ip !== undefined ? s.from_lab_ip : s.fromLabIp),
+            malpracticeFlag: Boolean(s.malpractice_flag !== undefined ? s.malpractice_flag : s.malpracticeFlag),
+            malpracticeReason: s.malpractice_reason || s.malpracticeReason || '',
+            weakAreas: s.weak_areas || s.weakAreas || [],
+            endTime: s.end_time || s.endTime,
+            score: Number(s.score) || 0,
+            correct: Number(s.correct) || 0,
+            incorrect: Number(s.incorrect) || 0,
+            unattempted: Number(s.unattempted) || 0,
+            totalQuestions: Number(s.total_questions || s.totalQuestions) || 0
+        }));
+        res.json(mapped);
     } catch (err) {
         res.status(500).json({ msg: 'Server Error: ' + err.message });
     }
@@ -1305,20 +1323,21 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/analytics', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const exam = await storage.getExamById(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+        const rawExam = await storage.getExamById(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
 
         const sessions = await storage.getSessionsByExam(req.params.id);
 
         const analytics = (exam.questions || []).map((q, i) => {
             let correct = 0, incorrect = 0, unattempted = 0;
-            const sid = String(q._id || q.id || q.questionId || i);
+            const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || i);
 
             sessions.forEach(session => {
-                const ans = (session.answers || []).find(a => String(a.questionId) === sid);
-                const selected = ans?.selectedOption || null;
+                const ans = (session.answers || []).find(a => String(a.questionId) === sid || String(a.questionId) === String(i)) || (session.answers || [])[i];
+                const selected = ans?.selectedOption !== undefined ? ans.selectedOption : null;
 
-                if (selected !== null && selected !== '') {
+                if (selected !== null && selected !== undefined && String(selected).trim() !== '') {
                     const isExactMatch = String(selected).trim().toLowerCase() === String(q.answer).trim().toLowerCase();
                     if (isExactMatch) correct++;
                     else incorrect++;
@@ -1329,7 +1348,7 @@ router.get('/:id/analytics', [auth, checkRole(['admin'])], async (req, res) => {
 
             return {
                 questionNumber: i + 1,
-                subject: q.subject,
+                subject: q.subject || 'Subject',
                 correct,
                 incorrect,
                 unattempted,
@@ -1349,25 +1368,22 @@ router.get('/:id/analytics', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/bridge-key', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const exam = await OnlineExam.findById(req.params.id);
+        const exam = await storage.getExamById(req.params.id);
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
 
-        // Generate only once: check if a bridge key already exists for this exam
-        let bridgeKey = await BridgeKey.findOne({ examId: exam._id });
+        let bridgeKey = await storage.getBridgeKey(exam._id || exam.id);
         if (bridgeKey) {
-            return res.json({ msg: 'Bridge key retrieved', key: bridgeKey.key, expiresAt: bridgeKey.expiresAt });
+            return res.json({ msg: 'Bridge key retrieved', key: bridgeKey.key, expiresAt: bridgeKey.expiresAt || bridgeKey.expires_at });
         }
 
-        const key = crypto.randomBytes(24).toString('hex');
-        bridgeKey = new BridgeKey({
-            key,
-            examId: exam._id,
-            examTitle: exam.title,
-            generatedBy: req.user.id,
-            expiresAt: new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000) // 10 years (static)
-        });
-        await bridgeKey.save();
-        res.json({ msg: 'Bridge key generated', key, expiresAt: bridgeKey.expiresAt });
+        const crypto = require('crypto');
+        const key = 'BK-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+        const created = await storage.createBridgeKey(key, exam._id || exam.id, exam.title, req.user?.id || 'admin');
+        res.json({ msg: 'Bridge key generated', key: created.key, expiresAt: created.expires_at || created.expiresAt });
+    } catch (err) {
+        res.status(500).json({ msg: 'Server Error: ' + err.message });
+    }
+});
     } catch (err) {
         res.status(500).json({ msg: 'Server Error' });
     }

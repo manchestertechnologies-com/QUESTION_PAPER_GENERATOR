@@ -18,29 +18,39 @@ export default function AdminResults() {
     const [msg, setMsg] = useState('');
 
     useEffect(() => {
-        api.get('/api/exams').then(r => setExams(r.data)).catch(() => {});
-        if (examIdParam) fetchResults(examIdParam);
+        api.get('/api/exams').then(r => setExams(r.data || [])).catch(() => {});
+        if (examIdParam) {
+            setSelectedExam(examIdParam);
+            fetchResults(examIdParam);
+        }
     }, [examIdParam]);
 
     const fetchResults = async (eid) => {
+        if (!eid) return;
         setLoading(true);
         try {
             const [res, analyticsRes] = await Promise.all([
                 api.get(`/api/exams/${eid}/results`),
                 api.get(`/api/exams/${eid}/analytics`).catch(() => ({ data: null }))
             ]);
-            setResults(res.data);
+            setResults(res.data || []);
             if (analyticsRes.data) setAnalytics(analyticsRes.data);
         } catch (e) { setMsg('Failed to load results'); }
         setLoading(false);
     };
 
     const handleExamSelect = (e) => {
-        setSelectedExam(e.target.value);
+        const val = e.target.value;
+        setSelectedExam(val);
         setResults([]);
         setAnalytics(null);
         setBridgeKey('');
-        if (e.target.value) fetchResults(e.target.value);
+        if (val) {
+            navigate(`/admin/dashboard/results?examId=${val}`, { replace: true });
+            fetchResults(val);
+        } else {
+            navigate(`/admin/dashboard/results`, { replace: true });
+        }
     };
 
     const generateBridgeKey = async () => {
@@ -48,7 +58,7 @@ export default function AdminResults() {
         try {
             const res = await api.post(`/api/exams/${selectedExam}/bridge-key`);
             setBridgeKey(res.data.key);
-            setMsg(`✅ Bridge key generated! Expires: ${new Date(res.data.expiresAt).toLocaleDateString()}`);
+            setMsg(`✅ Bridge key generated! Expires: ${res.data.expiresAt ? new Date(res.data.expiresAt).toLocaleDateString() : 'N/A'}`);
         } catch (e) { setMsg('Failed to generate key'); }
     };
 
@@ -59,7 +69,8 @@ export default function AdminResults() {
 
     const downloadIndividualPDF = (student) => {
         const token = localStorage.getItem('token');
-        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${selectedExam}/pdf-report/${student._id}?token=${token}`;
+        const sId = student._id || student.id;
+        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${selectedExam}/pdf-report/${sId}?token=${token}`;
         window.open(downloadUrl, '_blank');
     };
 
@@ -78,7 +89,7 @@ export default function AdminResults() {
 
     const exportExcel = () => {
         if (!results || results.length === 0) return;
-        const exam = exams.find(e => e._id === selectedExam);
+        const exam = exams.find(e => String(e._id || e.id) === String(selectedExam));
         const data = results.map((r, i) => {
             const attempted = [];
             const unattempted = [];
@@ -158,7 +169,7 @@ export default function AdminResults() {
     const exportPDF = () => {
         if (!results || results.length === 0) return;
         const doc = new jsPDF('landscape');
-        const exam = exams.find(e => e._id === selectedExam);
+        const exam = exams.find(e => String(e._id || e.id) === String(selectedExam));
         const examName = exam?.title || 'Exam Results';
         
         doc.setFontSize(16);
@@ -279,10 +290,10 @@ export default function AdminResults() {
             {msg && <div style={styles.msg}>{msg} <button onClick={() => setMsg('')} style={styles.closeMsg}>✕</button></div>}
 
             <div style={styles.toolbar}>
-                <select style={styles.select} value={selectedExam} onChange={handleExamSelect}>
+                <select style={styles.select} value={String(selectedExam || '')} onChange={handleExamSelect}>
                     <option value="">— Select an Exam —</option>
                     {exams.map(e => {
-                        const eId = e._id || e.id;
+                        const eId = String(e._id || e.id);
                         return <option key={eId} value={eId}>{e.title} ({e.examType})</option>;
                     })}
                 </select>
@@ -460,7 +471,7 @@ export default function AdminResults() {
                             </thead>
                             <tbody>
                                 {results.map((r, i) => (
-                                    <tr key={r._id} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                                    <tr key={r._id || r.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                                         <td style={styles.td}>{i + 1}</td>
                                         <td style={styles.td}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -501,7 +512,7 @@ export default function AdminResults() {
                                         <td style={styles.td}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                                                 <a 
-                                                    href={`/exam/${selectedExam}/scorecard/${r._id}`} 
+                                                    href={`/exam/${selectedExam}/scorecard/${r._id || r.id}`} 
                                                     target="_blank" 
                                                     rel="noopener noreferrer"
                                                     style={{
