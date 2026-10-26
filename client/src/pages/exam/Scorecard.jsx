@@ -37,7 +37,7 @@ export default function Scorecard() {
 
         const evaluatedBreakdown = (data.breakdown || []).map((q, idx) => {
             const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
-            const correctAns = q.correctAnswer ?? q.answer;
+            const correctAns = q.correctAnswer ?? q.answer ?? q.correct_option;
             const isCorrect = attempted ? checkAnswerCorrect(q.selectedOption, correctAns, q.options, q.numericalTolerance, q.type) : false;
             
             if (attempted) {
@@ -183,14 +183,52 @@ export default function Scorecard() {
                     weakAreas: (s.weakAreas && s.weakAreas.length > 0) ? s.weakAreas : (cached?.weakAreas || []),
                     breakdown: (s.breakdown && s.breakdown.length > 0) ? s.breakdown : (cached?.breakdown || [])
                 };
-                setData(merged);
-                setLoading(false);
+
+                // Check if any breakdown item is missing its correct answer
+                const needsHydration = (merged.breakdown || []).some(b => !b.correctAnswer && !b.answer && !b.correct_option);
+                if (needsHydration) {
+                    api.get(`/api/exams/${examId}/answer-key`)
+                        .then(akRes => {
+                            const keyList = akRes.data?.answerKey || [];
+                            const keyMap = new Map(keyList.map(k => [String(k.questionId), k]));
+                            const hydratedBreakdown = (merged.breakdown || []).map((b, idx) => {
+                                const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
+                                return {
+                                    ...b,
+                                    correctAnswer: b.correctAnswer || b.answer || b.correct_option || k?.correctAnswer,
+                                    solutionText: b.solutionText || k?.solutionText || ''
+                                };
+                            });
+                            setData({ ...merged, breakdown: hydratedBreakdown });
+                        })
+                        .catch(() => setData(merged))
+                        .finally(() => setLoading(false));
+                } else {
+                    setData(merged);
+                    setLoading(false);
+                }
             })
             .catch(() => {
                 if (cached) {
-                    setData(cached);
+                    api.get(`/api/exams/${examId}/answer-key`)
+                        .then(akRes => {
+                            const keyList = akRes.data?.answerKey || [];
+                            const keyMap = new Map(keyList.map(k => [String(k.questionId), k]));
+                            const hydratedBreakdown = (cached.breakdown || []).map((b, idx) => {
+                                const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
+                                return {
+                                    ...b,
+                                    correctAnswer: b.correctAnswer || b.answer || b.correct_option || k?.correctAnswer,
+                                    solutionText: b.solutionText || k?.solutionText || ''
+                                };
+                            });
+                            setData({ ...cached, breakdown: hydratedBreakdown });
+                        })
+                        .catch(() => setData(cached))
+                        .finally(() => setLoading(false));
+                } else {
+                    setLoading(false);
                 }
-                setLoading(false);
             });
     }, [examId, sessionId]);
 
@@ -589,7 +627,8 @@ export default function Scorecard() {
                                                                             const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
                                                                             return `Option ${cIdx + 1} — ${stripLeadingLabel(optText) || optText}`;
                                                                         }
-                                                                        return correctStr || 'Option 1';
+                                                                        if (correctStr) return correctStr;
+                                                                        return 'Not specified';
                                                                     })()}
                                                                 </span>
                                                             </div>

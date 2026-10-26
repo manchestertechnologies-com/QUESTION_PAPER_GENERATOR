@@ -1183,10 +1183,83 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             weakAreas
         });
 
-        res.json({ msg: 'Exam submitted successfully', sessionId: updatedSession?._id || session._id || session.id });
+        const breakdown = (exam.questions || []).map((q, idx) => {
+            const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+            const ans = processedAnswers.find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || processedAnswers[idx];
+            const correctAns = q.answer || q.correct_option || q.correctAnswer;
+            return {
+                questionId: sid,
+                questionNumber: idx + 1,
+                questionText: q.questionText,
+                subject: q.subject,
+                chapter: q.chapter,
+                concept: q.concept || q.subConcept || 'General',
+                options: q.options || [],
+                selectedOption: ans?.selectedOption ?? null,
+                correctAnswer: correctAns,
+                isCorrect: Boolean(ans?.isCorrect),
+                isAttempted: Boolean(ans?.isAttempted),
+                timeTaken: ans?.timeTaken || 0,
+                solutionText: q.solutionText || q.solution || ''
+            };
+        });
+
+        const scorecardData = {
+            sessionId: String(updatedSession?._id || session._id || session.id),
+            examId: req.params.id,
+            examTitle: exam.title,
+            examType: exam.examType,
+            studentName: session.student_name || session.studentName,
+            studentEmail: session.student_email || session.studentEmail,
+            rollNumber: session.roll_number || session.rollNumber,
+            totalQuestions: (exam.questions || []).length,
+            attempted: correct + incorrect,
+            correct,
+            incorrect,
+            unattempted,
+            score,
+            weakAreas,
+            breakdown,
+            submittedAt: new Date().toISOString()
+        };
+
+        res.json({
+            msg: 'Exam submitted successfully',
+            sessionId: String(updatedSession?._id || session._id || session.id),
+            scorecard: scorecardData
+        });
     } catch (err) {
         console.error(err.message);
         res.status(500).json({ msg: 'Server Error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// STUDENT: Get answer key for exam review
+// GET /api/exams/:id/answer-key
+// ─────────────────────────────────────────────────────────────────
+router.get('/:id/answer-key', async (req, res) => {
+    try {
+        const rawExam = await storage.getExamById(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
+
+        const answerKey = (exam.questions || []).map((q, idx) => ({
+            questionId: typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx),
+            questionNumber: idx + 1,
+            subject: q.subject,
+            correctAnswer: q.answer || q.correct_option || q.correctAnswer || '',
+            solutionText: q.solutionText || q.solution || '',
+            options: q.options || []
+        }));
+
+        res.json({
+            examId: exam._id || exam.id,
+            examTitle: exam.title,
+            answerKey
+        });
+    } catch (err) {
+        res.status(500).json({ msg: 'Server error: ' + err.message });
     }
 });
 
@@ -1196,8 +1269,23 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
     try {
-        const session = await storage.getSessionById(req.params.sessionId);
-        if (!session) return res.status(404).json({ msg: 'Session not found' });
+        let session = await storage.getSessionById(req.params.sessionId);
+        if (!session) {
+            const sessions = await storage.getSessionsByExam(req.params.id);
+            if (sessions && sessions.length > 0) {
+                const qRoll = req.query.rollNumber || req.query.roll;
+                const qEmail = req.query.email;
+                if (qRoll || qEmail) {
+                    session = sessions.find(s => 
+                        (qRoll && String(s.roll_number || '').trim() === String(qRoll).trim()) ||
+                        (qEmail && String(s.student_email || '').trim().toLowerCase() === String(qEmail).trim().toLowerCase())
+                    );
+                }
+                if (!session) {
+                    session = sessions.find(s => String(s.id || s._id) === String(req.params.sessionId)) || sessions[0];
+                }
+            }
+        }
 
         const rawExam = await storage.getExamById(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
@@ -1205,25 +1293,27 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
 
         const sessions = await storage.getSessionsByExam(req.params.id);
         const submittedSessions = (sessions || []).filter(s => Boolean(s.submitted));
-        const allSessions = submittedSessions.some(s => String(s.id || s._id) === String(session.id || session._id))
+        const allSessions = session && submittedSessions.some(s => String(s.id || s._id) === String(session.id || session._id))
             ? submittedSessions
-            : [...submittedSessions, session];
+            : session ? [...submittedSessions, session] : submittedSessions;
         const scores = allSessions.map(s => Number(s.score) || 0).sort((a, b) => b - a);
         const totalCandidates = scores.length || 1;
         const classAverageScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
-        const classTopScore = scores.length > 0 ? scores[0] : Number(session.score) || 0;
-        const myScore = Number(session.score) || 0;
+        const classTopScore = scores.length > 0 ? scores[0] : (session ? Number(session.score) || 0 : 0);
+        const myScore = session ? Number(session.score) || 0 : 0;
         const rank = (scores.findIndex(s => s <= myScore) + 1) || 1;
         const percentile = Math.max(0, Math.round(((totalCandidates - rank) / totalCandidates) * 100));
 
+        const sessionAnswers = session?.answers || [];
         const breakdown = (exam.questions || []).map((q, idx) => {
             const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
-            const ans = (session.answers || []).find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || (session.answers || [])[idx];
+            const ans = sessionAnswers.find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || sessionAnswers[idx];
             const timeTaken = ans?.timeTaken !== undefined ? ans.timeTaken : 0;
             const selectedOption = ans?.selectedOption !== undefined ? ans.selectedOption : null;
             const isAttempted = selectedOption !== null && selectedOption !== undefined && String(selectedOption).trim() !== '';
+            const correctAns = q.answer || q.correct_option || q.correctAnswer;
             const isCorrect = isAttempted 
-                ? checkAnswerCorrect(selectedOption, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ')
+                ? checkAnswerCorrect(selectedOption, correctAns, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ')
                 : false;
 
             return {
@@ -1235,28 +1325,28 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
                 concept: q.concept || q.subConcept || 'General',
                 options: q.options || [],
                 selectedOption,
-                correctAnswer: q.answer,
+                correctAnswer: correctAns,
                 isCorrect,
                 isAttempted,
                 timeTaken,
-                solutionText: q.solutionText || ''
+                solutionText: q.solutionText || q.solution || ''
             };
         });
 
         res.json({
-            sessionId: session._id,
-            studentName: session.student_name || session.studentName,
-            studentEmail: session.student_email || session.studentEmail,
-            rollNumber: session.roll_number || session.rollNumber,
+            sessionId: session ? (session._id || session.id) : req.params.sessionId,
+            studentName: session?.student_name || session?.studentName || 'Student',
+            studentEmail: session?.student_email || session?.studentEmail || '',
+            rollNumber: session?.roll_number || session?.rollNumber || '',
             examTitle: exam.title,
             examType: exam.examType,
-            score: session.score,
-            totalQuestions: session.total_questions || session.totalQuestions || (exam.questions || []).length,
-            attempted: session.attempted,
-            correct: session.correct,
-            incorrect: session.incorrect,
-            unattempted: session.unattempted,
-            weakAreas: session.weak_areas || session.weakAreas || [],
+            score: session ? session.score : 0,
+            totalQuestions: (exam.questions || []).length,
+            attempted: session?.attempted || 0,
+            correct: session?.correct || 0,
+            incorrect: session?.incorrect || 0,
+            unattempted: session?.unattempted !== undefined ? session.unattempted : (exam.questions || []).length,
+            weakAreas: session?.weak_areas || session?.weakAreas || [],
             breakdown,
             classStats: {
                 classAverageScore,

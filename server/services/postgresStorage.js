@@ -174,8 +174,12 @@ async function getExamById(id) {
     const isNum = /^\d+$/.test(cleanId);
     let res;
     if (isNum) {
-        res = await pool.query('SELECT * FROM public.online_exams WHERE id = $1', [parseInt(cleanId, 10)]);
-    } else {
+        const numVal = Number(cleanId);
+        if (Number.isSafeInteger(numVal) && numVal <= 2147483647) {
+            res = await pool.query('SELECT * FROM public.online_exams WHERE id = $1', [numVal]);
+        }
+    }
+    if (!res || res.rows.length === 0) {
         res = await pool.query('SELECT * FROM public.online_exams WHERE id::text = $1 OR title = $2', [cleanId, cleanId]);
     }
     return res.rows[0] ? mapExamRow(res.rows[0]) : null;
@@ -852,15 +856,21 @@ async function getSessionById(id) {
     const isNum = /^\d+$/.test(cleanId);
     let res;
     if (isNum) {
-        res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [parseInt(cleanId, 10)]);
+        const numVal = Number(cleanId);
+        if (Number.isSafeInteger(numVal) && numVal <= 2147483647) {
+            res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [numVal]);
+        }
     } else {
         const matchDigits = cleanId.match(/(\d+)$/);
         if (matchDigits) {
-            res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [parseInt(matchDigits[1], 10)]);
+            const numVal = Number(matchDigits[1]);
+            if (Number.isSafeInteger(numVal) && numVal <= 2147483647) {
+                res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [numVal]);
+            }
         }
-        if (!res || res.rows.length === 0) {
-            res = await pool.query('SELECT * FROM public.exam_sessions WHERE id::text = $1 OR student_id = $1 OR roll_number = $1', [cleanId]);
-        }
+    }
+    if (!res || res.rows.length === 0) {
+        res = await pool.query('SELECT * FROM public.exam_sessions WHERE id::text = $1 OR student_id = $1 OR roll_number = $1', [cleanId]);
     }
     if (res && res.rows[0]) {
         const r = res.rows[0];

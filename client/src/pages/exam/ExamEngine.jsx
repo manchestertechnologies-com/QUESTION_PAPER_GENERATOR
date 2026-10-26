@@ -458,7 +458,7 @@ export default function ExamEngine() {
                 weakMap[topicKey].timeSpent += timeTaken;
 
                 if (isAttempted) {
-                    const correctAns = q.answer || q.correctAnswer;
+                    const correctAns = q.answer || q.correct_option || q.correctAnswer;
                     isCorrect = checkAnswerCorrect(selected, correctAns, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
 
                     if (isCorrect) {
@@ -483,7 +483,7 @@ export default function ExamEngine() {
                     questionText: q.questionText,
                     options: q.options || [],
                     selectedOption: selected,
-                    correctAnswer: q.answer || q.correctAnswer,
+                    correctAnswer: q.answer || q.correct_option || q.correctAnswer,
                     timeTaken: timeTaken,
                     isCorrect: isCorrect,
                     isAttempted: isAttempted
@@ -550,8 +550,12 @@ export default function ExamEngine() {
                 });
                 if (res.data?.sessionId) {
                     redirectSessionId = res.data.sessionId;
-                    localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(localScorecard));
                 }
+                const serverScorecard = res.data?.scorecard;
+                const finalCard = serverScorecard ? { ...localScorecard, ...serverScorecard } : localScorecard;
+                localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
+                localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
+                localStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
             } catch (submitErr) {
                 console.warn('Backend submit notice:', submitErr.message);
             }
