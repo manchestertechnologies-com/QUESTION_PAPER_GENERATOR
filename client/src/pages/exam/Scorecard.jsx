@@ -10,6 +10,7 @@ export default function Scorecard() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('summary');
+    const [reviewFilter, setReviewFilter] = useState('all'); // 'all', 'correct', 'incorrect', 'unattempted'
     const [leaderboard, setLeaderboard] = useState([]);
     const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
@@ -24,6 +25,44 @@ export default function Scorecard() {
 
     const displayLeaderboard = useMemo(() => {
         let list = Array.isArray(leaderboard) ? [...leaderboard] : [];
+
+        // 1. Check localStorage for any exam submissions saved on this device
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && (k.startsWith('cbt_scorecard_') || k.startsWith('exam_score_'))) {
+                    const raw = localStorage.getItem(k);
+                    if (raw) {
+                        const item = JSON.parse(raw);
+                        if (item && (String(item.examId) === String(examId) || String(item.examTitle) === String(data?.examTitle))) {
+                            const itemRoll = String(item.rollNumber || '').trim();
+                            const itemName = String(item.studentName || '').trim();
+                            const itemSessionId = String(item.sessionId || '').trim();
+                            const alreadyInList = list.some(s => 
+                                (itemRoll && String(s.rollNumber || '').trim() === itemRoll) ||
+                                (itemSessionId && String(s.sessionId || s._id || s.id || '').trim() === itemSessionId) ||
+                                (itemName && String(s.studentName || '').trim().toLowerCase() === itemName.toLowerCase())
+                            );
+                            if (!alreadyInList) {
+                                list.push({
+                                    sessionId: itemSessionId || 'local_' + i,
+                                    studentName: item.studentName || 'Student',
+                                    rollNumber: item.rollNumber || '—',
+                                    score: Number(item.score) || 0,
+                                    correct: Number(item.correct) || 0,
+                                    incorrect: Number(item.incorrect) || 0,
+                                    unattempted: Number(item.unattempted) || 0,
+                                    totalQuestions: Number(item.totalQuestions) || 0,
+                                    isCurrentUser: Boolean(itemRoll && data?.rollNumber && itemRoll === String(data.rollNumber).trim())
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        // 2. Ensure current student is present
         if (data && (data.score !== undefined || data.studentName)) {
             const currentRoll = String(data.rollNumber || '').trim();
             const currentName = String(data.studentName || '').trim();
@@ -54,7 +93,7 @@ export default function Scorecard() {
             }
         }
         return list.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-    }, [leaderboard, data]);
+    }, [leaderboard, data, examId]);
 
     const formatSeconds = (totalSecs) => {
         const m = Math.floor(totalSecs / 60);
@@ -100,6 +139,24 @@ export default function Scorecard() {
                 setLoading(false);
             });
     }, [examId, sessionId]);
+
+    // Auto-sync scorecard to database if not yet registered in backend
+    useEffect(() => {
+        if (data && examId && sessionId && data.score !== undefined) {
+            api.post(`/api/exams/${examId}/submit`, {
+                sessionId: sessionId,
+                studentName: data.studentName,
+                studentEmail: data.studentEmail,
+                rollNumber: data.rollNumber,
+                answers: (data.breakdown || []).map(b => ({
+                    questionId: b._id || b.questionId,
+                    selectedOption: b.selectedOption,
+                    isCorrect: b.isCorrect,
+                    timeTaken: b.timeTaken
+                }))
+            }).catch(() => {});
+        }
+    }, [data, examId, sessionId]);
 
     const downloadPDF = () => {
         const token = localStorage.getItem('token');
@@ -284,110 +341,276 @@ export default function Scorecard() {
                                 🔒 You are on a college lab system. Correct answers are not shown per institutional policy.
                             </div>
                         )}
-                        <div style={styles.reviewList}>
-                            {data.breakdown?.map((q, i) => {
-                                const attempted = q.selectedOption !== null && q.selectedOption !== undefined && q.selectedOption !== '';
-                                let isCorrect = Boolean(q.isCorrect);
-                                let isWrong = false;
-                                const selectedStr = String(q.selectedOption ?? '').trim();
-                                const correctStr = String(q.correctAnswer ?? q.answer ?? '').trim();
 
-                                if (attempted && !data.answerKeyHidden) {
-                                    // 1. Numerical match with tolerance
-                                    const tolerance = q.numericalTolerance || 0;
-                                    const parsedSelected = parseFloat(selectedStr);
-                                    const parsedCorrect = parseFloat(correctStr);
-                                    if (!isNaN(parsedSelected) && !isNaN(parsedCorrect)) {
-                                        if (Math.abs(parsedSelected - parsedCorrect) <= (tolerance + 1e-9)) {
-                                            isCorrect = true;
-                                        }
-                                    }
+                        {/* Top Filter Bar with Dropdown and Pills */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: 20,
+                            padding: '14px 18px',
+                            background: '#fff',
+                            borderRadius: 12,
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            flexWrap: 'wrap',
+                            gap: 12
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <label style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>
+                                    🔍 Question Filter:
+                                </label>
+                                <select
+                                    value={reviewFilter}
+                                    onChange={(e) => setReviewFilter(e.target.value)}
+                                    style={{
+                                        padding: '8px 14px',
+                                        borderRadius: 8,
+                                        border: '1.5px solid #cbd5e1',
+                                        background: '#f8fafc',
+                                        fontSize: 14,
+                                        fontWeight: 600,
+                                        color: '#1e293b',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="all">All Questions ({(data.breakdown || []).length})</option>
+                                    <option value="correct">✅ Correct ({data.correct || 0})</option>
+                                    <option value="incorrect">❌ Incorrect ({data.incorrect || 0})</option>
+                                    <option value="unattempted">⏳ Unattempted / Skipped ({data.unattempted || 0})</option>
+                                </select>
+                            </div>
 
-                                    // 2. Exact match
-                                    if (!isCorrect && selectedStr.toLowerCase() === correctStr.toLowerCase()) {
-                                        isCorrect = true;
-                                    }
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {[
+                                    { key: 'all', label: 'All', count: (data.breakdown || []).length, color: '#4f46e5' },
+                                    { key: 'correct', label: 'Correct', count: data.correct || 0, color: '#10b981' },
+                                    { key: 'incorrect', label: 'Incorrect', count: data.incorrect || 0, color: '#ef4444' },
+                                    { key: 'unattempted', label: 'Skipped', count: data.unattempted || 0, color: '#64748b' }
+                                ].map(b => (
+                                    <button
+                                        key={b.key}
+                                        onClick={() => setReviewFilter(b.key)}
+                                        style={{
+                                            padding: '6px 14px',
+                                            borderRadius: 8,
+                                            border: reviewFilter === b.key ? `2px solid ${b.color}` : '1.5px solid #e2e8f0',
+                                            background: reviewFilter === b.key ? `${b.color}15` : '#fff',
+                                            color: reviewFilter === b.key ? b.color : '#64748b',
+                                            fontWeight: reviewFilter === b.key ? 800 : 600,
+                                            fontSize: 13,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {b.label} ({b.count})
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                                    // 3. Option index / letter match fallback
-                                    if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
-                                        const letters = ['A', 'B', 'C', 'D'];
-                                        const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
-                                        if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
-                                            if (String(q.options[selectedIdx]).trim().toLowerCase() === correctStr.toLowerCase()) {
-                                                isCorrect = true;
-                                            }
-                                        }
-                                        const correctIdx = letters.indexOf(correctStr.toUpperCase());
-                                        if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
-                                            if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
-                                                isCorrect = true;
-                                            }
-                                        }
-                                        if (selectedIdx !== -1 && selectedIdx === correctIdx) {
-                                            isCorrect = true;
-                                        }
-                                    }
-                                    isWrong = !isCorrect;
-                                }
+                        {(() => {
+                            const filteredList = (data.breakdown || [])
+                                .map((q, idx) => ({ ...q, originalIdx: idx }))
+                                .filter(q => {
+                                    const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
+                                    if (reviewFilter === 'correct') return q.isCorrect;
+                                    if (reviewFilter === 'incorrect') return attempted && !q.isCorrect;
+                                    if (reviewFilter === 'unattempted') return !attempted;
+                                    return true;
+                                });
+
+                            if (filteredList.length === 0) {
                                 return (
-                                    <div key={q._id || q.questionId || q.id || i} style={{ ...styles.reviewCard, borderLeft: `4px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
-                                        <div style={styles.reviewQHeader}>
-                                            <span style={styles.reviewQNum}>Q{i + 1}</span>
-                                            <span style={styles.reviewSubject}>{q.subject} | {q.chapter}{q.concept && q.concept !== 'General' ? ` • ${q.concept}` : ''}</span>
-                                            <span style={styles.timeBadge}>⏱️ {formatSeconds(q.timeTaken || 0)}</span>
-                                            {!attempted && <span style={styles.badge('#9ca3af')}>Skipped</span>}
-                                            {attempted && !data.answerKeyHidden && isCorrect && <span style={styles.badgeGreen}>✅ Correct</span>}
-                                            {attempted && !data.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
-                                            {attempted && data.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
-                                        </div>
-                                        <MathRenderer style={styles.reviewQText} text={q.questionText} />
-                                        
-                                        {q.type === 'numerical' || !Array.isArray(q.options) || q.options.length === 0 ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 400 }}>
-                                                <div style={{
-                                                    ...styles.reviewOption,
-                                                    background: attempted ? (isCorrect ? '#dcfce7' : '#fee2e2') : '#f9fafb',
-                                                    border: attempted ? (isCorrect ? '1.5px solid #10b981' : '1.5px solid #ef4444') : '1.5px solid #e5e7eb'
-                                                }}>
-                                                    <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? selectedStr : 'Skipped'} />
-                                                </div>
-                                                {!data.answerKeyHidden && (
-                                                    <div style={{
-                                                        ...styles.reviewOption,
-                                                        background: '#dcfce7',
-                                                        border: '1.5px solid #10b981'
-                                                    }}>
-                                                        <span style={styles.reviewOptLabel}>Correct Answer:</span> <MathRenderer inline={true} text={correctStr} />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div style={styles.reviewOptions}>
-                                                {q.options?.map((opt, oi) => {
-                                                    const label = (oi + 1).toString();
-                                                    const optStr = typeof opt === 'object' && opt !== null ? (opt.text || JSON.stringify(opt)) : String(opt);
-                                                    const isSelected = selectedStr === optStr || selectedStr === String.fromCharCode(65 + oi) || selectedStr === String(oi) || selectedStr === String(oi + 1);
-                                                    const isCorrectOpt = !data.answerKeyHidden && (correctStr === optStr || correctStr === String.fromCharCode(65 + oi));
-                                                    return (
-                                                        <div key={oi} style={{
-                                                            ...styles.reviewOption,
-                                                            background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
-                                                            border: isCorrectOpt ? '1.5px solid #10b981' : isSelected ? '1.5px solid #ef4444' : '1.5px solid #e5e7eb'
-                                                        }}>
-                                                            <span style={styles.reviewOptLabel}>{label}.</span> <MathRenderer inline={true} text={optStr} />
-                                                            {isSelected && <span style={{ marginLeft: 8, fontSize: 12 }}>← Your Answer</span>}
-                                                            {isCorrectOpt && <span style={{ marginLeft: 8, fontSize: 12, color: '#10b981' }}>✓ Correct</span>}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                        {q.markedForReview && <div style={styles.markedTag}>🔖 Marked for Review</div>}
-
+                                    <div style={{ padding: 40, textAlign: 'center', background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', color: '#64748b' }}>
+                                        No {reviewFilter} questions in this examination.
                                     </div>
                                 );
-                            })}
-                        </div>
+                            }
+
+                            return (
+                                <div style={styles.reviewList}>
+                                    {filteredList.map((q) => {
+                                        const i = q.originalIdx;
+                                        const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
+                                        let isCorrect = Boolean(q.isCorrect);
+                                        let isWrong = false;
+                                        const selectedStr = String(q.selectedOption ?? '').trim();
+                                        const correctStr = String(q.correctAnswer ?? q.answer ?? '').trim();
+
+                                        const letters = ['A', 'B', 'C', 'D'];
+                                        const cleanCorrect = correctStr.trim();
+                                        const cleanCorrectDigits = cleanCorrect.replace(/[^\d]/g, '');
+                                        const cleanSelected = selectedStr.trim();
+                                        const cleanSelectedDigits = cleanSelected.replace(/[^\d]/g, '');
+
+                                        if (attempted && !data.answerKeyHidden) {
+                                            // 1. Numerical match with tolerance
+                                            const tolerance = q.numericalTolerance || 0;
+                                            const parsedSelected = parseFloat(selectedStr);
+                                            const parsedCorrect = parseFloat(correctStr);
+                                            if (!isNaN(parsedSelected) && !isNaN(parsedCorrect)) {
+                                                if (Math.abs(parsedSelected - parsedCorrect) <= (tolerance + 1e-9)) {
+                                                    isCorrect = true;
+                                                }
+                                            }
+
+                                            // 2. Exact match
+                                            if (!isCorrect && selectedStr.toLowerCase() === correctStr.toLowerCase()) {
+                                                isCorrect = true;
+                                            }
+
+                                            // 3. Option index / letter match fallback
+                                            if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
+                                                const selIdx = letters.indexOf(selectedStr.toUpperCase());
+                                                const corrIdx = letters.indexOf(correctStr.toUpperCase());
+                                                if (selIdx !== -1 && q.options[selIdx] !== undefined) {
+                                                    if (String(q.options[selIdx]).trim().toLowerCase() === correctStr.toLowerCase()) {
+                                                        isCorrect = true;
+                                                    }
+                                                }
+                                                if (corrIdx !== -1 && q.options[corrIdx] !== undefined) {
+                                                    if (selectedStr.toLowerCase() === String(q.options[corrIdx]).trim().toLowerCase()) {
+                                                        isCorrect = true;
+                                                    }
+                                                }
+                                                if (selIdx !== -1 && selIdx === corrIdx) {
+                                                    isCorrect = true;
+                                                }
+                                                if (cleanSelectedDigits && cleanCorrectDigits && cleanSelectedDigits === cleanCorrectDigits) {
+                                                    isCorrect = true;
+                                                }
+                                            }
+                                            isWrong = !isCorrect;
+                                        }
+
+                                        return (
+                                            <div key={q._id || q.questionId || q.id || i} style={{ ...styles.reviewCard, borderLeft: `5px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
+                                                <div style={styles.reviewQHeader}>
+                                                    <span style={styles.reviewQNum}>Q{q.questionNumber || i + 1}</span>
+                                                    <span style={styles.reviewSubject}>{q.subject} | {q.chapter}{q.concept && q.concept !== 'General' ? ` • ${q.concept}` : ''}</span>
+                                                    <span style={styles.timeBadge}>⏱️ {formatSeconds(q.timeTaken || 0)}</span>
+                                                    {!attempted && <span style={styles.badge('#9ca3af')}>Skipped</span>}
+                                                    {attempted && !data.answerKeyHidden && isCorrect && <span style={styles.badgeGreen}>✅ Correct</span>}
+                                                    {attempted && !data.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
+                                                    {attempted && data.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
+                                                </div>
+                                                <MathRenderer style={styles.reviewQText} text={q.questionText} />
+                                                
+                                                {q.type === 'numerical' || !Array.isArray(q.options) || q.options.length === 0 ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 500, marginTop: 12 }}>
+                                                        <div style={{
+                                                            ...styles.reviewOption,
+                                                            background: attempted ? (isCorrect ? '#dcfce7' : '#fee2e2') : '#f9fafb',
+                                                            border: attempted ? (isCorrect ? '2px solid #10b981' : '2px solid #ef4444') : '1.5px solid #e5e7eb'
+                                                        }}>
+                                                            <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? selectedStr : 'Skipped'} />
+                                                            {attempted && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: isCorrect ? '#10b981' : '#ef4444' }}>{isCorrect ? '✓ Correct' : '✕ Wrong'}</span>}
+                                                        </div>
+                                                        {!data.answerKeyHidden && (
+                                                            <div style={{
+                                                                ...styles.reviewOption,
+                                                                background: '#dcfce7',
+                                                                border: '2px solid #10b981'
+                                                            }}>
+                                                                <span style={styles.reviewOptLabel}>Correct Answer:</span> <MathRenderer inline={true} text={correctStr} />
+                                                                <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: '#10b981' }}>✓ Correct</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div style={styles.reviewOptions}>
+                                                        {q.options?.map((opt, oi) => {
+                                                            const label = (oi + 1).toString();
+                                                            const optStr = typeof opt === 'object' && opt !== null ? (opt.text || JSON.stringify(opt)) : String(opt);
+
+                                                            // Check whether this option was selected by student
+                                                            const isSelected = attempted && (
+                                                                cleanSelected.toLowerCase() === optStr.toLowerCase() ||
+                                                                cleanSelected.toUpperCase() === letters[oi] ||
+                                                                cleanSelected === String(oi + 1) ||
+                                                                cleanSelected === String(oi) ||
+                                                                cleanSelectedDigits === String(oi + 1) ||
+                                                                (cleanSelected.startsWith('(') && cleanSelected.replace(/[()]/g, '').trim() === String(oi + 1)) ||
+                                                                (cleanSelected.startsWith('(') && cleanSelected.replace(/[()]/g, '').trim().toUpperCase() === letters[oi])
+                                                            );
+
+                                                            // Check whether this option is the correct answer
+                                                            const isCorrectOpt = !data.answerKeyHidden && (
+                                                                cleanCorrect.toLowerCase() === optStr.toLowerCase() ||
+                                                                cleanCorrect.toUpperCase() === letters[oi] ||
+                                                                cleanCorrect === String(oi + 1) ||
+                                                                cleanCorrect === String(oi) ||
+                                                                cleanCorrectDigits === String(oi + 1) ||
+                                                                (cleanCorrect.startsWith('(') && cleanCorrect.replace(/[()]/g, '').trim() === String(oi + 1)) ||
+                                                                (cleanCorrect.startsWith('(') && cleanCorrect.replace(/[()]/g, '').trim().toUpperCase() === letters[oi])
+                                                            );
+
+                                                            return (
+                                                                <div key={oi} style={{
+                                                                    ...styles.reviewOption,
+                                                                    background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
+                                                                    border: isCorrectOpt ? '2px solid #10b981' : isSelected ? '2px solid #ef4444' : '1.5px solid #e5e7eb'
+                                                                }}>
+                                                                    <span style={{ ...styles.reviewOptLabel, fontWeight: isCorrectOpt || isSelected ? 800 : 600 }}>{label}.</span> <MathRenderer inline={true} text={optStr} />
+                                                                    {isSelected && (
+                                                                        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: isCorrectOpt ? '#10b981' : '#ef4444' }}>
+                                                                            ← Your Answer
+                                                                        </span>
+                                                                    )}
+                                                                    {isCorrectOpt && (
+                                                                        <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: '#10b981', background: '#dcfce7', padding: '2px 8px', borderRadius: 6, border: '1px solid #86efac' }}>
+                                                                            ✓ Correct Answer
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+
+                                                        {/* Prominent Correct Answer Banner below options */}
+                                                        {!data.answerKeyHidden && (
+                                                            <div style={{
+                                                                marginTop: 12,
+                                                                padding: '10px 14px',
+                                                                background: '#ecfdf5',
+                                                                border: '1.5px solid #10b981',
+                                                                borderRadius: 8,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 8,
+                                                                fontSize: 13,
+                                                                fontWeight: 700,
+                                                                color: '#065f46'
+                                                            }}>
+                                                                <span>✅ Correct Answer:</span>
+                                                                <span>
+                                                                    {(() => {
+                                                                        const cIdx = parseInt(cleanCorrectDigits, 10);
+                                                                        if (cIdx >= 1 && cIdx <= (q.options?.length || 0)) {
+                                                                            const optVal = q.options[cIdx - 1];
+                                                                            const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
+                                                                            return `Option ${cIdx} — ${optText}`;
+                                                                        }
+                                                                        const lIdx = letters.indexOf(cleanCorrect.toUpperCase());
+                                                                        if (lIdx !== -1 && q.options && q.options[lIdx] !== undefined) {
+                                                                            const optVal = q.options[lIdx];
+                                                                            const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
+                                                                            return `Option ${lIdx + 1} — ${optText}`;
+                                                                        }
+                                                                        return correctStr || 'Option 1';
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {q.markedForReview && <div style={styles.markedTag}>🔖 Marked for Review</div>}
+
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 

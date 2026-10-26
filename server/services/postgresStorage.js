@@ -908,17 +908,40 @@ async function updateSession(id, updateData) {
 }
 
 async function getSessionsByExam(examId) {
+    if (!examId) return [];
+    let possibleIds = [String(examId)];
+    try {
+        const exam = await getExamById(examId);
+        if (exam) {
+            if (exam.id) possibleIds.push(String(exam.id));
+            if (exam._id) possibleIds.push(String(exam._id));
+            if (exam.title) possibleIds.push(String(exam.title));
+        }
+    } catch (e) {}
+    possibleIds = Array.from(new Set(possibleIds));
+
     const res = await pool.query(
         `SELECT * FROM public.exam_sessions 
-         WHERE exam_id::text = $1::text 
+         WHERE exam_id::text = ANY($1::text[]) 
          ORDER BY CAST(COALESCE(NULLIF(score::text, ''), '0') AS NUMERIC) DESC, created_at ASC`,
-        [String(examId)]
+        [possibleIds]
     );
     return res.rows.map(r => ({ ...r, _id: String(r.id), answers: r.answers || [] }));
 }
 
 async function deleteSessionsByExam(examId) {
-    await pool.query('DELETE FROM public.exam_sessions WHERE exam_id = $1', [String(examId)]);
+    if (!examId) return;
+    let possibleIds = [String(examId)];
+    try {
+        const exam = await getExamById(examId);
+        if (exam) {
+            if (exam.id) possibleIds.push(String(exam.id));
+            if (exam._id) possibleIds.push(String(exam._id));
+            if (exam.title) possibleIds.push(String(exam.title));
+        }
+    } catch (e) {}
+    possibleIds = Array.from(new Set(possibleIds));
+    await pool.query('DELETE FROM public.exam_sessions WHERE exam_id::text = ANY($1::text[])', [possibleIds]);
 }
 
 async function createBridgeKey(key, examId, examTitle, generatedBy) {

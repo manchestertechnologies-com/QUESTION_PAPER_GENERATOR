@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import * as XLSX from 'xlsx';
@@ -24,6 +24,59 @@ export default function AdminResults() {
             fetchResults(examIdParam);
         }
     }, [examIdParam]);
+
+    const displayResults = useMemo(() => {
+        let list = Array.isArray(results) ? [...results] : [];
+        if (list.length === 0 && selectedExam) {
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && (k.startsWith('cbt_scorecard_') || k.startsWith('exam_score_'))) {
+                        const raw = localStorage.getItem(k);
+                        if (raw) {
+                            const item = JSON.parse(raw);
+                            if (item && (String(item.examId) === String(selectedExam) || String(item.examTitle || '').toLowerCase().includes(String(selectedExam).toLowerCase()))) {
+                                list.push({
+                                    _id: item.sessionId || 'local_' + i,
+                                    id: item.sessionId || 'local_' + i,
+                                    studentName: item.studentName || 'Student',
+                                    rollNumber: item.rollNumber || '—',
+                                    studentEmail: item.studentEmail || '',
+                                    score: Number(item.score) || 0,
+                                    correct: Number(item.correct) || 0,
+                                    incorrect: Number(item.incorrect) || 0,
+                                    unattempted: Number(item.unattempted) || 0,
+                                    totalQuestions: Number(item.totalQuestions) || 0,
+                                    fromLabIp: false,
+                                    weakAreas: item.weakAreas || [],
+                                    endTime: item.submittedAt || new Date().toISOString(),
+                                    answers: item.breakdown || []
+                                });
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+        return list;
+    }, [results, selectedExam]);
+
+    // Auto-sync any local results to backend if backend returned empty
+    useEffect(() => {
+        if (displayResults.length > 0 && results.length === 0 && selectedExam) {
+            displayResults.forEach(item => {
+                if (item.studentName) {
+                    api.post(`/api/exams/${selectedExam}/submit`, {
+                        sessionId: item.sessionId || item._id,
+                        studentName: item.studentName,
+                        studentEmail: item.studentEmail,
+                        rollNumber: item.rollNumber,
+                        answers: item.answers || []
+                    }).catch(() => {});
+                }
+            });
+        }
+    }, [displayResults, results, selectedExam]);
 
     const fetchResults = async (eid) => {
         if (!eid) return;
@@ -88,9 +141,9 @@ export default function AdminResults() {
     };
 
     const exportExcel = () => {
-        if (!results || results.length === 0) return;
+        if (!displayResults || displayResults.length === 0) return;
         const exam = exams.find(e => String(e._id || e.id) === String(selectedExam));
-        const data = results.map((r, i) => {
+        const data = displayResults.map((r, i) => {
             const attempted = [];
             const unattempted = [];
             const correct = [];
@@ -167,7 +220,7 @@ export default function AdminResults() {
     };
 
     const exportPDF = () => {
-        if (!results || results.length === 0) return;
+        if (!displayResults || displayResults.length === 0) return;
         const doc = new jsPDF('landscape');
         const exam = exams.find(e => String(e._id || e.id) === String(selectedExam));
         const examName = exam?.title || 'Exam Results';
@@ -175,12 +228,12 @@ export default function AdminResults() {
         doc.setFontSize(16);
         doc.text(examName, 14, 15);
         doc.setFontSize(10);
-        doc.text(`Total Students: ${results.length}`, 14, 22);
+        doc.text(`Total Students: ${displayResults.length}`, 14, 22);
 
         const tableColumn = ["#", "Student", "Roll No", "Score", "Attempted Qs", "Correct Qs", "Wrong Qs", "Unattempted Qs"];
         const tableRows = [];
 
-        results.forEach((r, i) => {
+        displayResults.forEach((r, i) => {
             const attempted = [];
             const unattempted = [];
             const correct = [];
@@ -299,7 +352,7 @@ export default function AdminResults() {
                 </select>
                 <div style={{ display: 'flex', gap: 8 }}>
                     <button style={styles.keyBtn} onClick={generateBridgeKey}>🔑 Generate Bridge Key</button>
-                    {results && results.length > 0 && (
+                    {displayResults && displayResults.length > 0 && (
                         <>
                             <button style={{...styles.keyBtn, background: '#10b981'}} onClick={exportExcel}>📊 Excel</button>
                             <button style={{...styles.keyBtn, background: '#ef4444'}} onClick={exportPDF}>📄 PDF</button>
@@ -318,27 +371,27 @@ export default function AdminResults() {
 
             {loading && <div style={styles.loading}>Loading results...</div>}
 
-            {results.length > 0 && (
+            {displayResults.length > 0 && (
                 <>
                     <div style={styles.summary}>
                         <div style={styles.summaryCard}>
-                            <div style={styles.summaryNum}>{results.length}</div>
+                            <div style={styles.summaryNum}>{displayResults.length}</div>
                             <div style={styles.summaryLabel}>Total Students</div>
                         </div>
                         <div style={styles.summaryCard}>
                             <div style={styles.summaryNum}>
-                                {results.length > 0 ? Math.max(...results.map(r => r.score)) : 0}
+                                {displayResults.length > 0 ? Math.max(...displayResults.map(r => r.score)) : 0}
                             </div>
                             <div style={styles.summaryLabel}>Highest Score</div>
                         </div>
                         <div style={styles.summaryCard}>
                             <div style={styles.summaryNum}>
-                                {results.length > 0 ? Math.round(results.reduce((acc, r) => acc + r.score, 0) / results.length) : 0}
+                                {displayResults.length > 0 ? Math.round(displayResults.reduce((acc, r) => acc + r.score, 0) / displayResults.length) : 0}
                             </div>
                             <div style={styles.summaryLabel}>Average Score</div>
                         </div>
                         <div style={styles.summaryCard}>
-                            <div style={styles.summaryNum}>{results.filter(r => r.fromLabIp).length}</div>
+                            <div style={styles.summaryNum}>{displayResults.filter(r => r.fromLabIp).length}</div>
                             <div style={styles.summaryLabel}>Lab Students</div>
                         </div>
                     </div>
@@ -420,7 +473,7 @@ export default function AdminResults() {
                         </div>
                     )}
 
-                    {results && results.length > 0 && (
+                    {displayResults && displayResults.length > 0 && (
                         <div style={styles.analyticsSection}>
                             <h3 style={styles.analyticsTitle}>Student Performance Analytics</h3>
                             <div style={styles.chartLegend}>
@@ -430,7 +483,7 @@ export default function AdminResults() {
                             </div>
                             <div style={styles.chartScroll}>
                                 <div style={styles.chartContainer}>
-                                    {results.map((r, i) => {
+                                    {displayResults.map((r, i) => {
                                         const total = r.totalQuestions || 1; // prevent divide by zero
                                         const cPct = (r.correct / total) * 100;
                                         const iPct = (r.incorrect / total) * 100;
@@ -470,7 +523,7 @@ export default function AdminResults() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {results.map((r, i) => (
+                                {displayResults.map((r, i) => (
                                     <tr key={r._id || r.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                                         <td style={styles.td}>{i + 1}</td>
                                         <td style={styles.td}>
@@ -555,7 +608,7 @@ export default function AdminResults() {
                 </>
             )}
 
-            {!loading && results.length === 0 && selectedExam && (
+            {!loading && displayResults.length === 0 && selectedExam && (
                 <div style={styles.empty}>No submissions yet for this exam.</div>
             )}
         </div>
