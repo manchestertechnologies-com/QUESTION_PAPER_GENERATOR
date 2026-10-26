@@ -4,6 +4,7 @@ import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import ResizableDiagram from '../../components/ResizableDiagram';
+import { checkAnswerCorrect } from '../../utils/answerEvaluation';
 
 function extractDiagramFromText(rawText, existingImageUrl) {
     if (!rawText) return { cleanText: '', diagramUrl: existingImageUrl || null };
@@ -457,26 +458,8 @@ export default function ExamEngine() {
                 weakMap[topicKey].timeSpent += timeTaken;
 
                 if (isAttempted) {
-                    const parsedSelected = parseFloat(selected);
-                    const parsedAnswer = parseFloat(q.answer || q.correctAnswer);
-                    if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
-                        if (Math.abs(parsedSelected - parsedAnswer) <= 1e-9) isCorrect = true;
-                    }
-                    if (!isCorrect && String(selected).trim().toLowerCase() === String(q.answer || q.correctAnswer || '').trim().toLowerCase()) {
-                        isCorrect = true;
-                    }
-                    if (!isCorrect && q.options && q.options.length > 0) {
-                        const letters = ['A', 'B', 'C', 'D'];
-                        const selLetterIdx = letters.indexOf(String(selected).trim().toUpperCase());
-                        const ansLetterIdx = letters.indexOf(String(q.answer || q.correctAnswer || '').trim().toUpperCase());
-                        if (selLetterIdx !== -1 && q.options[selLetterIdx]) {
-                            if (String(q.options[selLetterIdx]).trim().toLowerCase() === String(q.answer || q.correctAnswer || '').trim().toLowerCase()) isCorrect = true;
-                        }
-                        if (ansLetterIdx !== -1 && q.options[ansLetterIdx]) {
-                            if (String(selected).trim().toLowerCase() === String(q.options[ansLetterIdx]).trim().toLowerCase()) isCorrect = true;
-                        }
-                        if (selLetterIdx !== -1 && selLetterIdx === ansLetterIdx) isCorrect = true;
-                    }
+                    const correctAns = q.answer || q.correctAnswer;
+                    isCorrect = checkAnswerCorrect(selected, correctAns, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
 
                     if (isCorrect) {
                         score += correctMarks;

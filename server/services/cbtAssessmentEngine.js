@@ -7,6 +7,8 @@
  * server-validated timer engine, and topic diagnostic weak-area algorithms.
  */
 
+const { checkAnswerCorrect } = require('../utils/answerEvaluation');
+
 // ── CONSTANTS & STATUS DEFINITIONS ──────────────────────────────
 const QUESTION_STATUS = Object.freeze({
     UNVISITED: 'Unvisited',
@@ -121,76 +123,7 @@ function calculateServerTimerState(startTime, durationMinutes, serverNow = new D
  * @returns {boolean} True if correct, false otherwise
  */
 function evaluateQuestionAnswer(userResponse, correctResponse, questionType = 'MCQ', tolerance = 0, options = []) {
-    if (!isResponseValid(userResponse) || !isResponseValid(correctResponse)) {
-        return false;
-    }
-
-    const qTypeUpper = (questionType || 'MCQ').toString().toUpperCase().trim();
-
-    // 1. Numerical Comparison
-    if (qTypeUpper === 'NUMERICAL' || qTypeUpper === 'NUMERIC') {
-        const parsedUser = parseFloat(String(userResponse).trim());
-        const parsedCorrect = parseFloat(String(correctResponse).trim());
-        if (isNaN(parsedUser) || isNaN(parsedCorrect)) return false;
-        const tol = Math.max(0, parseFloat(tolerance) || 0) + 1e-9;
-        return Math.abs(parsedUser - parsedCorrect) <= tol;
-    }
-
-    // 2. Multi-Select / Multiple Choice (Array Comparison)
-    if (qTypeUpper === 'MULTIPLE_CHOICE' || qTypeUpper === 'MULTI_SELECT' || qTypeUpper === 'MCQ_MULTI' || Array.isArray(userResponse) || Array.isArray(correctResponse)) {
-        const normalizeArray = (val) => {
-            if (Array.isArray(val)) {
-                return val.map(x => String(x).trim().toLowerCase()).filter(Boolean).sort();
-            }
-            if (typeof val === 'string') {
-                return val.split(/[,;\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean).sort();
-            }
-            return [String(val).trim().toLowerCase()];
-        };
-
-        const userArr = normalizeArray(userResponse);
-        const correctArr = normalizeArray(correctResponse);
-        if (userArr.length !== correctArr.length || userArr.length === 0) return false;
-        return userArr.every((v, i) => v === correctArr[i]);
-    }
-
-    // 3. Single-Choice MCQ
-    const userStr = String(userResponse).trim();
-    const correctStr = String(correctResponse).trim();
-
-    // Direct case-insensitive match
-    if (userStr.toLowerCase() === correctStr.toLowerCase()) {
-        return true;
-    }
-
-    // Letter to Number / Number to Letter conversion ('A' <-> '1', 'B' <-> '2', etc.)
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-    const userLetterIdx = letters.indexOf(userStr.toUpperCase());
-    const correctLetterIdx = letters.indexOf(correctStr.toUpperCase());
-
-    const userNum = parseInt(userStr, 10);
-    const correctNum = parseInt(correctStr, 10);
-
-    if (userLetterIdx !== -1 && correctNum === userLetterIdx + 1) return true;
-    if (correctLetterIdx !== -1 && userNum === correctLetterIdx + 1) return true;
-
-    // Option text match if options array is available
-    if (Array.isArray(options) && options.length > 0) {
-        // Candidate picked letter, answer stored as option text
-        if (userLetterIdx !== -1 && options[userLetterIdx]) {
-            if (String(options[userLetterIdx]).trim().toLowerCase() === correctStr.toLowerCase()) {
-                return true;
-            }
-        }
-        // Correct answer is letter, candidate picked option text
-        if (correctLetterIdx !== -1 && options[correctLetterIdx]) {
-            if (String(options[correctLetterIdx]).trim().toLowerCase() === userStr.toLowerCase()) {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    return checkAnswerCorrect(userResponse, correctResponse, options, tolerance, questionType);
 }
 
 // ── MODULE 3: SCORING & COMPREHENSIVE ANALYTICS ENGINE ──────────

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
+import { checkAnswerCorrect, resolveOptionIndex, stripLeadingLabel, normalizeText } from '../../utils/answerEvaluation';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -23,6 +24,59 @@ export default function Scorecard() {
         }
     }, [activeTab, examId]);
 
+    const evalData = useMemo(() => {
+        if (!data) return null;
+        const isCET = (data.examType === 'CET' || data.examType === 'KCET');
+        const marksPerQ = isCET ? 1 : 4;
+        const penaltyPerQ = isCET ? 0 : -1;
+
+        let totalCorrect = 0;
+        let totalIncorrect = 0;
+        let totalUnattempted = 0;
+        let computedScore = 0;
+
+        const evaluatedBreakdown = (data.breakdown || []).map((q, idx) => {
+            const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
+            const correctAns = q.correctAnswer ?? q.answer;
+            const isCorrect = attempted ? checkAnswerCorrect(q.selectedOption, correctAns, q.options, q.numericalTolerance, q.type) : false;
+            
+            if (attempted) {
+                if (isCorrect) {
+                    totalCorrect++;
+                    computedScore += marksPerQ;
+                } else {
+                    totalIncorrect++;
+                    computedScore += penaltyPerQ;
+                }
+            } else {
+                totalUnattempted++;
+            }
+
+            const userOptIdx = resolveOptionIndex(q.selectedOption, q.options);
+            const correctOptIdx = resolveOptionIndex(correctAns, q.options);
+
+            return {
+                ...q,
+                originalIdx: idx,
+                isAttempted: attempted,
+                isCorrect: isCorrect,
+                userOptIdx,
+                correctOptIdx
+            };
+        });
+
+        const hasBreakdown = evaluatedBreakdown.length > 0;
+        return {
+            ...data,
+            correct: hasBreakdown ? totalCorrect : (data.correct || 0),
+            incorrect: hasBreakdown ? totalIncorrect : (data.incorrect || 0),
+            unattempted: hasBreakdown ? totalUnattempted : (data.unattempted || 0),
+            attempted: hasBreakdown ? (totalCorrect + totalIncorrect) : (data.attempted || 0),
+            score: hasBreakdown ? computedScore : (data.score || 0),
+            breakdown: evaluatedBreakdown
+        };
+    }, [data]);
+
     const displayLeaderboard = useMemo(() => {
         let list = Array.isArray(leaderboard) ? [...leaderboard] : [];
 
@@ -34,7 +88,7 @@ export default function Scorecard() {
                     const raw = localStorage.getItem(k);
                     if (raw) {
                         const item = JSON.parse(raw);
-                        if (item && (String(item.examId) === String(examId) || String(item.examTitle) === String(data?.examTitle))) {
+                        if (item && (String(item.examId) === String(examId) || String(item.examTitle) === String(evalData?.examTitle))) {
                             const itemRoll = String(item.rollNumber || '').trim();
                             const itemName = String(item.studentName || '').trim();
                             const itemSessionId = String(item.sessionId || '').trim();
@@ -53,7 +107,7 @@ export default function Scorecard() {
                                     incorrect: Number(item.incorrect) || 0,
                                     unattempted: Number(item.unattempted) || 0,
                                     totalQuestions: Number(item.totalQuestions) || 0,
-                                    isCurrentUser: Boolean(itemRoll && data?.rollNumber && itemRoll === String(data.rollNumber).trim())
+                                    isCurrentUser: Boolean(itemRoll && evalData?.rollNumber && itemRoll === String(evalData.rollNumber).trim())
                                 });
                             }
                         }
@@ -63,10 +117,10 @@ export default function Scorecard() {
         } catch (e) {}
 
         // 2. Ensure current student is present
-        if (data && (data.score !== undefined || data.studentName)) {
-            const currentRoll = String(data.rollNumber || '').trim();
-            const currentName = String(data.studentName || '').trim();
-            const currentSessionId = String(data.sessionId || '').trim();
+        if (evalData && (evalData.score !== undefined || evalData.studentName)) {
+            const currentRoll = String(evalData.rollNumber || '').trim();
+            const currentName = String(evalData.studentName || '').trim();
+            const currentSessionId = String(evalData.sessionId || '').trim();
 
             const exists = list.some(s => {
                 const sRoll = String(s.rollNumber || '').trim();
@@ -81,19 +135,19 @@ export default function Scorecard() {
             if (!exists) {
                 list.push({
                     sessionId: currentSessionId || 'current',
-                    studentName: data.studentName || 'You',
-                    rollNumber: data.rollNumber || '—',
-                    score: Number(data.score) || 0,
-                    correct: Number(data.correct) || 0,
-                    incorrect: Number(data.incorrect) || 0,
-                    unattempted: Number(data.unattempted) || 0,
-                    totalQuestions: Number(data.totalQuestions) || 0,
+                    studentName: evalData.studentName || 'You',
+                    rollNumber: evalData.rollNumber || '—',
+                    score: Number(evalData.score) || 0,
+                    correct: Number(evalData.correct) || 0,
+                    incorrect: Number(evalData.incorrect) || 0,
+                    unattempted: Number(evalData.unattempted) || 0,
+                    totalQuestions: Number(evalData.totalQuestions) || 0,
                     isCurrentUser: true
                 });
             }
         }
         return list.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
-    }, [leaderboard, data, examId]);
+    }, [leaderboard, evalData, examId]);
 
     const formatSeconds = (totalSecs) => {
         const m = Math.floor(totalSecs / 60);
@@ -165,13 +219,13 @@ export default function Scorecard() {
     };
 
     if (loading) return <div style={styles.center}>Loading scorecard...</div>;
-    if (!data) return <div style={styles.center}>Scorecard not found.</div>;
+    if (!evalData) return <div style={styles.center}>Scorecard not found.</div>;
 
-    const isCET = (data.examType === 'CET' || data.examType === 'KCET');
+    const isCET = (evalData.examType === 'CET' || evalData.examType === 'KCET');
     const marksPerQ = isCET ? 1 : 4;
-    const maxMarks = (data.totalQuestions || 0) * marksPerQ;
+    const maxMarks = (evalData.totalQuestions || 0) * marksPerQ;
     const percentage = maxMarks > 0
-        ? Math.max(0, Math.round(((Number(data.score) || 0) / maxMarks) * 100))
+        ? Math.max(0, Math.round(((Number(evalData.score) || 0) / maxMarks) * 100))
         : 0;
 
     const getGrade = (pct) => {
@@ -188,7 +242,7 @@ export default function Scorecard() {
             <div style={styles.topBar}>
                 <span style={styles.topTitle}>📋 Examination Scorecard</span>
                 <div style={styles.topRight}>
-                    {data.isLabSession && (
+                    {evalData.isLabSession && (
                         <span style={styles.labBadge}>🏫 Lab Session — Answer Key Hidden</span>
                     )}
                     <button style={{ ...styles.homeBtn, backgroundColor: '#10b981', color: '#fff', border: 'none' }} onClick={downloadPDF}>Download PDF Result</button>
@@ -204,14 +258,14 @@ export default function Scorecard() {
                 <div style={styles.heroCard}>
                     <div style={styles.heroLeft}>
                         <div style={styles.candidateInfo}>
-                            <div style={styles.candidateName}>{data.studentName}</div>
-                            <div style={styles.candidateMeta}>{data.rollNumber && `Roll No: ${data.rollNumber}`} {data.studentEmail && `| ${data.studentEmail}`}</div>
-                            <div style={styles.examLabel}>{data.examTitle} — {data.examType}</div>
+                            <div style={styles.candidateName}>{evalData.studentName}</div>
+                            <div style={styles.candidateMeta}>{evalData.rollNumber && `Roll No: ${evalData.rollNumber}`} {evalData.studentEmail && `| ${evalData.studentEmail}`}</div>
+                            <div style={styles.examLabel}>{evalData.examTitle} — {evalData.examType}</div>
                         </div>
                     </div>
                     <div style={styles.scoreCircleWrap}>
                         <div style={{ ...styles.scoreCircle, borderColor: grade.color }}>
-                            <div style={{ ...styles.scoreNum, color: grade.color }}>{data.score}</div>
+                            <div style={{ ...styles.scoreNum, color: grade.color }}>{evalData.score}</div>
                             <div style={styles.scoreMax}>/ {maxMarks}</div>
                         </div>
                         <div style={{ ...styles.gradeLabel, color: grade.color }}>{grade.grade} — {grade.label}</div>
@@ -222,11 +276,11 @@ export default function Scorecard() {
                 {/* Stats Row */}
                 <div style={styles.statsRow}>
                     {[
-                        { label: 'Total Questions', value: data.totalQuestions, color: '#6b7280' },
-                        { label: 'Attempted', value: data.attempted, color: '#3b82f6' },
-                        { label: 'Correct', value: data.correct, color: '#10b981' },
-                        { label: 'Incorrect', value: data.incorrect, color: '#ef4444' },
-                        { label: 'Unattempted', value: data.unattempted, color: '#9ca3af' }
+                        { label: 'Total Questions', value: evalData.totalQuestions, color: '#6b7280' },
+                        { label: 'Attempted', value: evalData.attempted, color: '#3b82f6' },
+                        { label: 'Correct', value: evalData.correct, color: '#10b981' },
+                        { label: 'Incorrect', value: evalData.incorrect, color: '#ef4444' },
+                        { label: 'Unattempted', value: evalData.unattempted, color: '#9ca3af' }
                     ].map(stat => (
                         <div key={stat.label} style={styles.statCard}>
                             <div style={{ ...styles.statNum, color: stat.color }}>{stat.value}</div>
@@ -252,37 +306,37 @@ export default function Scorecard() {
                             <div style={styles.summarySection}>
                                 <h3 style={styles.sectionTitle}>Score Breakdown</h3>
                                 <div style={styles.breakdownBar}>
-                                    <div style={{ ...styles.barSegment, background: '#10b981', width: `${((data.correct || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Correct" />
-                                    <div style={{ ...styles.barSegment, background: '#ef4444', width: `${((data.incorrect || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Incorrect" />
-                                    <div style={{ ...styles.barSegment, background: '#e5e7eb', width: `${((data.unattempted || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Unattempted" />
+                                    <div style={{ ...styles.barSegment, background: '#10b981', width: `${((evalData.correct || 0) / (evalData.totalQuestions || 1)) * 100}%` }} title="Correct" />
+                                    <div style={{ ...styles.barSegment, background: '#ef4444', width: `${((evalData.incorrect || 0) / (evalData.totalQuestions || 1)) * 100}%` }} title="Incorrect" />
+                                    <div style={{ ...styles.barSegment, background: '#e5e7eb', width: `${((evalData.unattempted || 0) / (evalData.totalQuestions || 1)) * 100}%` }} title="Unattempted" />
                                 </div>
                                 <div style={styles.barLegend}>
-                                    <span style={{ color: '#10b981' }}>■ Correct ({data.correct || 0})</span>
-                                    <span style={{ color: '#ef4444' }}>■ Wrong ({data.incorrect || 0})</span>
-                                    <span style={{ color: '#9ca3af' }}>■ Skipped ({data.unattempted || 0})</span>
+                                    <span style={{ color: '#10b981' }}>■ Correct ({evalData.correct || 0})</span>
+                                    <span style={{ color: '#ef4444' }}>■ Wrong ({evalData.incorrect || 0})</span>
+                                    <span style={{ color: '#9ca3af' }}>■ Skipped ({evalData.unattempted || 0})</span>
                                 </div>
                                 <div style={styles.markCalc}>
-                                    <div>Marks from Correct: <strong>+{(data.correct || 0) * marksPerQ}</strong></div>
-                                    <div>Marks deducted: <strong>−{isCET ? 0 : (data.incorrect || 0)}</strong></div>
+                                    <div>Marks from Correct: <strong>+{(evalData.correct || 0) * marksPerQ}</strong></div>
+                                    <div>Marks deducted: <strong>−{isCET ? 0 : (evalData.incorrect || 0)}</strong></div>
                                     <div style={{ color: '#64748b', fontSize: 13 }}>Unattempted: <strong>0 (No deduction)</strong></div>
                                     <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, marginTop: 8, fontWeight: 700 }}>
-                                        Net Score: <span style={{ color: grade.color }}>{data.score}</span> / {maxMarks}
+                                        Net Score: <span style={{ color: grade.color }}>{evalData.score}</span> / {maxMarks}
                                     </div>
                                 </div>
                             </div>
 
-                            {data.classStats && (
+                            {evalData.classStats && (
                                 <div style={{ marginTop: 24, padding: 18, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
                                     <h4 style={{ margin: '0 0 14px', fontSize: 15, fontWeight: 700, color: '#1e293b' }}>
                                         🏫 Class Performance & Comparative Standing
                                     </h4>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14, textAlign: 'center' }}>
                                         <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{data.classStats.classAverageScore}</div>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#4f46e5' }}>{evalData.classStats.classAverageScore}</div>
                                             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Class Average</div>
                                         </div>
                                         <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981' }}>{data.classStats.classTopScore}</div>
+                                            <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981' }}>{evalData.classStats.classTopScore}</div>
                                             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Class Highest</div>
                                         </div>
                                         <div style={{ background: '#fff', padding: '12px 8px', borderRadius: 8, border: '1px solid #e5e7eb' }}>
@@ -303,11 +357,11 @@ export default function Scorecard() {
                 {/* Weak Areas Tab */}
                 {activeTab === 'weakareas' && (
                     <div style={styles.tabContent}>
-                        {data.weakAreas?.length > 0 ? (
+                        {evalData.weakAreas?.length > 0 ? (
                             <>
                                 <p style={styles.weakNote}>These chapters had the most incorrect answers. Focus your revision here:</p>
                                 <div style={styles.weakList}>
-                                    {data.weakAreas.map((w, i) => (
+                                    {evalData.weakAreas.map((w, i) => (
                                         <div key={i} style={styles.weakCard}>
                                             <div style={styles.weakRank}>#{i + 1}</div>
                                             <div style={styles.weakInfo}>
@@ -336,7 +390,7 @@ export default function Scorecard() {
                 {/* Review Tab */}
                 {activeTab === 'review' && (
                     <div style={styles.tabContent}>
-                        {data.answerKeyHidden && (
+                        {evalData.answerKeyHidden && (
                             <div style={styles.hiddenNotice}>
                                 🔒 You are on a college lab system. Correct answers are not shown per institutional policy.
                             </div>
@@ -374,19 +428,19 @@ export default function Scorecard() {
                                         cursor: 'pointer'
                                     }}
                                 >
-                                    <option value="all">All Questions ({(data.breakdown || []).length})</option>
-                                    <option value="correct">✅ Correct ({data.correct || 0})</option>
-                                    <option value="incorrect">❌ Incorrect ({data.incorrect || 0})</option>
-                                    <option value="unattempted">⏳ Unattempted / Skipped ({data.unattempted || 0})</option>
+                                    <option value="all">All Questions ({(evalData.breakdown || []).length})</option>
+                                    <option value="correct">✅ Correct ({evalData.correct || 0})</option>
+                                    <option value="incorrect">❌ Incorrect ({evalData.incorrect || 0})</option>
+                                    <option value="unattempted">⏳ Unattempted / Skipped ({evalData.unattempted || 0})</option>
                                 </select>
                             </div>
 
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                 {[
-                                    { key: 'all', label: 'All', count: (data.breakdown || []).length, color: '#4f46e5' },
-                                    { key: 'correct', label: 'Correct', count: data.correct || 0, color: '#10b981' },
-                                    { key: 'incorrect', label: 'Incorrect', count: data.incorrect || 0, color: '#ef4444' },
-                                    { key: 'unattempted', label: 'Skipped', count: data.unattempted || 0, color: '#64748b' }
+                                    { key: 'all', label: 'All', count: (evalData.breakdown || []).length, color: '#4f46e5' },
+                                    { key: 'correct', label: 'Correct', count: evalData.correct || 0, color: '#10b981' },
+                                    { key: 'incorrect', label: 'Incorrect', count: evalData.incorrect || 0, color: '#ef4444' },
+                                    { key: 'unattempted', label: 'Skipped', count: evalData.unattempted || 0, color: '#64748b' }
                                 ].map(b => (
                                     <button
                                         key={b.key}
@@ -409,13 +463,11 @@ export default function Scorecard() {
                         </div>
 
                         {(() => {
-                            const filteredList = (data.breakdown || [])
-                                .map((q, idx) => ({ ...q, originalIdx: idx }))
+                            const filteredList = (evalData.breakdown || [])
                                 .filter(q => {
-                                    const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
                                     if (reviewFilter === 'correct') return q.isCorrect;
-                                    if (reviewFilter === 'incorrect') return attempted && !q.isCorrect;
-                                    if (reviewFilter === 'unattempted') return !attempted;
+                                    if (reviewFilter === 'incorrect') return q.isAttempted && !q.isCorrect;
+                                    if (reviewFilter === 'unattempted') return !q.isAttempted;
                                     return true;
                                 });
 
@@ -431,68 +483,22 @@ export default function Scorecard() {
                                 <div style={styles.reviewList}>
                                     {filteredList.map((q) => {
                                         const i = q.originalIdx;
-                                        const attempted = q.selectedOption !== null && q.selectedOption !== undefined && String(q.selectedOption).trim() !== '';
-                                        let isCorrect = Boolean(q.isCorrect);
-                                        let isWrong = false;
+                                        const attempted = q.isAttempted;
+                                        const isCorrect = q.isCorrect;
+                                        const isWrong = attempted && !isCorrect;
                                         const selectedStr = String(q.selectedOption ?? '').trim();
                                         const correctStr = String(q.correctAnswer ?? q.answer ?? '').trim();
 
-                                        const letters = ['A', 'B', 'C', 'D'];
-                                        const cleanCorrect = correctStr.trim();
-                                        const cleanCorrectDigits = cleanCorrect.replace(/[^\d]/g, '');
-                                        const cleanSelected = selectedStr.trim();
-                                        const cleanSelectedDigits = cleanSelected.replace(/[^\d]/g, '');
-
-                                        if (attempted && !data.answerKeyHidden) {
-                                            // 1. Numerical match with tolerance
-                                            const tolerance = q.numericalTolerance || 0;
-                                            const parsedSelected = parseFloat(selectedStr);
-                                            const parsedCorrect = parseFloat(correctStr);
-                                            if (!isNaN(parsedSelected) && !isNaN(parsedCorrect)) {
-                                                if (Math.abs(parsedSelected - parsedCorrect) <= (tolerance + 1e-9)) {
-                                                    isCorrect = true;
-                                                }
-                                            }
-
-                                            // 2. Exact match
-                                            if (!isCorrect && selectedStr.toLowerCase() === correctStr.toLowerCase()) {
-                                                isCorrect = true;
-                                            }
-
-                                            // 3. Option index / letter match fallback
-                                            if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
-                                                const selIdx = letters.indexOf(selectedStr.toUpperCase());
-                                                const corrIdx = letters.indexOf(correctStr.toUpperCase());
-                                                if (selIdx !== -1 && q.options[selIdx] !== undefined) {
-                                                    if (String(q.options[selIdx]).trim().toLowerCase() === correctStr.toLowerCase()) {
-                                                        isCorrect = true;
-                                                    }
-                                                }
-                                                if (corrIdx !== -1 && q.options[corrIdx] !== undefined) {
-                                                    if (selectedStr.toLowerCase() === String(q.options[corrIdx]).trim().toLowerCase()) {
-                                                        isCorrect = true;
-                                                    }
-                                                }
-                                                if (selIdx !== -1 && selIdx === corrIdx) {
-                                                    isCorrect = true;
-                                                }
-                                                if (cleanSelectedDigits && cleanCorrectDigits && cleanSelectedDigits === cleanCorrectDigits) {
-                                                    isCorrect = true;
-                                                }
-                                            }
-                                            isWrong = !isCorrect;
-                                        }
-
                                         return (
-                                            <div key={q._id || q.questionId || q.id || i} style={{ ...styles.reviewCard, borderLeft: `5px solid ${!attempted ? '#9ca3af' : (data.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
+                                            <div key={q._id || q.questionId || q.id || i} style={{ ...styles.reviewCard, borderLeft: `5px solid ${!attempted ? '#9ca3af' : (evalData.answerKeyHidden ? '#6b7280' : isCorrect ? '#10b981' : '#ef4444')}` }}>
                                                 <div style={styles.reviewQHeader}>
                                                     <span style={styles.reviewQNum}>Q{q.questionNumber || i + 1}</span>
                                                     <span style={styles.reviewSubject}>{q.subject} | {q.chapter}{q.concept && q.concept !== 'General' ? ` • ${q.concept}` : ''}</span>
                                                     <span style={styles.timeBadge}>⏱️ {formatSeconds(q.timeTaken || 0)}</span>
                                                     {!attempted && <span style={styles.badge('#9ca3af')}>Skipped</span>}
-                                                    {attempted && !data.answerKeyHidden && isCorrect && <span style={styles.badgeGreen}>✅ Correct</span>}
-                                                    {attempted && !data.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
-                                                    {attempted && data.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
+                                                    {attempted && !evalData.answerKeyHidden && isCorrect && <span style={styles.badgeGreen}>✅ Correct</span>}
+                                                    {attempted && !evalData.answerKeyHidden && isWrong && <span style={styles.badgeRed}>❌ Wrong</span>}
+                                                    {attempted && evalData.answerKeyHidden && <span style={styles.badgeGrey}>Attempted</span>}
                                                 </div>
                                                 <MathRenderer style={styles.reviewQText} text={q.questionText} />
                                                 
@@ -506,7 +512,7 @@ export default function Scorecard() {
                                                             <span style={styles.reviewOptLabel}>Your Answer:</span> <MathRenderer inline={true} text={attempted ? selectedStr : 'Skipped'} />
                                                             {attempted && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: isCorrect ? '#10b981' : '#ef4444' }}>{isCorrect ? '✓ Correct' : '✕ Wrong'}</span>}
                                                         </div>
-                                                        {!data.answerKeyHidden && (
+                                                        {!evalData.answerKeyHidden && (
                                                             <div style={{
                                                                 ...styles.reviewOption,
                                                                 background: '#dcfce7',
@@ -522,27 +528,20 @@ export default function Scorecard() {
                                                         {q.options?.map((opt, oi) => {
                                                             const label = (oi + 1).toString();
                                                             const optStr = typeof opt === 'object' && opt !== null ? (opt.text || JSON.stringify(opt)) : String(opt);
+                                                            const displayOptText = stripLeadingLabel(optStr) || optStr;
 
                                                             // Check whether this option was selected by student
                                                             const isSelected = attempted && (
-                                                                cleanSelected.toLowerCase() === optStr.toLowerCase() ||
-                                                                cleanSelected.toUpperCase() === letters[oi] ||
-                                                                cleanSelected === String(oi + 1) ||
-                                                                cleanSelected === String(oi) ||
-                                                                cleanSelectedDigits === String(oi + 1) ||
-                                                                (cleanSelected.startsWith('(') && cleanSelected.replace(/[()]/g, '').trim() === String(oi + 1)) ||
-                                                                (cleanSelected.startsWith('(') && cleanSelected.replace(/[()]/g, '').trim().toUpperCase() === letters[oi])
+                                                                oi === q.userOptIdx ||
+                                                                checkAnswerCorrect(optStr, q.selectedOption, q.options) ||
+                                                                checkAnswerCorrect(String(oi + 1), q.selectedOption, q.options)
                                                             );
 
                                                             // Check whether this option is the correct answer
-                                                            const isCorrectOpt = !data.answerKeyHidden && (
-                                                                cleanCorrect.toLowerCase() === optStr.toLowerCase() ||
-                                                                cleanCorrect.toUpperCase() === letters[oi] ||
-                                                                cleanCorrect === String(oi + 1) ||
-                                                                cleanCorrect === String(oi) ||
-                                                                cleanCorrectDigits === String(oi + 1) ||
-                                                                (cleanCorrect.startsWith('(') && cleanCorrect.replace(/[()]/g, '').trim() === String(oi + 1)) ||
-                                                                (cleanCorrect.startsWith('(') && cleanCorrect.replace(/[()]/g, '').trim().toUpperCase() === letters[oi])
+                                                            const isCorrectOpt = !evalData.answerKeyHidden && (
+                                                                oi === q.correctOptIdx ||
+                                                                checkAnswerCorrect(optStr, correctStr, q.options) ||
+                                                                checkAnswerCorrect(String(oi + 1), correctStr, q.options)
                                                             );
 
                                                             return (
@@ -551,10 +550,10 @@ export default function Scorecard() {
                                                                     background: isCorrectOpt ? '#dcfce7' : isSelected && isWrong ? '#fee2e2' : '#f9fafb',
                                                                     border: isCorrectOpt ? '2px solid #10b981' : isSelected ? '2px solid #ef4444' : '1.5px solid #e5e7eb'
                                                                 }}>
-                                                                    <span style={{ ...styles.reviewOptLabel, fontWeight: isCorrectOpt || isSelected ? 800 : 600 }}>{label}.</span> <MathRenderer inline={true} text={optStr} />
+                                                                    <span style={{ ...styles.reviewOptLabel, fontWeight: isCorrectOpt || isSelected ? 800 : 600 }}>{label}.</span> <MathRenderer inline={true} text={displayOptText} />
                                                                     {isSelected && (
                                                                         <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 700, color: isCorrectOpt ? '#10b981' : '#ef4444' }}>
-                                                                            ← Your Answer
+                                                                            ← Your Answer {isCorrectOpt ? '(Correct)' : ''}
                                                                         </span>
                                                                     )}
                                                                     {isCorrectOpt && (
@@ -567,7 +566,7 @@ export default function Scorecard() {
                                                         })}
 
                                                         {/* Prominent Correct Answer Banner below options */}
-                                                        {!data.answerKeyHidden && (
+                                                        {!evalData.answerKeyHidden && (
                                                             <div style={{
                                                                 marginTop: 12,
                                                                 padding: '10px 14px',
@@ -584,17 +583,11 @@ export default function Scorecard() {
                                                                 <span>✅ Correct Answer:</span>
                                                                 <span>
                                                                     {(() => {
-                                                                        const cIdx = parseInt(cleanCorrectDigits, 10);
-                                                                        if (cIdx >= 1 && cIdx <= (q.options?.length || 0)) {
-                                                                            const optVal = q.options[cIdx - 1];
+                                                                        const cIdx = q.correctOptIdx;
+                                                                        if (cIdx >= 0 && cIdx < (q.options?.length || 0)) {
+                                                                            const optVal = q.options[cIdx];
                                                                             const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
-                                                                            return `Option ${cIdx} — ${optText}`;
-                                                                        }
-                                                                        const lIdx = letters.indexOf(cleanCorrect.toUpperCase());
-                                                                        if (lIdx !== -1 && q.options && q.options[lIdx] !== undefined) {
-                                                                            const optVal = q.options[lIdx];
-                                                                            const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
-                                                                            return `Option ${lIdx + 1} — ${optText}`;
+                                                                            return `Option ${cIdx + 1} — ${stripLeadingLabel(optText) || optText}`;
                                                                         }
                                                                         return correctStr || 'Option 1';
                                                                     })()}
@@ -620,12 +613,12 @@ export default function Scorecard() {
                         <h3 style={styles.sectionTitle}>⏱️ Time Spent Analysis</h3>
                         <div style={styles.timeSummaryRow}>
                             <div style={styles.timeSummaryCard}>
-                                <div style={styles.timeSummaryNum}>{formatSeconds(data.breakdown?.reduce((acc, q) => acc + (q.timeTaken || 0), 0) || 0)}</div>
+                                <div style={styles.timeSummaryNum}>{formatSeconds(evalData.breakdown?.reduce((acc, q) => acc + (q.timeTaken || 0), 0) || 0)}</div>
                                 <div style={styles.timeSummaryLabel}>Total Time Taken</div>
                             </div>
                             <div style={styles.timeSummaryCard}>
                                 <div style={styles.timeSummaryNum}>
-                                    {data.totalQuestions > 0 ? formatSeconds(Math.round((data.breakdown?.reduce((acc, q) => acc + (q.timeTaken || 0), 0) || 0) / data.totalQuestions)) : '0s'}
+                                    {evalData.totalQuestions > 0 ? formatSeconds(Math.round((evalData.breakdown?.reduce((acc, q) => acc + (q.timeTaken || 0), 0) || 0) / evalData.totalQuestions)) : '0s'}
                                 </div>
                                 <div style={styles.timeSummaryLabel}>Average Time Per Question</div>
                             </div>
@@ -633,7 +626,7 @@ export default function Scorecard() {
 
                         <h4 style={{ ...styles.sectionTitle, marginTop: 24 }}>Questions Taking the Most Time</h4>
                         {(() => {
-                            const sorted = data.breakdown ? [...data.breakdown]
+                            const sorted = evalData.breakdown ? [...evalData.breakdown]
                                 .map((q, idx) => ({ ...q, qNumber: idx + 1 }))
                                 .filter(q => (q.timeTaken || 0) > 0)
                                 .sort((a, b) => b.timeTaken - a.timeTaken) : [];
@@ -655,7 +648,7 @@ export default function Scorecard() {
 
                         <h4 style={{ ...styles.sectionTitle, marginTop: 28 }}>Time Grid (All Questions)</h4>
                         <div style={styles.timeGrid}>
-                            {data.breakdown?.map((q, idx) => (
+                            {evalData.breakdown?.map((q, idx) => (
                                 <div key={idx} style={styles.timeGridCell}>
                                     <div style={styles.timeGridQ}>Q{idx + 1}</div>
                                     <div style={styles.timeGridVal}>{formatSeconds(q.timeTaken || 0)}</div>

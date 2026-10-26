@@ -8,6 +8,7 @@ const { detectLabIp } = require('../middleware/labIp');
 const pool = require('../config/postgres');
 const { createNotification } = require('./notifications');
 const supabaseQuestions = require('../services/supabaseQuestions');
+const { checkAnswerCorrect, resolveOptionIndex } = require('../utils/answerEvaluation');
 
 // Helper to enforce standard exam subject compositions:
 // NEET: strictly PCB (Physics, Chemistry, Biology) - NO Mathematics
@@ -1129,21 +1130,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
 
             let isCorrect = false;
             if (isAttempted) {
-                const parsedSelected = parseFloat(selected);
-                const parsedAnswer = parseFloat(q.answer);
-                if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
-                    if (Math.abs(parsedSelected - parsedAnswer) <= 1e-9) isCorrect = true;
-                }
-                if (!isCorrect && String(selected).trim().toLowerCase() === String(q.answer).trim().toLowerCase()) {
-                    isCorrect = true;
-                }
-                if (!isCorrect) {
-                    const selIndices = parseAnswerIndicesExam(selected, q.options || []);
-                    const ansIndices = parseAnswerIndicesExam(q.answer, q.options || []);
-                    if (selIndices.length > 0 && ansIndices.length > 0 && selIndices.some(idx => ansIndices.includes(idx))) {
-                        isCorrect = true;
-                    }
-                }
+                isCorrect = checkAnswerCorrect(selected, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
 
                 if (isCorrect) {
                     score += correctMarks;
@@ -1235,10 +1222,9 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             const timeTaken = ans?.timeTaken !== undefined ? ans.timeTaken : 0;
             const selectedOption = ans?.selectedOption !== undefined ? ans.selectedOption : null;
             const isAttempted = selectedOption !== null && selectedOption !== undefined && String(selectedOption).trim() !== '';
-            let isCorrect = Boolean(ans?.isCorrect);
-            if (!ans?.isCorrect && isAttempted) {
-                isCorrect = String(selectedOption).trim().toLowerCase() === String(q.answer).trim().toLowerCase();
-            }
+            const isCorrect = isAttempted 
+                ? checkAnswerCorrect(selectedOption, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ')
+                : false;
 
             return {
                 questionId: sid,
@@ -1338,7 +1324,7 @@ router.get('/:id/analytics', [auth, checkRole(['admin'])], async (req, res) => {
                 const selected = ans?.selectedOption !== undefined ? ans.selectedOption : null;
 
                 if (selected !== null && selected !== undefined && String(selected).trim() !== '') {
-                    const isExactMatch = String(selected).trim().toLowerCase() === String(q.answer).trim().toLowerCase();
+                    const isExactMatch = checkAnswerCorrect(selected, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
                     if (isExactMatch) correct++;
                     else incorrect++;
                 } else {
@@ -1382,10 +1368,6 @@ router.post('/:id/bridge-key', [auth, checkRole(['admin'])], async (req, res) =>
         res.json({ msg: 'Bridge key generated', key: created.key, expiresAt: created.expires_at || created.expiresAt });
     } catch (err) {
         res.status(500).json({ msg: 'Server Error: ' + err.message });
-    }
-});
-    } catch (err) {
-        res.status(500).json({ msg: 'Server Error' });
     }
 });
 

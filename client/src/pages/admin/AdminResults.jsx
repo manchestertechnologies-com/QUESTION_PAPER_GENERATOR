@@ -4,6 +4,7 @@ import api from '../../api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { checkAnswerCorrect } from '../../utils/answerEvaluation';
 
 export default function AdminResults() {
     const navigate = useNavigate();
@@ -154,38 +155,7 @@ export default function AdminResults() {
                     const ans = r.answers?.find(a => String(a.questionId) === String(q._id || q.id));
                     if (ans && ans.selectedOption !== null && ans.selectedOption !== undefined && ans.selectedOption !== '') {
                         attempted.push(qNum);
-                        let isCorrect = false;
-                        const tolerance = q.numericalTolerance || 0;
-                        const selectedStr = String(ans.selectedOption ?? '').trim();
-                        const answerStr = String(q.answer ?? q.correctAnswer ?? '').trim();
-                        const parsedSelected = parseFloat(selectedStr);
-                        const parsedAnswer = parseFloat(answerStr);
-                        if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
-                            if (Math.abs(parsedSelected - parsedAnswer) <= (tolerance + 1e-9)) {
-                                isCorrect = true;
-                            }
-                        }
-                        if (!isCorrect && selectedStr.toLowerCase() === answerStr.toLowerCase()) {
-                            isCorrect = true;
-                        }
-                        if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
-                            const letters = ['A', 'B', 'C', 'D'];
-                            const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
-                            if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
-                                if (String(q.options[selectedIdx]).trim().toLowerCase() === answerStr.toLowerCase()) {
-                                    isCorrect = true;
-                                }
-                            }
-                            const correctIdx = letters.indexOf(answerStr.toUpperCase());
-                            if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
-                                if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
-                                    isCorrect = true;
-                                }
-                            }
-                            if (selectedIdx !== -1 && selectedIdx === correctIdx) {
-                                isCorrect = true;
-                            }
-                        }
+                        const isCorrect = checkAnswerCorrect(ans.selectedOption, q.answer ?? q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
                         if (isCorrect) {
                             correct.push(qNum);
                         } else {
@@ -244,38 +214,7 @@ export default function AdminResults() {
                     const ans = r.answers?.find(a => String(a.questionId) === String(q._id || q.id));
                     if (ans && ans.selectedOption !== null && ans.selectedOption !== undefined && ans.selectedOption !== '') {
                         attempted.push(qNum);
-                        let isCorrect = false;
-                        const tolerance = q.numericalTolerance || 0;
-                        const selectedStr = String(ans.selectedOption ?? '').trim();
-                        const answerStr = String(q.answer ?? q.correctAnswer ?? '').trim();
-                        const parsedSelected = parseFloat(selectedStr);
-                        const parsedAnswer = parseFloat(answerStr);
-                        if (!isNaN(parsedSelected) && !isNaN(parsedAnswer)) {
-                            if (Math.abs(parsedSelected - parsedAnswer) <= (tolerance + 1e-9)) {
-                                isCorrect = true;
-                            }
-                        }
-                        if (!isCorrect && selectedStr.toLowerCase() === answerStr.toLowerCase()) {
-                            isCorrect = true;
-                        }
-                        if (!isCorrect && Array.isArray(q.options) && q.options.length > 0) {
-                            const letters = ['A', 'B', 'C', 'D'];
-                            const selectedIdx = letters.indexOf(selectedStr.toUpperCase());
-                            if (selectedIdx !== -1 && q.options[selectedIdx] !== undefined) {
-                                if (String(q.options[selectedIdx]).trim().toLowerCase() === answerStr.toLowerCase()) {
-                                    isCorrect = true;
-                                }
-                            }
-                            const correctIdx = letters.indexOf(answerStr.toUpperCase());
-                            if (correctIdx !== -1 && q.options[correctIdx] !== undefined) {
-                                if (selectedStr.toLowerCase() === String(q.options[correctIdx]).trim().toLowerCase()) {
-                                    isCorrect = true;
-                                }
-                            }
-                            if (selectedIdx !== -1 && selectedIdx === correctIdx) {
-                                isCorrect = true;
-                            }
-                        }
+                        const isCorrect = checkAnswerCorrect(ans.selectedOption, q.answer ?? q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
                         if (isCorrect) {
                             correct.push(qNum);
                         } else {
