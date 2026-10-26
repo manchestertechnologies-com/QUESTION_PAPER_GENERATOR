@@ -925,6 +925,34 @@ async function getQuestionsByIds(ids) {
 }
 
 /**
+ * Find a question across all subject databases by matching distinctive words from its questionText.
+ */
+async function findQuestionByText(qText) {
+    if (!qText || typeof qText !== 'string') return null;
+    const clean = qText.replace(/\{\{IMG::.*?\}\}/g, '').replace(/\[DIAGRAM:.*?\]/g, '');
+    const words = clean.match(/[a-zA-Z0-9]{3,}/g) || [];
+    if (words.length < 2) return null;
+
+    const pattern = `%${words.slice(0, 5).join('%')}%`;
+    const all = getAllPools();
+
+    for (const entry of all) {
+        try {
+            const res = await entry.pool.query(
+                'SELECT * FROM public.questions WHERE question ILIKE $1 LIMIT 1',
+                [pattern]
+            );
+            if (res.rows && res.rows.length > 0) {
+                return mapSupabaseToQuestion(res.rows[0]);
+            }
+        } catch (e) {
+            // continue searching other pools
+        }
+    }
+    return null;
+}
+
+/**
  * Assemble questions strictly honoring chapter quotas & difficulty distribution.
  */
 async function getQuestionsWithChapterQuotas({
@@ -1300,6 +1328,8 @@ module.exports = {
     getQuestions,
     getQuestionById,
     getQuestionsByIds,
+    findQuestionByText,
+    isUuid,
     getQuestionsWithChapterQuotas,
     getSubjectMetadata,
     getDailyQuestionStats,

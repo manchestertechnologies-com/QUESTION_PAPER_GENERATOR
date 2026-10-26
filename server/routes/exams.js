@@ -707,12 +707,50 @@ async function getExamOrPaperAsExam(id) {
     if (!id) return null;
     let exam = await storage.getExamById(id);
     if (!exam) {
-        // Fallback: Check if it's a paper in public.papers!
-        const paper = await storage.getPaperById(id);
+        // Fallback 1: Check if it's a paper in public.papers!
+        let paper = await storage.getPaperById(id);
+        
+        // Fallback 2: Search all papers by title or partial paper_id
+        if (!paper) {
+            try {
+                const allPapers = await storage.getPapers();
+                paper = (allPapers || []).find(p => 
+                    String(p.id) === String(id) ||
+                    String(p.paper_id) === String(id) ||
+                    String(p._id) === String(id) ||
+                    (p.title && String(p.title).trim().toLowerCase() === String(id).trim().toLowerCase())
+                );
+            } catch (e) {}
+        }
+
+        // Fallback 3: Search all exams by title
+        if (!paper) {
+            try {
+                const allExams = await storage.getExams();
+                const matchedExam = (allExams || []).find(e => 
+                    String(e.id) === String(id) ||
+                    String(e._id) === String(id) ||
+                    (e.title && String(e.title).trim().toLowerCase() === String(id).trim().toLowerCase())
+                );
+                if (matchedExam) return matchedExam;
+            } catch (e) {}
+        }
+
         if (paper) {
-            const qList = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
+            let qList = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
                 ? paper.questionObjects
                 : (Array.isArray(paper.questions) ? paper.questions : []);
+
+            if (qList.length === 0 && Array.isArray(paper.sections)) {
+                paper.sections.forEach(sec => {
+                    if (Array.isArray(sec.questionObjects) && sec.questionObjects.length > 0) {
+                        qList.push(...sec.questionObjects);
+                    } else if (Array.isArray(sec.questions)) {
+                        qList.push(...sec.questions);
+                    }
+                });
+            }
+
             exam = {
                 _id: String(paper._id || paper.id || paper.paper_id),
                 id: paper.id,
@@ -782,6 +820,7 @@ async function hydrateExamQuestions(exam) {
     // 3. Resolve any string IDs or question objects with missing answers/options from Supabase!
     const idsToFetch = [];
     const idToIndexMap = new Map();
+    const missingAnswerIndices = [];
 
     questions.forEach((q, idx) => {
         if (typeof q === 'string') {
@@ -795,6 +834,9 @@ async function hydrateExamQuestions(exam) {
                 idsToFetch.push(qid);
                 if (!idToIndexMap.has(qid)) idToIndexMap.set(qid, []);
                 idToIndexMap.get(qid).push(idx);
+            }
+            if (!hasAnswer) {
+                missingAnswerIndices.push(idx);
             }
         }
     });
@@ -831,6 +873,31 @@ async function hydrateExamQuestions(exam) {
             }
         } catch (fetchErr) {
             console.error('Error hydrating exam questions by id:', fetchErr.message);
+        }
+    }
+
+    // 3b. Fallback: for any questions that STILL lack answers, search by question text in Supabase!
+    for (const idx of missingAnswerIndices) {
+        const curQ = questions[idx];
+        if (typeof curQ === 'object' && curQ !== null && !(curQ.answer || curQ.correct_option || curQ.correctAnswer)) {
+            const qText = curQ.questionText || curQ.question || '';
+            if (qText) {
+                try {
+                    const matched = await supabaseQuestions.findQuestionByText(qText);
+                    if (matched) {
+                        questions[idx] = {
+                            ...matched,
+                            ...curQ,
+                            answer: curQ.answer || matched.answer || matched.correct_option,
+                            correct_option: curQ.correct_option || matched.correct_option,
+                            correctAnswer: curQ.correctAnswer || curQ.answer || matched.answer || matched.correct_option,
+                            options: (Array.isArray(curQ.options) && curQ.options.length > 0) ? curQ.options : matched.options,
+                            solutionText: curQ.solutionText || matched.solutionText || matched.solution || '',
+                            solution: curQ.solution || matched.solution || matched.solutionText || ''
+                        };
+                    }
+                } catch (textErr) {}
+            }
         }
     }
 
@@ -1420,6 +1487,65 @@ router.get('/:id/answer-key', async (req, res) => {
             answerKey
         });
     } catch (err) {
+        res.status(500).json({ msg: 'Server error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// PUBLIC / CLIENT: Resolve authentic answers & solutions for arbitrary questions
+// POST /api/exams/resolve-answers
+// ─────────────────────────────────────────────────────────────────
+router.post('/resolve-answers', async (req, res) => {
+    try {
+        const { questions } = req.body;
+        if (!Array.isArray(questions) || questions.length === 0) {
+            return res.json({ answerKey: [] });
+        }
+
+        const answerKey = await Promise.all(questions.map(async (q, idx) => {
+            const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+            let ans = q.answer || q.correct_option || q.correctAnswer || '';
+            let sol = q.solutionText || q.solution || '';
+            let opts = q.options || [];
+
+            // 1. Try by UUID if answer is missing
+            if (!ans && supabaseQuestions.isUuid(sid)) {
+                try {
+                    const fetched = await supabaseQuestions.getQuestionsByIds([sid]);
+                    if (fetched && fetched[0]) {
+                        ans = fetched[0].answer || fetched[0].correct_option || '';
+                        sol = fetched[0].solutionText || fetched[0].solution || '';
+                        if (!opts.length) opts = fetched[0].options || [];
+                    }
+                } catch (e) {}
+            }
+
+            // 2. Try by Question Text pattern if still missing
+            const qText = q.questionText || q.question || '';
+            if (!ans && qText) {
+                try {
+                    const matched = await supabaseQuestions.findQuestionByText(qText);
+                    if (matched) {
+                        ans = matched.answer || matched.correct_option || '';
+                        sol = matched.solutionText || matched.solution || '';
+                        if (!opts.length) opts = matched.options || [];
+                    }
+                } catch (e) {}
+            }
+
+            return {
+                questionId: sid,
+                questionNumber: idx + 1,
+                correctAnswer: ans,
+                correct_option: ans,
+                solutionText: sol,
+                options: opts
+            };
+        }));
+
+        res.json({ answerKey });
+    } catch (err) {
+        console.error('resolve-answers error:', err);
         res.status(500).json({ msg: 'Server error: ' + err.message });
     }
 });

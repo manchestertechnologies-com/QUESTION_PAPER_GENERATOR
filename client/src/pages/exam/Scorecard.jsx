@@ -157,6 +157,92 @@ export default function Scorecard() {
 
 
 
+    // Helper to extract question answer mapping from local paper storage if exam was adapted from a paper
+    const getLocalPaperAnswers = () => {
+        const map = new Map();
+        try {
+            const draftStr = localStorage.getItem('sapthagiri_pu_wizard_draft_v3');
+            if (draftStr) {
+                const draft = JSON.parse(draftStr);
+                const qs = draft?.selectedQuestions || [];
+                qs.forEach((q, idx) => {
+                    const ans = q.answer || q.correct_option || q.correctAnswer;
+                    if (ans) {
+                        if (q._id) map.set(String(q._id), q);
+                        if (q.id) map.set(String(q.id), q);
+                        if (q.questionText) map.set(String(q.questionText).trim().substring(0, 70), q);
+                        map.set(`idx_${idx}`, q);
+                    }
+                });
+            }
+        } catch (e) {}
+        return map;
+    };
+
+    // Universal hydration helper to resolve authentic answer keys from all available sources
+    const hydrateWithBestAvailable = async (baseScorecard) => {
+        if (!baseScorecard || !Array.isArray(baseScorecard.breakdown)) return baseScorecard;
+        const localMap = getLocalPaperAnswers();
+
+        // 1. First Pass: Apply any local paper draft matches
+        let updatedBreakdown = baseScorecard.breakdown.map((b, idx) => {
+            if (b.correctAnswer || b.answer || b.correct_option) return b;
+            const qMatch = localMap.get(String(b._id || b.questionId)) ||
+                           localMap.get(String(b.questionText || '').trim().substring(0, 70)) ||
+                           localMap.get(`idx_${idx}`);
+            if (qMatch) {
+                return {
+                    ...b,
+                    correctAnswer: qMatch.answer || qMatch.correct_option || qMatch.correctAnswer,
+                    solutionText: b.solutionText || qMatch.solutionText || qMatch.solution || ''
+                };
+            }
+            return b;
+        });
+
+        // 2. Second Pass: Fetch /api/exams/${examId}/answer-key if still missing answers
+        const stillNeeds = updatedBreakdown.some(b => !b.correctAnswer && !b.answer && !b.correct_option);
+        if (stillNeeds) {
+            try {
+                const akRes = await api.get(`/api/exams/${examId}/answer-key`);
+                const keyList = akRes.data?.answerKey || [];
+                const keyMap = new Map(keyList.map(k => [String(k.questionId), k]));
+                updatedBreakdown = updatedBreakdown.map((b, idx) => {
+                    const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
+                    return {
+                        ...b,
+                        correctAnswer: k?.correctAnswer || b.correctAnswer || b.answer || b.correct_option,
+                        solutionText: b.solutionText || k?.solutionText || ''
+                    };
+                });
+            } catch (e) {
+                // If answer-key endpoint fails, try resolving questions directly by text & ID from Supabase
+                try {
+                    const resolveRes = await api.post('/api/exams/resolve-answers', {
+                        questions: updatedBreakdown.map(b => ({
+                            _id: b._id || b.questionId,
+                            questionId: b.questionId || b._id,
+                            questionText: b.questionText,
+                            options: b.options
+                        }))
+                    });
+                    const resKeys = resolveRes.data?.answerKey || [];
+                    const resMap = new Map(resKeys.map(k => [String(k.questionId), k]));
+                    updatedBreakdown = updatedBreakdown.map((b, idx) => {
+                        const rk = resMap.get(String(b._id || b.questionId)) || resKeys[idx];
+                        return {
+                            ...b,
+                            correctAnswer: rk?.correctAnswer || b.correctAnswer,
+                            solutionText: b.solutionText || rk?.solutionText || ''
+                        };
+                    });
+                } catch (resErr) {}
+            }
+        }
+
+        return { ...baseScorecard, breakdown: updatedBreakdown };
+    };
+
     useEffect(() => {
         const cachedRaw = localStorage.getItem(`cbt_scorecard_${sessionId}`) || localStorage.getItem('cbt_scorecard_latest');
         let cached = null;
@@ -165,7 +251,7 @@ export default function Scorecard() {
         }
 
         api.get(`/api/exams/${examId}/scorecard/${sessionId}`)
-            .then(r => {
+            .then(async r => {
                 const s = r.data || {};
                 const merged = {
                     ...cached,
@@ -184,67 +270,16 @@ export default function Scorecard() {
                     breakdown: (s.breakdown && s.breakdown.length > 0) ? s.breakdown : (cached?.breakdown || [])
                 };
 
-                // Check if any breakdown item is missing its correct answer
-                const needsHydration = (merged.breakdown || []).some(b => !b.correctAnswer && !b.answer && !b.correct_option);
-                if (needsHydration) {
-                    api.get(`/api/exams/${examId}/answer-key`)
-                        .then(akRes => {
-                            const keyList = akRes.data?.answerKey || [];
-                            const keyMap = new Map(keyList.map(k => [String(k.questionId), k]));
-                            const hydratedBreakdown = (merged.breakdown || []).map((b, idx) => {
-                                const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
-                                return {
-                                    ...b,
-                                    correctAnswer: b.correctAnswer || b.answer || b.correct_option || k?.correctAnswer,
-                                    solutionText: b.solutionText || k?.solutionText || ''
-                                };
-                            });
-                            setData({ ...merged, breakdown: hydratedBreakdown });
-                        })
-                        .catch(() => setData(merged))
-                        .finally(() => setLoading(false));
-                } else {
-                    setData(merged);
-                    setLoading(false);
-                }
+                const fullyHydrated = await hydrateWithBestAvailable(merged);
+                setData(fullyHydrated);
+                setLoading(false);
             })
-            .catch(() => {
+            .catch(async () => {
                 if (cached) {
-                    api.get(`/api/exams/${examId}/answer-key`)
-                        .then(akRes => {
-                            const keyList = akRes.data?.answerKey || [];
-                            const keyMap = new Map(keyList.map(k => [String(k.questionId), k]));
-                            const hydratedBreakdown = (cached.breakdown || []).map((b, idx) => {
-                                const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
-                                return {
-                                    ...b,
-                                    correctAnswer: k?.correctAnswer || b.correctAnswer || b.answer || b.correct_option,
-                                    solutionText: k?.solutionText || b.solutionText || ''
-                                };
-                            });
-                            setData({ ...cached, breakdown: hydratedBreakdown });
-                        })
-                        .catch(() => {
-                            api.get(`/api/exams/${examId}`)
-                                .then(exRes => {
-                                    const exQuestions = exRes.data?.questions || [];
-                                    const exMap = new Map(exQuestions.map(eq => [String(eq._id || eq.id || eq.questionId), eq]));
-                                    const hydratedBreakdown = (cached.breakdown || []).map((b, idx) => {
-                                        const eq = exMap.get(String(b._id || b.questionId)) || exQuestions[idx];
-                                        return {
-                                            ...b,
-                                            correctAnswer: eq?.correctAnswer || eq?.answer || eq?.correct_option || b.correctAnswer,
-                                            solutionText: eq?.solutionText || eq?.solution || b.solutionText || ''
-                                        };
-                                    });
-                                    setData({ ...cached, breakdown: hydratedBreakdown });
-                                })
-                                .catch(() => setData(cached));
-                        })
-                        .finally(() => setLoading(false));
-                } else {
-                    setLoading(false);
+                    const fullyHydrated = await hydrateWithBestAvailable(cached);
+                    setData(fullyHydrated);
                 }
+                setLoading(false);
             });
     }, [examId, sessionId]);
 
@@ -669,6 +704,17 @@ export default function Scorecard() {
                                                                                 return `Option ${idx + 1} — ${stripLeadingLabel(optText) || optText}`;
                                                                             }
                                                                             return correctStr;
+                                                                        }
+                                                                        // Check solution text if it states the correct option
+                                                                        const sol = q.solutionText || q.solution || '';
+                                                                        const solMatch = sol.match(/option\s*\(?([1-4A-Da-d])\)?/i) || sol.match(/choice\s*\(?([1-4A-Da-d])\)?/i);
+                                                                        if (solMatch && solMatch[1]) {
+                                                                            const idx = resolveOptionIndex(solMatch[1], q.options);
+                                                                            if (idx >= 0 && idx < (q.options?.length || 0)) {
+                                                                                const optVal = q.options[idx];
+                                                                                const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
+                                                                                return `Option ${idx + 1} — ${stripLeadingLabel(optText) || optText}`;
+                                                                            }
                                                                         }
                                                                         return 'Option not specified in key';
                                                                     })()}
