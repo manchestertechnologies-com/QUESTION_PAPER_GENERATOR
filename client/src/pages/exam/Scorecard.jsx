@@ -218,13 +218,29 @@ export default function Scorecard() {
                                 const k = keyMap.get(String(b._id || b.questionId)) || keyList[idx];
                                 return {
                                     ...b,
-                                    correctAnswer: b.correctAnswer || b.answer || b.correct_option || k?.correctAnswer,
-                                    solutionText: b.solutionText || k?.solutionText || ''
+                                    correctAnswer: k?.correctAnswer || b.correctAnswer || b.answer || b.correct_option,
+                                    solutionText: k?.solutionText || b.solutionText || ''
                                 };
                             });
                             setData({ ...cached, breakdown: hydratedBreakdown });
                         })
-                        .catch(() => setData(cached))
+                        .catch(() => {
+                            api.get(`/api/exams/${examId}`)
+                                .then(exRes => {
+                                    const exQuestions = exRes.data?.questions || [];
+                                    const exMap = new Map(exQuestions.map(eq => [String(eq._id || eq.id || eq.questionId), eq]));
+                                    const hydratedBreakdown = (cached.breakdown || []).map((b, idx) => {
+                                        const eq = exMap.get(String(b._id || b.questionId)) || exQuestions[idx];
+                                        return {
+                                            ...b,
+                                            correctAnswer: eq?.correctAnswer || eq?.answer || eq?.correct_option || b.correctAnswer,
+                                            solutionText: eq?.solutionText || eq?.solution || b.solutionText || ''
+                                        };
+                                    });
+                                    setData({ ...cached, breakdown: hydratedBreakdown });
+                                })
+                                .catch(() => setData(cached));
+                        })
                         .finally(() => setLoading(false));
                 } else {
                     setLoading(false);
@@ -246,6 +262,24 @@ export default function Scorecard() {
                     isCorrect: b.isCorrect,
                     timeTaken: b.timeTaken
                 }))
+            }).then(res => {
+                if (res.data?.scorecard?.breakdown && res.data.scorecard.breakdown.length > 0) {
+                    setData(prev => {
+                        const sMap = new Map((res.data.scorecard.breakdown || []).map(sb => [String(sb.questionId), sb]));
+                        const hydratedBreakdown = (prev?.breakdown || []).map((b, idx) => {
+                            const sb = sMap.get(String(b._id || b.questionId)) || res.data.scorecard.breakdown[idx];
+                            return {
+                                ...b,
+                                correctAnswer: sb?.correctAnswer || b.correctAnswer,
+                                solutionText: sb?.solutionText || b.solutionText
+                            };
+                        });
+                        return {
+                            ...prev,
+                            breakdown: hydratedBreakdown
+                        };
+                    });
+                }
             }).catch(() => {});
         }
     }, [data, examId, sessionId]);
@@ -627,8 +661,16 @@ export default function Scorecard() {
                                                                             const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
                                                                             return `Option ${cIdx + 1} — ${stripLeadingLabel(optText) || optText}`;
                                                                         }
-                                                                        if (correctStr) return correctStr;
-                                                                        return 'Not specified';
+                                                                        if (correctStr) {
+                                                                            const idx = resolveOptionIndex(correctStr, q.options);
+                                                                            if (idx >= 0 && idx < (q.options?.length || 0)) {
+                                                                                const optVal = q.options[idx];
+                                                                                const optText = typeof optVal === 'object' && optVal !== null ? (optVal.text || JSON.stringify(optVal)) : String(optVal);
+                                                                                return `Option ${idx + 1} — ${stripLeadingLabel(optText) || optText}`;
+                                                                            }
+                                                                            return correctStr;
+                                                                        }
+                                                                        return 'Option not specified in key';
                                                                     })()}
                                                                 </span>
                                                             </div>

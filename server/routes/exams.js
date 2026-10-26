@@ -702,13 +702,57 @@ router.post('/from-paper', [auth, checkRole(['admin'])], async (req, res) => {
     }
 });
 
+// Helper to resolve an ID as an exam or fallback to paper adapted as exam
+async function getExamOrPaperAsExam(id) {
+    if (!id) return null;
+    let exam = await storage.getExamById(id);
+    if (!exam) {
+        // Fallback: Check if it's a paper in public.papers!
+        const paper = await storage.getPaperById(id);
+        if (paper) {
+            const qList = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
+                ? paper.questionObjects
+                : (Array.isArray(paper.questions) ? paper.questions : []);
+            exam = {
+                _id: String(paper._id || paper.id || paper.paper_id),
+                id: paper.id,
+                title: paper.title || `${paper.subject || 'Online'} Examination`,
+                examType: paper.examType || paper.exam_type || 'CET',
+                instructions: paper.instructions || 'Standard Computer-Based Assessment',
+                duration_minutes: Number(paper.duration_minutes) || parseInt(paper.duration, 10) || 180,
+                start_time: null,
+                end_time: null,
+                status: 'live',
+                isOnlineVisible: true,
+                questions: qList,
+                totalQuestions: qList.length,
+                isFromPaper: true
+            };
+        }
+    }
+    return exam;
+}
+
 // Helper to hydrate full questions for composite/commissioned exams or string-ID questions
 async function hydrateExamQuestions(exam) {
     if (!exam) return exam;
     const eObj = exam.toObject ? exam.toObject() : { ...exam };
     let questions = Array.isArray(eObj.questions) ? [...eObj.questions] : [];
 
-    // 1. If questions is empty, but subjectAssignments has submitted papers, merge questions from all assignments!
+    // 1. If questions is empty, check sourcePapers
+    if (questions.length === 0 && Array.isArray(eObj.sourcePapers) && eObj.sourcePapers.length > 0) {
+        for (const pid of eObj.sourcePapers) {
+            const p = await storage.getPaperById(pid);
+            if (p) {
+                const pQs = (Array.isArray(p.questionObjects) && p.questionObjects.length > 0)
+                    ? p.questionObjects
+                    : (Array.isArray(p.questions) ? p.questions : []);
+                questions.push(...pQs);
+            }
+        }
+    }
+
+    // 2. If questions is empty, but subjectAssignments has submitted papers, merge questions from all assignments!
     if (questions.length === 0 && Array.isArray(eObj.subjectAssignments) && eObj.subjectAssignments.length > 0) {
         const allPapers = await storage.getPapers();
         for (const sa of eObj.subjectAssignments) {
@@ -722,41 +766,103 @@ async function hydrateExamQuestions(exam) {
                     (p.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase())
                 );
             }
-            if (paper && Array.isArray(paper.questions) && paper.questions.length > 0) {
-                let paperQuestions = paper.questions;
-                if (typeof paperQuestions[0] === 'string') {
-                    try {
-                        paperQuestions = await supabaseQuestions.getQuestionsByIds(paperQuestions);
-                    } catch (err) {
-                        paperQuestions = paper.questionObjects || [];
-                    }
-                }
-                paperQuestions.forEach(q => {
-                    const qClone = typeof q === 'object' && q !== null ? { ...q } : { questionText: String(q) };
-                    if (!qClone.subject) qClone.subject = sa.subject;
-                    questions.push(qClone);
-                });
-            } else if (paper && Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0) {
-                paper.questionObjects.forEach(q => {
+            if (paper) {
+                const pQs = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
+                    ? paper.questionObjects
+                    : (Array.isArray(paper.questions) ? paper.questions : []);
+                pQs.forEach(q => {
                     const qClone = typeof q === 'object' && q !== null ? { ...q } : { questionText: String(q) };
                     if (!qClone.subject) qClone.subject = sa.subject;
                     questions.push(qClone);
                 });
             }
-        }
-    } else if (questions.length > 0 && typeof questions[0] === 'string') {
-        // 2. If questions contains string IDs, resolve them from Supabase!
-        try {
-            const resolved = await supabaseQuestions.getQuestionsByIds(questions);
-            if (resolved && resolved.length > 0) {
-                const map = new Map(resolved.map(q => [String(q._id || q.id), q]));
-                const ordered = questions.map(id => map.get(String(id))).filter(Boolean);
-                questions = ordered.length > 0 ? ordered : resolved;
-            }
-        } catch (err) {
-            console.error('Error hydrating exam questions by id:', err.message);
         }
     }
+
+    // 3. Resolve any string IDs or question objects with missing answers/options from Supabase!
+    const idsToFetch = [];
+    const idToIndexMap = new Map();
+
+    questions.forEach((q, idx) => {
+        if (typeof q === 'string') {
+            idsToFetch.push(q);
+            if (!idToIndexMap.has(q)) idToIndexMap.set(q, []);
+            idToIndexMap.get(q).push(idx);
+        } else if (typeof q === 'object' && q !== null) {
+            const qid = String(q._id || q.id || q.questionId || '');
+            const hasAnswer = Boolean(q.answer || q.correct_option || q.correctAnswer);
+            if (qid && (!hasAnswer || !Array.isArray(q.options) || q.options.length === 0)) {
+                idsToFetch.push(qid);
+                if (!idToIndexMap.has(qid)) idToIndexMap.set(qid, []);
+                idToIndexMap.get(qid).push(idx);
+            }
+        }
+    });
+
+    if (idsToFetch.length > 0) {
+        try {
+            const uniqueIds = Array.from(new Set(idsToFetch));
+            const fetched = await supabaseQuestions.getQuestionsByIds(uniqueIds);
+            if (fetched && fetched.length > 0) {
+                const fetchedMap = new Map(fetched.map(fq => [String(fq._id || fq.id), fq]));
+                uniqueIds.forEach(uid => {
+                    const resolvedQ = fetchedMap.get(uid);
+                    if (resolvedQ) {
+                        const indices = idToIndexMap.get(uid) || [];
+                        indices.forEach(idx => {
+                            const orig = questions[idx];
+                            if (typeof orig === 'string') {
+                                questions[idx] = resolvedQ;
+                            } else {
+                                questions[idx] = {
+                                    ...resolvedQ,
+                                    ...orig,
+                                    answer: orig.answer || resolvedQ.answer || resolvedQ.correct_option,
+                                    correct_option: orig.correct_option || resolvedQ.correct_option,
+                                    correctAnswer: orig.correctAnswer || orig.answer || resolvedQ.answer || resolvedQ.correct_option,
+                                    options: (Array.isArray(orig.options) && orig.options.length > 0) ? orig.options : resolvedQ.options,
+                                    solutionText: orig.solutionText || resolvedQ.solutionText || resolvedQ.solution || '',
+                                    solution: orig.solution || resolvedQ.solution || resolvedQ.solutionText || ''
+                                };
+                            }
+                        });
+                    }
+                });
+            }
+        } catch (fetchErr) {
+            console.error('Error hydrating exam questions by id:', fetchErr.message);
+        }
+    }
+
+    // 4. Guarantee every question has canonical fields
+    questions = questions.map((q, idx) => {
+        if (typeof q === 'string') {
+            return {
+                _id: q,
+                id: q,
+                questionId: q,
+                questionNumber: idx + 1,
+                questionText: `Question ${idx + 1}`,
+                options: [],
+                answer: '',
+                correctAnswer: ''
+            };
+        }
+        const sid = String(q._id || q.id || q.questionId || idx);
+        const correctAns = q.answer || q.correct_option || q.correctAnswer || '';
+        return {
+            ...q,
+            _id: sid,
+            id: sid,
+            questionId: sid,
+            questionNumber: idx + 1,
+            answer: correctAns,
+            correctAnswer: correctAns,
+            correct_option: q.correct_option || correctAns,
+            options: Array.isArray(q.options) ? q.options : [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean),
+            solutionText: q.solutionText || q.solution || ''
+        };
+    });
 
     // Apply subject compliance filter:
     // NEET must only contain PCB (no Mathematics)
@@ -774,7 +880,7 @@ async function hydrateExamQuestions(exam) {
 // ─────────────────────────────────────────────────────────────────
 router.get('/admin/:id', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
         res.json(exam);
@@ -844,12 +950,27 @@ const seededShuffle = (arr, seed) => {
 };
 
 // ─────────────────────────────────────────────────────────────────
+// PUBLIC/STUDENT: Get exam metadata & questions
+// GET /api/exams/:id
+// ─────────────────────────────────────────────────────────────────
+router.get('/:id', async (req, res) => {
+    try {
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
+        res.json(exam);
+    } catch (err) {
+        res.status(500).json({ msg: 'Server error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
 // STUDENT: Get exam for taking (NO answers)
 // GET /api/exams/:id/take
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/take', detectLabIp, async (req, res) => {
     try {
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
         if (!['live', 'scheduled', 'draft'].includes(exam.status)) {
@@ -915,7 +1036,7 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/start', detectLabIp, async (req, res) => {
     try {
-        const exam = await storage.getExamById(req.params.id);
+        const exam = await getExamOrPaperAsExam(req.params.id);
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
 
         let { studentName, studentEmail, rollNumber } = req.body;
@@ -1062,7 +1183,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             session = await storage.findActiveSession(req.params.id, studentEmail, rollNumber);
         }
 
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
 
@@ -1080,7 +1201,47 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             });
         }
 
-        if (session.submitted) return res.json({ msg: 'Already submitted', session, sessionId: session._id || session.id });
+        if (session.submitted) {
+            const breakdown = (exam.questions || []).map((q, idx) => {
+                const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+                const ans = (session.answers || []).find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || (session.answers || [])[idx];
+                const correctAns = q.answer || q.correct_option || q.correctAnswer;
+                return {
+                    questionId: sid,
+                    questionNumber: idx + 1,
+                    questionText: q.questionText,
+                    subject: q.subject,
+                    chapter: q.chapter,
+                    concept: q.concept || q.subConcept || 'General',
+                    options: q.options || [],
+                    selectedOption: ans?.selectedOption ?? null,
+                    correctAnswer: correctAns,
+                    isCorrect: Boolean(ans?.isCorrect),
+                    isAttempted: Boolean(ans?.isAttempted),
+                    timeTaken: ans?.timeTaken || 0,
+                    solutionText: q.solutionText || q.solution || ''
+                };
+            });
+            const scorecardData = {
+                sessionId: String(session._id || session.id),
+                examId: req.params.id,
+                examTitle: exam.title,
+                examType: exam.examType,
+                studentName: session.student_name || session.studentName,
+                studentEmail: session.student_email || session.studentEmail,
+                rollNumber: session.roll_number || session.rollNumber,
+                totalQuestions: (exam.questions || []).length,
+                attempted: session.attempted || 0,
+                correct: session.correct || 0,
+                incorrect: session.incorrect || 0,
+                unattempted: session.unattempted || 0,
+                score: session.score || 0,
+                weakAreas: session.weak_areas || session.weakAreas || [],
+                breakdown,
+                submittedAt: session.end_time || new Date().toISOString()
+            };
+            return res.json({ msg: 'Already submitted', session, sessionId: session._id || session.id, scorecard: scorecardData });
+        }
 
         const answerMap = {};
         if (answers && Array.isArray(answers)) {
@@ -1240,7 +1401,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/answer-key', async (req, res) => {
     try {
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
 
@@ -1287,7 +1448,7 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             }
         }
 
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
 
@@ -1399,7 +1560,7 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/analytics', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const rawExam = await storage.getExamById(req.params.id);
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
         const exam = await hydrateExamQuestions(rawExam);
 
@@ -1664,7 +1825,7 @@ router.get('/:id/pdf-report/:sessionId', auth, async (req, res) => {
         const session = await storage.getSessionById(req.params.sessionId);
         if (!session) return res.status(404).json({ msg: 'Session not found' });
 
-        const exam = await storage.getExamById(req.params.id);
+        const exam = await getExamOrPaperAsExam(req.params.id);
         if (!exam) return res.status(404).json({ msg: 'Exam not found' });
 
         const { generateReportPdf } = require('../services/pdfReport');
