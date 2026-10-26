@@ -681,7 +681,7 @@ async function generatePaperDoc(paper, template = null) {
     const isJEE = examTypeStr.includes('JEE');
 
     const instructionText = isJEE
-        ? "1. All questions are compulsory. Total 25 questions (100 Marks).  2. Section A contains 20 Multiple Choice Questions (+4 for correct, -1 for incorrect).  3. Section B contains 5 Numerical Value Questions (+4 for correct, 0 for unattempted). No options are provided.  4. Use of calculators or electronic devices is strictly prohibited."
+        ? "1. All questions are compulsory. Total 75 questions (300 Marks) across Physics, Chemistry, and Mathematics (25 questions each, 100 Marks per subject).  2. Section A contains 20 Multiple Choice Questions (+4 for correct, -1 for incorrect).  3. Section B contains 5 Numerical Value Questions (+4 for correct, 0 for unattempted). No options are provided.  4. Use of calculators or electronic devices is strictly prohibited."
         : "1. All questions are compulsory.  2. Each question carries marks as indicated.  3. For multiple choice questions, only one option is correct.  4. Use of calculators or electronic devices is strictly prohibited.";
 
     docChildren.push(new Paragraph({ text: '', spacing: { after: 60 } }));

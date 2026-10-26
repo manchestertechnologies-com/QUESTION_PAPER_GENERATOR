@@ -12,21 +12,57 @@ const { checkAnswerCorrect, resolveOptionIndex } = require('../utils/answerEvalu
 
 // Helper to enforce standard exam subject compositions:
 // NEET: strictly PCB (Physics, Chemistry, Biology) - NO Mathematics
-// JEE: strictly PCM (Physics, Chemistry, Mathematics) - NO Biology
+// JEE: strictly PCM (Physics, Chemistry, Mathematics) - NO Biology, strictly 75 questions total (20 Section A non-numericals + 5 Section B numericals per subject)
 // CET: PCMB (Physics, Chemistry, Mathematics, Biology)
 function filterQuestionsForExamType(questions, examType) {
     if (!Array.isArray(questions)) return [];
     const upperType = String(examType || '').trim().toUpperCase();
-    if (upperType === 'NEET') {
+    if (upperType === 'NEET' || upperType.includes('NEET')) {
         return questions.filter(q => {
             const sub = String(q.subject || q.sectionName || '').trim().toLowerCase();
             return !sub.includes('math');
         });
-    } else if (upperType === 'JEE') {
-        return questions.filter(q => {
+    } else if (upperType === 'JEE' || upperType.includes('JEE')) {
+        // 1. Strictly PCM only (Physics, Chemistry, Mathematics) - NO Biology
+        const pcmQuestions = questions.filter(q => {
             const sub = String(q.subject || q.sectionName || '').trim().toLowerCase();
             return !sub.includes('bio') && !sub.includes('botan') && !sub.includes('zool');
         });
+
+        const isNumQ = (q) => Boolean(
+            q.isNumerical ||
+            (q.type && String(q.type).toUpperCase().includes('NUMERICAL')) ||
+            (q.q_type && String(q.q_type).toUpperCase().includes('NUMERICAL')) ||
+            (q.part && String(q.part).toUpperCase().includes('SECTION B')) ||
+            ((!Array.isArray(q.options) || q.options.length === 0) && (q.num_answer !== undefined || q.answer !== undefined))
+        );
+
+        // 2. Strict 20 + 5 format per subject (Physics: 25, Chemistry: 25, Mathematics: 25) = Exactly 75
+        const subjects = ['Physics', 'Chemistry', 'Mathematics'];
+        const organized = [];
+
+        for (const sub of subjects) {
+            const subQs = pcmQuestions.filter(q => {
+                const s = String(q.subject || q.sectionName || '').trim().toLowerCase();
+                return s.includes(sub.toLowerCase());
+            });
+
+            // Section A: strictly non-numerical questions (up to 20)
+            const secA = subQs.filter(q => !isNumQ(q) && Array.isArray(q.options) && q.options.length >= 2).slice(0, 20);
+            // Section B: strictly numerical questions (up to 5)
+            const secB = subQs.filter(q => isNumQ(q)).slice(0, 5);
+
+            organized.push(...secA, ...secB);
+        }
+
+        if (organized.length > 0) {
+            return organized.slice(0, 75);
+        }
+
+        // Fallback if subjects were not partitioned by explicit names: cap at exactly 75
+        const nonNum = pcmQuestions.filter(q => !isNumQ(q));
+        const num = pcmQuestions.filter(q => isNumQ(q));
+        return [...nonNum.slice(0, 60), ...num.slice(0, 15)].slice(0, 75);
     }
     return questions;
 }

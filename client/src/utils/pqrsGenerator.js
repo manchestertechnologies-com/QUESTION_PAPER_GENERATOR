@@ -112,10 +112,20 @@ function shuffleQuestionOptions(question, randomFn) {
 function applySectionAwareTransform(baseQuestions, transformFn) {
     if (!Array.isArray(baseQuestions) || baseQuestions.length === 0) return [];
 
-    // Identify sections / subjects in order
+    // Identify sections / subjects in order.
+    // Partition by subject/section AND part (Section A non-numerical vs Section B numerical)
+    // so Section A questions (MCQs) and Section B questions (numericals) are never mixed together.
     const sectionMap = new Map();
     baseQuestions.forEach((q, idx) => {
-        const key = q.sectionName || q.subject || 'Default';
+        const isNum = Boolean(
+            q.isNumerical ||
+            (q.type && String(q.type).toUpperCase().includes('NUMERICAL')) ||
+            (q.part && String(q.part).toUpperCase().includes('SECTION B')) ||
+            (!q.options?.length && q.num_answer)
+        );
+        const sub = q.sectionName || q.subject || 'Default';
+        const partTag = isNum ? 'SECTION_B_NUMERICAL' : 'SECTION_A_NON_NUMERICAL';
+        const key = `${sub}:::${partTag}`;
         if (!sectionMap.has(key)) {
             sectionMap.set(key, []);
         }
