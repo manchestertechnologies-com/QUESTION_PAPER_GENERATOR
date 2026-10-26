@@ -47,7 +47,9 @@ async function generateReportPdf(session, exam) {
     const correctCount = session.correctAnswers || 0;
     const incorrectCount = session.wrongAnswers || 0;
     const totalQuestions = exam.questions?.length || 0;
-    const totalMarks = totalQuestions * 4;
+    const isCET = (exam.examType === 'CET' || exam.examType === 'KCET');
+    const marksPerQ = isCET ? 1 : 4;
+    const totalMarks = totalQuestions * marksPerQ;
     const score = session.score;
     const submittedAt = session.submittedAt ? new Date(session.submittedAt).toLocaleString('en-IN') : 'N/A';
     

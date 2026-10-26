@@ -559,7 +559,10 @@ export default function ExamEngine() {
             let redirectSessionId = activeSessionId;
             try {
                 const res = await api.post(`/api/exams/${examId}/submit`, {
-                    sessionId: session?._id || session?.id,
+                    sessionId: session?._id || session?.id || activeSessionId,
+                    studentName: studentInfo.studentName || session?.student_name || 'Student',
+                    studentEmail: studentInfo.studentEmail || session?.student_email || '',
+                    rollNumber: studentInfo.rollNumber || session?.roll_number || '',
                     answers: finalAnswers
                 });
                 if (res.data?.sessionId) {

@@ -1054,18 +1054,40 @@ function parseAnswerIndicesExam(rawAns, options = []) {
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/submit', detectLabIp, async (req, res) => {
     try {
-        const { sessionId, answers } = req.body;
+        let { sessionId, answers, studentName, studentEmail, rollNumber } = req.body;
 
-        const session = await storage.getSessionById(sessionId);
-        if (!session) return res.status(404).json({ msg: 'Session not found' });
-        if (session.submitted) return res.json({ msg: 'Already submitted', session, sessionId: session._id });
+        let session = await storage.getSessionById(sessionId);
+        if (!session && (rollNumber || studentEmail)) {
+            session = await storage.findActiveSession(req.params.id, studentEmail, rollNumber);
+        }
 
-        const exam = await storage.getExamById(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+        const rawExam = await storage.getExamById(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
+
+        if (!session) {
+            session = await storage.createSession({
+                examId: req.params.id,
+                studentId: rollNumber || studentEmail || 'student',
+                studentName: studentName || 'Student',
+                studentEmail: studentEmail || '',
+                rollNumber: rollNumber || '',
+                fromLabIp: req.isLabIp,
+                clientIp: req.clientIp,
+                answers: answers || [],
+                totalQuestions: (exam.questions || []).length
+            });
+        }
+
+        if (session.submitted) return res.json({ msg: 'Already submitted', session, sessionId: session._id || session.id });
 
         const answerMap = {};
         if (answers && Array.isArray(answers)) {
-            answers.forEach(a => { answerMap[String(a.questionId)] = a; });
+            answers.forEach(a => { 
+                if (a.questionId !== undefined && a.questionId !== null) {
+                    answerMap[String(a.questionId)] = a; 
+                }
+            });
         }
 
         let score = 0, correct = 0, incorrect = 0, unattempted = 0;
@@ -1073,18 +1095,18 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
         const weakMap = {};
 
         const processedAnswers = (exam.questions || []).map((q, idx) => {
-            const sid = String(q._id || q.id || q.questionId || idx);
-            const submitted = answerMap[sid];
-            let selected = submitted?.selectedOption || null;
+            const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+            const submitted = answerMap[sid] || answerMap[String(idx)] || (Array.isArray(answers) ? answers[idx] : null);
+            let selected = submitted?.selectedOption !== undefined ? submitted.selectedOption : null;
             const markedForReview = submitted?.markedForReview || false;
             const timeTaken = Math.max(0, parseFloat(submitted?.timeTaken) || 0);
             totalTimeSpent += timeTaken;
 
-            let isAttempted = selected !== null && selected !== '';
+            let isAttempted = selected !== null && selected !== undefined && String(selected).trim() !== '';
             const isKcetExam = (exam.examType === 'CET' || exam.examType === 'KCET');
             let correctMarks = isKcetExam ? 1 : 4;
             let incorrectMarks = isKcetExam ? 0 : -1;
-            let unattemptedMarks = 0;
+            let unattemptedMarks = 0; // Strictly 0 marks for unattempted questions!
 
             const chapterName = q.chapter || 'General';
             const conceptName = q.concept || q.subConcept || 'General';
@@ -1133,7 +1155,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
                     weakMap[topicKey].incorrect++;
                 }
             } else {
-                score += unattemptedMarks;
+                score += unattemptedMarks; // 0
                 unattempted++;
                 weakMap[topicKey].unattempted++;
             }
@@ -1162,7 +1184,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             }))
             .sort((a, b) => b.totalWeak - a.totalWeak);
 
-        const updatedSession = await storage.updateSession(sessionId, {
+        const updatedSession = await storage.updateSession(session.id || session._id, {
             answers: processedAnswers,
             score,
             correct,
@@ -1174,7 +1196,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             weakAreas
         });
 
-        res.json({ msg: 'Exam submitted successfully', sessionId: updatedSession._id });
+        res.json({ msg: 'Exam submitted successfully', sessionId: updatedSession?._id || session._id || session.id });
     } catch (err) {
         console.error(err.message);
         res.status(500).json({ msg: 'Server Error: ' + err.message });
@@ -1190,25 +1212,29 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
         const session = await storage.getSessionById(req.params.sessionId);
         if (!session) return res.status(404).json({ msg: 'Session not found' });
 
-        const exam = await storage.getExamById(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+        const rawExam = await storage.getExamById(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
 
         const sessions = await storage.getSessionsByExam(req.params.id);
-        const submittedSessions = (sessions || []).filter(s => s.submitted);
-        const scores = submittedSessions.map(s => Number(s.score) || 0).sort((a, b) => b - a);
+        const submittedSessions = (sessions || []).filter(s => Boolean(s.submitted));
+        const allSessions = submittedSessions.some(s => String(s.id || s._id) === String(session.id || session._id))
+            ? submittedSessions
+            : [...submittedSessions, session];
+        const scores = allSessions.map(s => Number(s.score) || 0).sort((a, b) => b - a);
         const totalCandidates = scores.length || 1;
         const classAverageScore = scores.length > 0 ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0;
         const classTopScore = scores.length > 0 ? scores[0] : Number(session.score) || 0;
         const myScore = Number(session.score) || 0;
-        const rank = (scores.findIndex(s => s <= myScore) + 1) || totalCandidates;
+        const rank = (scores.findIndex(s => s <= myScore) + 1) || 1;
         const percentile = Math.max(0, Math.round(((totalCandidates - rank) / totalCandidates) * 100));
 
         const breakdown = (exam.questions || []).map((q, idx) => {
-            const sid = String(q._id || q.id || q.questionId || idx);
-            const ans = (session.answers || []).find(a => String(a.questionId) === sid);
+            const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+            const ans = (session.answers || []).find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || (session.answers || [])[idx];
             const timeTaken = ans?.timeTaken !== undefined ? ans.timeTaken : 0;
-            const selectedOption = ans?.selectedOption || null;
-            const isAttempted = selectedOption !== null && selectedOption !== '';
+            const selectedOption = ans?.selectedOption !== undefined ? ans.selectedOption : null;
+            const isAttempted = selectedOption !== null && selectedOption !== undefined && String(selectedOption).trim() !== '';
             let isCorrect = Boolean(ans?.isCorrect);
             if (!ans?.isCorrect && isAttempted) {
                 isCorrect = String(selectedOption).trim().toLowerCase() === String(q.answer).trim().toLowerCase();
@@ -1239,7 +1265,7 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             examTitle: exam.title,
             examType: exam.examType,
             score: session.score,
-            totalQuestions: session.total_questions || session.totalQuestions,
+            totalQuestions: session.total_questions || session.totalQuestions || (exam.questions || []).length,
             attempted: session.attempted,
             correct: session.correct,
             incorrect: session.incorrect,
@@ -1458,18 +1484,31 @@ router.post('/:id/malpractice', detectLabIp, async (req, res) => {
 router.get('/:id/leaderboard', async (req, res) => {
     try {
         const sessions = await storage.getSessionsByExam(req.params.id);
-        const filtered = sessions.filter(s => s.submitted).map(s => ({
-            studentName: s.student_name || s.studentName,
-            rollNumber: s.roll_number || s.rollNumber,
-            score: s.score,
-            correct: s.correct,
-            incorrect: s.incorrect,
-            unattempted: s.unattempted,
-            weakAreas: s.weak_areas || s.weakAreas,
-            endTime: s.end_time || s.endTime
-        }));
+        const filtered = (sessions || [])
+            .filter(s => Boolean(s.submitted))
+            .map(s => {
+                const totalQ = Number(s.total_questions || s.totalQuestions) || 0;
+                const corr = Number(s.correct) || 0;
+                const incorr = Number(s.incorrect) || 0;
+                const unatt = Number(s.unattempted) || 0;
+                const sc = Number(s.score) || 0;
+                return {
+                    sessionId: String(s._id || s.id),
+                    studentName: s.student_name || s.studentName || 'Student',
+                    rollNumber: s.roll_number || s.rollNumber || '—',
+                    score: sc,
+                    correct: corr,
+                    incorrect: incorr,
+                    unattempted: unatt,
+                    totalQuestions: totalQ,
+                    weakAreas: s.weak_areas || s.weakAreas || [],
+                    endTime: s.end_time || s.endTime
+                };
+            })
+            .sort((a, b) => b.score - a.score);
         res.json(filtered);
     } catch (err) {
+        console.error('Leaderboard error:', err.message);
         res.status(500).json({ msg: 'Server Error: ' + err.message });
     }
 });

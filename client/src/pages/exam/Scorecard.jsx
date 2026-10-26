@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
@@ -17,10 +17,44 @@ export default function Scorecard() {
         if (activeTab === 'leaderboard') {
             setLoadingLeaderboard(true);
             api.get(`/api/exams/${examId}/leaderboard`)
-                .then(r => { setLeaderboard(r.data); setLoadingLeaderboard(false); })
+                .then(r => { setLeaderboard(r.data || []); setLoadingLeaderboard(false); })
                 .catch(() => setLoadingLeaderboard(false));
         }
     }, [activeTab, examId]);
+
+    const displayLeaderboard = useMemo(() => {
+        let list = Array.isArray(leaderboard) ? [...leaderboard] : [];
+        if (data && (data.score !== undefined || data.studentName)) {
+            const currentRoll = String(data.rollNumber || '').trim();
+            const currentName = String(data.studentName || '').trim();
+            const currentSessionId = String(data.sessionId || '').trim();
+
+            const exists = list.some(s => {
+                const sRoll = String(s.rollNumber || '').trim();
+                const sName = String(s.studentName || '').trim();
+                const sId = String(s.sessionId || s._id || s.id || '').trim();
+                if (currentRoll && sRoll && sRoll === currentRoll) return true;
+                if (currentSessionId && sId && sId === currentSessionId) return true;
+                if (currentName && sName && sName.toLowerCase() === currentName.toLowerCase()) return true;
+                return false;
+            });
+
+            if (!exists) {
+                list.push({
+                    sessionId: currentSessionId || 'current',
+                    studentName: data.studentName || 'You',
+                    rollNumber: data.rollNumber || '—',
+                    score: Number(data.score) || 0,
+                    correct: Number(data.correct) || 0,
+                    incorrect: Number(data.incorrect) || 0,
+                    unattempted: Number(data.unattempted) || 0,
+                    totalQuestions: Number(data.totalQuestions) || 0,
+                    isCurrentUser: true
+                });
+            }
+        }
+        return list.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+    }, [leaderboard, data]);
 
     const formatSeconds = (totalSecs) => {
         const m = Math.floor(totalSecs / 60);
@@ -76,8 +110,11 @@ export default function Scorecard() {
     if (loading) return <div style={styles.center}>Loading scorecard...</div>;
     if (!data) return <div style={styles.center}>Scorecard not found.</div>;
 
-    const percentage = data.totalQuestions > 0
-        ? Math.round((data.score / (data.totalQuestions * 4)) * 100)
+    const isCET = (data.examType === 'CET' || data.examType === 'KCET');
+    const marksPerQ = isCET ? 1 : 4;
+    const maxMarks = (data.totalQuestions || 0) * marksPerQ;
+    const percentage = maxMarks > 0
+        ? Math.max(0, Math.round(((Number(data.score) || 0) / maxMarks) * 100))
         : 0;
 
     const getGrade = (pct) => {
@@ -118,7 +155,7 @@ export default function Scorecard() {
                     <div style={styles.scoreCircleWrap}>
                         <div style={{ ...styles.scoreCircle, borderColor: grade.color }}>
                             <div style={{ ...styles.scoreNum, color: grade.color }}>{data.score}</div>
-                            <div style={styles.scoreMax}>/ {data.totalQuestions * 4}</div>
+                            <div style={styles.scoreMax}>/ {maxMarks}</div>
                         </div>
                         <div style={{ ...styles.gradeLabel, color: grade.color }}>{grade.grade} — {grade.label}</div>
                         <div style={styles.percentage}>{percentage}%</div>
@@ -158,20 +195,21 @@ export default function Scorecard() {
                             <div style={styles.summarySection}>
                                 <h3 style={styles.sectionTitle}>Score Breakdown</h3>
                                 <div style={styles.breakdownBar}>
-                                    <div style={{ ...styles.barSegment, background: '#10b981', width: `${(data.correct / data.totalQuestions) * 100}%` }} title="Correct" />
-                                    <div style={{ ...styles.barSegment, background: '#ef4444', width: `${(data.incorrect / data.totalQuestions) * 100}%` }} title="Incorrect" />
-                                    <div style={{ ...styles.barSegment, background: '#e5e7eb', width: `${(data.unattempted / data.totalQuestions) * 100}%` }} title="Unattempted" />
+                                    <div style={{ ...styles.barSegment, background: '#10b981', width: `${((data.correct || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Correct" />
+                                    <div style={{ ...styles.barSegment, background: '#ef4444', width: `${((data.incorrect || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Incorrect" />
+                                    <div style={{ ...styles.barSegment, background: '#e5e7eb', width: `${((data.unattempted || 0) / (data.totalQuestions || 1)) * 100}%` }} title="Unattempted" />
                                 </div>
                                 <div style={styles.barLegend}>
-                                    <span style={{ color: '#10b981' }}>■ Correct ({data.correct})</span>
-                                    <span style={{ color: '#ef4444' }}>■ Wrong ({data.incorrect})</span>
-                                    <span style={{ color: '#9ca3af' }}>■ Skipped ({data.unattempted})</span>
+                                    <span style={{ color: '#10b981' }}>■ Correct ({data.correct || 0})</span>
+                                    <span style={{ color: '#ef4444' }}>■ Wrong ({data.incorrect || 0})</span>
+                                    <span style={{ color: '#9ca3af' }}>■ Skipped ({data.unattempted || 0})</span>
                                 </div>
                                 <div style={styles.markCalc}>
-                                    <div>Marks from Correct: <strong>+{data.correct * 4}</strong></div>
-                                    <div>Marks deducted: <strong>−{data.incorrect}</strong></div>
+                                    <div>Marks from Correct: <strong>+{(data.correct || 0) * marksPerQ}</strong></div>
+                                    <div>Marks deducted: <strong>−{isCET ? 0 : (data.incorrect || 0)}</strong></div>
+                                    <div style={{ color: '#64748b', fontSize: 13 }}>Unattempted: <strong>0 (No deduction)</strong></div>
                                     <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, marginTop: 8, fontWeight: 700 }}>
-                                        Net Score: <span style={{ color: grade.color }}>{data.score}</span>
+                                        Net Score: <span style={{ color: grade.color }}>{data.score}</span> / {maxMarks}
                                     </div>
                                 </div>
                             </div>
@@ -408,9 +446,9 @@ export default function Scorecard() {
                 {activeTab === 'leaderboard' && (
                     <div style={styles.tabContent}>
                         <h3 style={styles.sectionTitle}>🏆 Leaderboard / Results Sheet</h3>
-                        {loadingLeaderboard ? (
+                        {loadingLeaderboard && displayLeaderboard.length === 0 ? (
                             <div style={{ textAlign: 'center', padding: 20 }}>Loading results...</div>
-                        ) : leaderboard.length > 0 ? (
+                        ) : displayLeaderboard.length > 0 ? (
                             <div style={styles.leaderboardWrap}>
                                 <table style={styles.leaderboardTable}>
                                     <thead>
@@ -424,11 +462,13 @@ export default function Scorecard() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {leaderboard.map((student, rankIdx) => {
-                                            const isCurrentUser = student.rollNumber === data.rollNumber;
-                                            const totalAttempted = student.correct + student.incorrect;
+                                        {displayLeaderboard.map((student, rankIdx) => {
+                                            const isCurrentUser = Boolean(student.isCurrentUser) || 
+                                                (student.rollNumber && data.rollNumber && String(student.rollNumber).trim() === String(data.rollNumber).trim()) ||
+                                                (student.studentName && data.studentName && student.studentName === data.studentName);
+                                            const totalAttempted = (Number(student.correct) || 0) + (Number(student.incorrect) || 0);
                                             const accuracy = totalAttempted > 0 
-                                                ? Math.round((student.correct / totalAttempted) * 100)
+                                                ? Math.round(((Number(student.correct) || 0) / totalAttempted) * 100)
                                                 : 0;
 
                                             return (
@@ -446,7 +486,7 @@ export default function Scorecard() {
                                                     <td style={{ ...styles.leaderboardTd, color: '#4f46e5', fontWeight: 'bold' }}>{student.score}</td>
                                                     <td style={styles.leaderboardTd}>{accuracy}% accuracy</td>
                                                     <td style={{ ...styles.leaderboardTd, fontSize: 12, color: '#6b7280' }}>
-                                                        ✅ {student.correct} | ❌ {student.incorrect} | ⏳ {student.unattempted} skipped
+                                                        ✅ {student.correct || 0} | ❌ {student.incorrect || 0} | ⏳ {student.unattempted || 0} skipped
                                                     </td>
                                                 </tr>
                                             );

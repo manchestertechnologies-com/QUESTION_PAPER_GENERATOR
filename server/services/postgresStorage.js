@@ -854,9 +854,15 @@ async function getSessionById(id) {
     if (isNum) {
         res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [parseInt(cleanId, 10)]);
     } else {
-        res = await pool.query('SELECT * FROM public.exam_sessions WHERE id::text = $1', [cleanId]);
+        const matchDigits = cleanId.match(/(\d+)$/);
+        if (matchDigits) {
+            res = await pool.query('SELECT * FROM public.exam_sessions WHERE id = $1', [parseInt(matchDigits[1], 10)]);
+        }
+        if (!res || res.rows.length === 0) {
+            res = await pool.query('SELECT * FROM public.exam_sessions WHERE id::text = $1 OR student_id = $1 OR roll_number = $1', [cleanId]);
+        }
     }
-    if (res.rows[0]) {
+    if (res && res.rows[0]) {
         const r = res.rows[0];
         return { ...r, _id: String(r.id), answers: r.answers || [] };
     }
@@ -903,7 +909,9 @@ async function updateSession(id, updateData) {
 
 async function getSessionsByExam(examId) {
     const res = await pool.query(
-        'SELECT * FROM public.exam_sessions WHERE exam_id = $1 ORDER BY score DESC, created_at ASC',
+        `SELECT * FROM public.exam_sessions 
+         WHERE exam_id::text = $1::text 
+         ORDER BY CAST(COALESCE(NULLIF(score::text, ''), '0') AS NUMERIC) DESC, created_at ASC`,
         [String(examId)]
     );
     return res.rows.map(r => ({ ...r, _id: String(r.id), answers: r.answers || [] }));
