@@ -20,13 +20,13 @@ router.get('/student/:rollNumber', async (req, res) => {
         if (num >= 1000 && num <= 1010 && String(num) === roll) {
             const isClass12 = num <= 1005;
             return res.json({
-                name: Student ,
+                name: `Student ${roll}`,
                 rollNumber: roll,
                 enrollmentNo: roll,
                 satsNo: roll,
                 section: isClass12 ? 'Batch A' : 'Batch B',
                 classLevel: isClass12 ? 'II-PUC' : 'I-PUC',
-                email: ${roll}@student.manchester.edu
+                email: `${roll}@student.manchester.edu`
             });
         }
 

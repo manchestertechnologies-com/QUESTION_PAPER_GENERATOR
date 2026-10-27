@@ -72,7 +72,9 @@ export default function ExamEngine() {
     const navigate = useNavigate();
     const studentInfo = useMemo(() => {
         try {
-            return JSON.parse(localStorage.getItem('student_info') || '{}');
+            const raw = localStorage.getItem('student_info');
+            const parsed = raw ? JSON.parse(raw) : null;
+            return (parsed && typeof parsed === 'object') ? parsed : {};
         } catch (e) {
             return {};
         }
@@ -411,7 +413,12 @@ export default function ExamEngine() {
         if (submitting) return;
         isSubmittingOrFinished.current = true;
         setSubmitting(true);
+        setShowSubmitConfirm(false);
         clearInterval(timerRef.current);
+
+        const activeSessionId = session?._id || session?.id || `sess_cbt_${Date.now()}`;
+        let redirectSessionId = activeSessionId;
+
         try {
             const finalAnswers = answers.map((a, i) => ({
                 ...a,
@@ -514,15 +521,18 @@ export default function ExamEngine() {
                 .filter(w => w.totalWeak > 0)
                 .sort((a, b) => b.totalWeak - a.totalWeak);
 
-            const activeSessionId = session?._id || session?.id || `sess_cbt_${Date.now()}`;
+            const sName = studentInfo?.studentName || session?.student_name || 'Student';
+            const sRoll = studentInfo?.rollNumber || session?.roll_number || '';
+            const sEmail = studentInfo?.studentEmail || session?.student_email || '';
+
             const localScorecard = {
                 sessionId: String(activeSessionId),
                 examId: examId,
                 examTitle: exam?.title || 'Online Examination',
                 examType: exam?.examType || 'CET',
-                studentName: studentInfo.studentName || 'Student',
-                rollNumber: studentInfo.rollNumber || '',
-                studentEmail: studentInfo.studentEmail || '',
+                studentName: sName,
+                rollNumber: sRoll,
+                studentEmail: sEmail,
                 totalQuestions: (exam?.questions || []).length,
                 attempted: correct + incorrect,
                 correct: correct,
@@ -535,17 +545,20 @@ export default function ExamEngine() {
                 submittedAt: new Date().toISOString()
             };
 
-            // Store full calculated metrics into persistent local storage
-            localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(localScorecard));
-            localStorage.setItem('cbt_scorecard_latest', JSON.stringify(localScorecard));
+            // Store full calculated metrics into persistent local storage safely
+            try {
+                localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(localScorecard));
+                localStorage.setItem('cbt_scorecard_latest', JSON.stringify(localScorecard));
+            } catch (storageErr) {
+                console.warn('LocalStorage error storing scorecard:', storageErr);
+            }
 
-            let redirectSessionId = activeSessionId;
             try {
                 const res = await api.post(`/api/exams/${examId}/submit`, {
                     sessionId: session?._id || session?.id || activeSessionId,
-                    studentName: studentInfo.studentName || session?.student_name || 'Student',
-                    studentEmail: studentInfo.studentEmail || session?.student_email || '',
-                    rollNumber: studentInfo.rollNumber || session?.roll_number || '',
+                    studentName: sName,
+                    studentEmail: sEmail,
+                    rollNumber: sRoll,
                     answers: finalAnswers
                 });
                 if (res.data?.sessionId) {
@@ -553,9 +566,11 @@ export default function ExamEngine() {
                 }
                 const serverScorecard = res.data?.scorecard;
                 const finalCard = serverScorecard ? { ...localScorecard, ...serverScorecard } : localScorecard;
-                localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
-                localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
-                localStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
+                try {
+                    localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
+                    localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
+                    localStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
+                } catch (e) {}
             } catch (submitErr) {
                 console.warn('Backend submit notice:', submitErr.message);
             }
@@ -571,8 +586,10 @@ export default function ExamEngine() {
             navigate(`/exam/${examId}/scorecard/${redirectSessionId}`);
         } catch (err) {
             console.error('Submit failed', err);
-            isSubmittingOrFinished.current = false;
-            setSubmitting(false);
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+            navigate(`/exam/${examId}/scorecard/${redirectSessionId}`);
         }
     }, [submitting, session, answers, exam, examId, studentInfo, navigate]);
 
@@ -1067,6 +1084,16 @@ export default function ExamEngine() {
                     </div>
                 </div>
             )}
+            {/* Submitting Overlay */}
+            {submitting && (
+                <div style={styles.submittingOverlay}>
+                    <div style={styles.submittingCard}>
+                        <div style={styles.submittingSpinner} />
+                        <h3 style={{ margin: '16px 0 8px 0', fontSize: '20px', fontWeight: 800, color: '#1e3a8a' }}>Submitting Examination...</h3>
+                        <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Please wait while your answers are being evaluated and recorded.</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -1262,5 +1289,36 @@ const styles = {
         alignItems: 'center',
         justifyContent: 'center',
         boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+    },
+    submittingOverlay: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(4px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 99999
+    },
+    submittingCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 16,
+        padding: '36px 40px',
+        maxWidth: 420,
+        width: '90%',
+        textAlign: 'center',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1)'
+    },
+    submittingSpinner: {
+        width: 44,
+        height: 44,
+        margin: '0 auto',
+        border: '4px solid #e2e8f0',
+        borderTop: '4px solid #2563eb',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite'
     }
 };
