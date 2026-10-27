@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
@@ -15,6 +15,7 @@ export default function Scorecard() {
     const [reviewFilter, setReviewFilter] = useState('all'); // 'all', 'correct', 'incorrect', 'unattempted'
     const [leaderboard, setLeaderboard] = useState([]);
     const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+    const hasSyncedRef = useRef(false);
 
     useEffect(() => {
         if (activeTab === 'leaderboard') {
@@ -254,21 +255,41 @@ export default function Scorecard() {
         api.get(`/api/exams/${examId}/scorecard/${sessionId}`)
             .then(async r => {
                 const s = r.data || {};
+
+                // Merge breakdown: ALWAYS preserve the student's selected options from cached answers!
+                const baseBreakdown = (cached?.breakdown && cached.breakdown.length > 0)
+                    ? cached.breakdown
+                    : (s.breakdown || []);
+
+                const mergedBreakdown = baseBreakdown.map((cb, idx) => {
+                    const sb = (s.breakdown || []).find(b => String(b.questionId || b._id) === String(cb.questionId || cb._id)) || (s.breakdown || [])[idx] || {};
+                    const selected = cb.selectedOption || sb.selectedOption || null;
+                    const isAttempted = Boolean(selected !== null && selected !== undefined && String(selected).trim() !== '');
+                    return {
+                        ...sb,
+                        ...cb,
+                        selectedOption: selected,
+                        isAttempted: isAttempted,
+                        correctAnswer: cb.correctAnswer || cb.answer || sb.correctAnswer || sb.answer || sb.correct_option,
+                        solutionText: cb.solutionText || sb.solutionText || sb.solution || ''
+                    };
+                });
+
+                const studentAttempted = mergedBreakdown.filter(b => b.isAttempted).length;
+
                 const merged = {
-                    ...cached,
                     ...s,
-                    studentName: s.studentName || cached?.studentName || 'Student',
-                    rollNumber: s.rollNumber || cached?.rollNumber || '',
-                    examTitle: s.examTitle || cached?.examTitle || 'Online Examination',
-                    examType: s.examType || cached?.examType || 'CET',
-                    totalQuestions: s.totalQuestions || cached?.totalQuestions || (s.breakdown?.length || 0),
-                    attempted: s.attempted !== undefined ? s.attempted : (cached?.attempted || 0),
-                    correct: s.correct !== undefined ? s.correct : (cached?.correct || 0),
-                    incorrect: s.incorrect !== undefined ? s.incorrect : (cached?.incorrect || 0),
-                    unattempted: s.unattempted !== undefined ? s.unattempted : (cached?.unattempted || 0),
-                    score: s.score !== undefined ? s.score : (cached?.score || 0),
-                    weakAreas: (s.weakAreas && s.weakAreas.length > 0) ? s.weakAreas : (cached?.weakAreas || []),
-                    breakdown: (s.breakdown && s.breakdown.length > 0) ? s.breakdown : (cached?.breakdown || [])
+                    ...cached,
+                    studentName: cached?.studentName || s.studentName || 'Student',
+                    rollNumber: cached?.rollNumber || s.rollNumber || '',
+                    examTitle: cached?.examTitle || s.examTitle || 'Online Examination',
+                    examType: cached?.examType || s.examType || 'CET',
+                    totalQuestions: cached?.totalQuestions || s.totalQuestions || mergedBreakdown.length,
+                    attempted: Math.max(cached?.attempted || 0, s.attempted || 0, studentAttempted),
+                    correct: Math.max(cached?.correct || 0, s.correct || 0),
+                    score: (cached?.score !== undefined && cached.score !== null) ? cached.score : (s.score || 0),
+                    weakAreas: (cached?.weakAreas && cached.weakAreas.length > 0) ? cached.weakAreas : (s.weakAreas || []),
+                    breakdown: mergedBreakdown
                 };
 
                 const fullyHydrated = await hydrateWithBestAvailable(merged);
@@ -284,39 +305,25 @@ export default function Scorecard() {
             });
     }, [examId, sessionId]);
 
-    // Auto-sync scorecard to database if not yet registered in backend
+    // Auto-sync scorecard to database once if answers are present and not registered
     useEffect(() => {
-        if (data && examId && sessionId && data.score !== undefined) {
-            api.post(`/api/exams/${examId}/submit`, {
-                sessionId: sessionId,
-                studentName: data.studentName,
-                studentEmail: data.studentEmail,
-                rollNumber: data.rollNumber,
-                answers: (data.breakdown || []).map(b => ({
-                    questionId: b._id || b.questionId,
-                    selectedOption: b.selectedOption,
-                    isCorrect: b.isCorrect,
-                    timeTaken: b.timeTaken
-                }))
-            }).then(res => {
-                if (res.data?.scorecard?.breakdown && res.data.scorecard.breakdown.length > 0) {
-                    setData(prev => {
-                        const sMap = new Map((res.data.scorecard.breakdown || []).map(sb => [String(sb.questionId), sb]));
-                        const hydratedBreakdown = (prev?.breakdown || []).map((b, idx) => {
-                            const sb = sMap.get(String(b._id || b.questionId)) || res.data.scorecard.breakdown[idx];
-                            return {
-                                ...b,
-                                correctAnswer: sb?.correctAnswer || b.correctAnswer,
-                                solutionText: sb?.solutionText || b.solutionText
-                            };
-                        });
-                        return {
-                            ...prev,
-                            breakdown: hydratedBreakdown
-                        };
-                    });
-                }
-            }).catch(() => {});
+        if (!hasSyncedRef.current && data && examId && sessionId && data.score !== undefined) {
+            const hasActualAnswers = (data.breakdown || []).some(b => b.selectedOption);
+            if (hasActualAnswers) {
+                hasSyncedRef.current = true;
+                api.post(`/api/exams/${examId}/submit`, {
+                    sessionId: sessionId,
+                    studentName: data.studentName,
+                    studentEmail: data.studentEmail,
+                    rollNumber: data.rollNumber,
+                    answers: (data.breakdown || []).map(b => ({
+                        questionId: b._id || b.questionId,
+                        selectedOption: b.selectedOption,
+                        isCorrect: b.isCorrect,
+                        timeTaken: b.timeTaken
+                    }))
+                }).catch(() => {});
+            }
         }
     }, [data, examId, sessionId]);
 

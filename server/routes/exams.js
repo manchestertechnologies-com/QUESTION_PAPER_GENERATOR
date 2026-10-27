@@ -1304,7 +1304,8 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             });
         }
 
-        if (session.submitted) {
+        const hasIncomingAnswers = Array.isArray(answers) && answers.some(a => a.selectedOption);
+        if (session.submitted && (!hasIncomingAnswers || (session.attempted || 0) > 0)) {
             const breakdown = (exam.questions || []).map((q, idx) => {
                 const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
                 const ans = (session.answers || []).find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || (session.answers || [])[idx];
@@ -1605,9 +1606,13 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
                     );
                 }
                 if (!session) {
-                    session = sessions.find(s => String(s.id || s._id) === String(req.params.sessionId)) || sessions[0];
+                    session = sessions.find(s => String(s.id || s._id) === String(req.params.sessionId));
                 }
             }
+        }
+
+        if (!session) {
+            return res.status(404).json({ msg: 'Scorecard session not found' });
         }
 
         const rawExam = await getExamOrPaperAsExam(req.params.id);

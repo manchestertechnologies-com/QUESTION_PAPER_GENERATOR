@@ -561,7 +561,14 @@ export default function ExamEngine() {
                     redirectSessionId = res.data.sessionId;
                 }
                 const serverScorecard = res.data?.scorecard;
-                const finalCard = serverScorecard ? { ...localScorecard, ...serverScorecard } : localScorecard;
+                // Merge safely: ensure student's local answers are never wiped by a blank server response!
+                let finalCard = localScorecard;
+                if (serverScorecard) {
+                    const serverHasMoreAnswers = (serverScorecard.attempted || 0) >= (localScorecard.attempted || 0);
+                    finalCard = serverHasMoreAnswers 
+                        ? { ...localScorecard, ...serverScorecard } 
+                        : { ...serverScorecard, ...localScorecard, attempted: localScorecard.attempted, breakdown: localScorecard.breakdown };
+                }
                 safeStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
                 safeStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
                 safeStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
