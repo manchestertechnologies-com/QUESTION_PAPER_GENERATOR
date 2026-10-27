@@ -5,6 +5,7 @@ import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import ResizableDiagram from '../../components/ResizableDiagram';
 import { checkAnswerCorrect } from '../../utils/answerEvaluation';
+import safeStorage from '../../utils/safeStorage';
 
 function extractDiagramFromText(rawText, existingImageUrl) {
     if (!rawText) return { cleanText: '', diagramUrl: existingImageUrl || null };
@@ -72,7 +73,7 @@ export default function ExamEngine() {
     const navigate = useNavigate();
     const studentInfo = useMemo(() => {
         try {
-            const raw = localStorage.getItem('student_info');
+            const raw = safeStorage.getItem('student_info');
             const parsed = raw ? JSON.parse(raw) : null;
             return (parsed && typeof parsed === 'object') ? parsed : {};
         } catch (e) {
@@ -111,7 +112,7 @@ export default function ExamEngine() {
             document.exitFullscreen().catch(() => {});
         }
 
-        localStorage.removeItem('active_exam_session_id');
+        safeStorage.removeItem('active_exam_session_id');
         navigate(`/exam/disqualified?reason=${encodeURIComponent(reason)}`);
     }, [session, examId, navigate]);
 
@@ -201,7 +202,8 @@ export default function ExamEngine() {
 
                 // Initialize local answers state (restore saved state if session resumed)
                 const storageKey = `exam_answers_${examId}_${sessionData._id || sessionData.id}`;
-                const cachedAnswersStr = localStorage.getItem(storageKey);
+                safeStorage.clearOldExamCaches(storageKey);
+                const cachedAnswersStr = safeStorage.getItem(storageKey);
                 let cachedAnswers = null;
                 if (cachedAnswersStr) {
                     try { cachedAnswers = JSON.parse(cachedAnswersStr); } catch(e) {}
@@ -333,9 +335,9 @@ export default function ExamEngine() {
         const sid = session?._id || session?.id;
         if (!sid || answers.length === 0) return;
         
-        // 1. Sync immediately to localStorage
+        // 1. Sync immediately to storage safely
         const storageKey = `exam_answers_${examId}_${sid}`;
-        localStorage.setItem(storageKey, JSON.stringify(answers));
+        safeStorage.setItem(storageKey, JSON.stringify(answers));
 
         // 2. Debounced sync to database
         const timer = setTimeout(async () => {
@@ -367,13 +369,11 @@ export default function ExamEngine() {
         questionDwellTimeRef.current[idx] = 0;
         setAnswers(prev => {
             const updated = prev.map((a, i) => i === idx ? { ...a, ...patch, timeTaken: (a.timeTaken || 0) + dwell } : a);
-            try {
-                const sid = session?._id || session?.id;
-                if (sid) {
-                    const storageKey = `exam_answers_${examId}_${sid}`;
-                    localStorage.setItem(storageKey, JSON.stringify(updated));
-                }
-            } catch (e) {}
+            const sid = session?._id || session?.id;
+            if (sid) {
+                const storageKey = `exam_answers_${examId}_${sid}`;
+                safeStorage.setItem(storageKey, JSON.stringify(updated));
+            }
             return updated;
         });
     };
@@ -545,13 +545,9 @@ export default function ExamEngine() {
                 submittedAt: new Date().toISOString()
             };
 
-            // Store full calculated metrics into persistent local storage safely
-            try {
-                localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(localScorecard));
-                localStorage.setItem('cbt_scorecard_latest', JSON.stringify(localScorecard));
-            } catch (storageErr) {
-                console.warn('LocalStorage error storing scorecard:', storageErr);
-            }
+            // Store full calculated metrics into persistent storage safely
+            safeStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(localScorecard));
+            safeStorage.setItem('cbt_scorecard_latest', JSON.stringify(localScorecard));
 
             try {
                 const res = await api.post(`/api/exams/${examId}/submit`, {
@@ -566,19 +562,14 @@ export default function ExamEngine() {
                 }
                 const serverScorecard = res.data?.scorecard;
                 const finalCard = serverScorecard ? { ...localScorecard, ...serverScorecard } : localScorecard;
-                try {
-                    localStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
-                    localStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
-                    localStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
-                } catch (e) {}
+                safeStorage.setItem(`cbt_scorecard_${redirectSessionId}`, JSON.stringify(finalCard));
+                safeStorage.setItem(`cbt_scorecard_${activeSessionId}`, JSON.stringify(finalCard));
+                safeStorage.setItem('cbt_scorecard_latest', JSON.stringify(finalCard));
             } catch (submitErr) {
                 console.warn('Backend submit notice:', submitErr.message);
             }
 
-            try {
-                const storageKey = `exam_answers_${examId}_${activeSessionId}`;
-                localStorage.removeItem(storageKey);
-            } catch (e) {}
+            safeStorage.removeItem(`exam_answers_${examId}_${activeSessionId}`);
 
             if (document.fullscreenElement) {
                 document.exitFullscreen().catch(() => {});

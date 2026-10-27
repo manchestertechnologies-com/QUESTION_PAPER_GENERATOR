@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
+import safeStorage from '../../utils/safeStorage';
 
 export default function StudentLabPortal() {
     const navigate = useNavigate();
@@ -8,7 +9,7 @@ export default function StudentLabPortal() {
     // ── Student Identification State ──
     const [savedStudent, setSavedStudent] = useState(() => {
         try {
-            const data = localStorage.getItem('student_info');
+            const data = safeStorage.getItem('student_info');
             return data ? JSON.parse(data) : null;
         } catch {
             return null;
@@ -75,7 +76,7 @@ export default function StudentLabPortal() {
                 classLevel: classNum === '11' ? 'I-PUC' : 'II-PUC',
                 studentEmail: trimmedReg + "@student.manchester.edu"
             };
-            localStorage.setItem('student_info', JSON.stringify(info));
+            safeStorage.setItem('student_info', JSON.stringify(info));
             setSavedStudent(info);
             setStudentName(info.studentName);
             setStudentClass(classNum);
@@ -108,7 +109,7 @@ export default function StudentLabPortal() {
                 studentEmail: s.email || `${trimmedReg.toLowerCase()}@student.sapthagiri.edu`
             };
 
-            localStorage.setItem('student_info', JSON.stringify(info));
+            safeStorage.setItem('student_info', JSON.stringify(info));
             setSavedStudent(info);
             setStudentName(s.name);
             setStudentClass(classNum);

@@ -1,4 +1,5 @@
 import React from 'react';
+import safeStorage from '../utils/safeStorage';
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -18,6 +19,12 @@ class ErrorBoundary extends React.Component {
 
     componentDidCatch(error, errorInfo) {
         console.error('[CRITICAL ERROR CAUGHT BY BOUNDARY]', error, errorInfo);
+        // Automatically prune old cached exam sessions if quota was exceeded
+        if (error?.name === 'QuotaExceededError' || String(error?.message || '').toLowerCase().includes('quota')) {
+            try {
+                safeStorage.clearOldExamCaches();
+            } catch (_) {}
+        }
         this.setState({ errorInfo });
     }
 

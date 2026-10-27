@@ -4,6 +4,7 @@ import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import { checkAnswerCorrect, resolveOptionIndex, stripLeadingLabel, normalizeText } from '../../utils/answerEvaluation';
+import safeStorage from '../../utils/safeStorage';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -244,7 +245,7 @@ export default function Scorecard() {
     };
 
     useEffect(() => {
-        const cachedRaw = localStorage.getItem(`cbt_scorecard_${sessionId}`) || localStorage.getItem('cbt_scorecard_latest');
+        const cachedRaw = safeStorage.getItem(`cbt_scorecard_${sessionId}`) || safeStorage.getItem('cbt_scorecard_latest');
         let cached = null;
         if (cachedRaw) {
             try { cached = JSON.parse(cachedRaw); } catch (e) {}
