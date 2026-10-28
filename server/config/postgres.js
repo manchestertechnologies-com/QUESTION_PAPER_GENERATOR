@@ -15,9 +15,9 @@ if (!DATABASE_URL || DATABASE_URL.includes('vukxgqkrersxcasdklda')) {
 const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 20,
+    max: 35,
     idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
 });
 
 pool.on('error', (err) => {

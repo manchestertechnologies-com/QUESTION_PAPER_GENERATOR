@@ -1097,6 +1097,13 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
                     return res.status(403).json({ msg: 'Access Denied: Unregistered Student ID. Only officially enrolled students are permitted to take examinations.' });
                 }
             }
+
+            if (exam.allowedStudents && exam.allowedStudents.length > 0) {
+                const allowed = exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, ''));
+                if (!allowed.includes(cleanRoll)) {
+                    return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
+                }
+            }
         }
         const studentId = rollNumber || email || 'anonymous';
         let examQuestions = filterQuestionsForExamType(exam.questions || [], exam.examType);
@@ -1173,8 +1180,10 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
         }
 
         if (exam.allowedStudents && exam.allowedStudents.length > 0) {
-            if (!exam.allowedStudents.includes(rollNumber)) {
-                return res.status(403).json({ msg: 'You are not authorized to take this exam.' });
+            const cleanR = String(rollNumber || '').trim().replace(/[\s\-_]/g, '');
+            const allowed = exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, ''));
+            if (!cleanR || !allowed.includes(cleanR)) {
+                return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
             }
         }
 
@@ -1281,6 +1290,23 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
     try {
         let { sessionId, answers, studentName, studentEmail, rollNumber } = req.body;
 
+        // Auto-resolve official name from students table if rollNumber is present
+        let verifiedName = studentName;
+        if (rollNumber) {
+            const cleanRoll = String(rollNumber).trim().replace(/[\s\-_]/g, '');
+            try {
+                const sCheck = await pool.query(
+                    'SELECT name, roll_number, enrollment_no FROM public.students WHERE roll_number = $1 OR enrollment_no = $1 LIMIT 1',
+                    [cleanRoll]
+                );
+                if (sCheck.rows.length > 0 && sCheck.rows[0].name) {
+                    verifiedName = sCheck.rows[0].name;
+                }
+            } catch (sErr) {
+                console.error('Error fetching student name on submit:', sErr);
+            }
+        }
+
         let session = await storage.getSessionById(sessionId);
         if (!session && (rollNumber || studentEmail)) {
             session = await storage.findActiveSession(req.params.id, studentEmail, rollNumber);
@@ -1294,7 +1320,7 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             session = await storage.createSession({
                 examId: req.params.id,
                 studentId: rollNumber || studentEmail || 'student',
-                studentName: studentName || 'Student',
+                studentName: verifiedName || studentName || 'Student',
                 studentEmail: studentEmail || '',
                 rollNumber: rollNumber || '',
                 fromLabIp: req.isLabIp,
@@ -1302,6 +1328,8 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
                 answers: answers || [],
                 totalQuestions: (exam.questions || []).length
             });
+        } else if (verifiedName && (!session.student_name || session.student_name === 'Student')) {
+            session.student_name = verifiedName;
         }
 
         const hasIncomingAnswers = Array.isArray(answers) && answers.some(a => a.selectedOption);
@@ -1474,9 +1502,9 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
             examId: req.params.id,
             examTitle: exam.title,
             examType: exam.examType,
-            studentName: session.student_name || session.studentName,
-            studentEmail: session.student_email || session.studentEmail,
-            rollNumber: session.roll_number || session.rollNumber,
+            studentName: verifiedName || session.student_name || session.studentName || 'Student',
+            studentEmail: session.student_email || session.studentEmail || '',
+            rollNumber: rollNumber || session.roll_number || session.rollNumber || '',
             totalQuestions: (exam.questions || []).length,
             attempted: correct + incorrect,
             correct,
