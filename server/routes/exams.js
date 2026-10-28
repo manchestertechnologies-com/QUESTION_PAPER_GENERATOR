@@ -1085,7 +1085,14 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             const cleanRoll = String(rollNumber).trim().replace(/[\s\-_]/g, '');
             const testNum = parseInt(cleanRoll, 10);
             const isTestCandidate = testNum >= 1000 && testNum <= 1010 && String(testNum) === cleanRoll;
-            if (!isTestCandidate) {
+            const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
+                exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
+
+            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate) {
+                return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
+            }
+
+            if (!isExplicitlyAllowed && !isTestCandidate) {
                 const studentCheck = await pool.query(
                     `SELECT name, roll_number, enrollment_no, section, class_level 
                      FROM public.students 
@@ -1095,13 +1102,6 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
                 );
                 if (studentCheck.rows.length === 0) {
                     return res.status(403).json({ msg: 'Access Denied: Unregistered Student ID. Only officially enrolled students are permitted to take examinations.' });
-                }
-            }
-
-            if (exam.allowedStudents && exam.allowedStudents.length > 0) {
-                const allowed = exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, ''));
-                if (!allowed.includes(cleanRoll)) {
-                    return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
                 }
             }
         }
@@ -1157,33 +1157,47 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
             const cleanRoll = String(rollNumber).trim().replace(/[\s\-_]/g, '');
             const testNum = parseInt(cleanRoll, 10);
             const isTestCandidate = testNum >= 1000 && testNum <= 1010 && String(testNum) === cleanRoll;
+            const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
+                exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
+
+            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate) {
+                return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
+            }
+
             if (isTestCandidate) {
                 verifiedName = verifiedName || `Student ${cleanRoll}`;
                 verifiedSection = testNum <= 1005 ? 'Batch A' : 'Batch B';
                 if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;
             } else {
-                const studentCheck = await pool.query(
-                    `SELECT name, roll_number, enrollment_no, section, class_level, email 
-                     FROM public.students 
-                     WHERE roll_number = $1 OR enrollment_no = $1 
-                     LIMIT 1`,
-                    [cleanRoll]
-                );
-                if (studentCheck.rows.length === 0) {
-                    return res.status(403).json({ msg: 'Access Denied: Unregistered Student ID. Only officially enrolled students are permitted to take examinations.' });
+                try {
+                    const studentCheck = await pool.query(
+                        `SELECT name, roll_number, enrollment_no, section, class_level, email 
+                         FROM public.students 
+                         WHERE roll_number = $1 OR enrollment_no = $1 
+                         LIMIT 1`,
+                        [cleanRoll]
+                    );
+                    if (studentCheck.rows.length > 0) {
+                        const s = studentCheck.rows[0];
+                        verifiedName = s.name || studentName;
+                        verifiedSection = s.section || '';
+                        if (!studentEmail) studentEmail = s.email || `${s.enrollment_no || rollNumber}@student.manchester.edu`;
+                    } else if (isExplicitlyAllowed) {
+                        verifiedName = studentName || `Candidate ${cleanRoll}`;
+                        verifiedSection = 'PACE';
+                        if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;
+                    } else {
+                        return res.status(403).json({ msg: 'Access Denied: Unregistered Student ID. Only officially enrolled students are permitted to take examinations.' });
+                    }
+                } catch (dbErr) {
+                    if (isExplicitlyAllowed) {
+                        verifiedName = studentName || `Candidate ${cleanRoll}`;
+                        verifiedSection = 'PACE';
+                        if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;
+                    } else {
+                        return res.status(403).json({ msg: 'Access Denied: Unable to verify student enrollment.' });
+                    }
                 }
-                const s = studentCheck.rows[0];
-                verifiedName = s.name || studentName;
-                verifiedSection = s.section || '';
-                if (!studentEmail) studentEmail = s.email || `${s.enrollment_no || rollNumber}@student.manchester.edu`;
-            }
-        }
-
-        if (exam.allowedStudents && exam.allowedStudents.length > 0) {
-            const cleanR = String(rollNumber || '').trim().replace(/[\s\-_]/g, '');
-            const allowed = exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, ''));
-            if (!cleanR || !allowed.includes(cleanR)) {
-                return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
             }
         }
 
