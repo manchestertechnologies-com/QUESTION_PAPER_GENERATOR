@@ -838,16 +838,34 @@ async function createSession(sessionData) {
 
 async function findActiveSession(examId, studentEmail, rollNumber) {
     let res;
-    if (rollNumber) {
-        res = await pool.query(
-            'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND roll_number = $2 AND submitted = false LIMIT 1',
-            [String(examId), rollNumber]
-        );
-    } else if (studentEmail) {
-        res = await pool.query(
-            'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND student_email = $2 AND submitted = false LIMIT 1',
-            [String(examId), studentEmail]
-        );
+    try {
+        if (rollNumber) {
+            res = await pool.query(
+                'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND roll_number = $2 AND (submitted IS NULL OR submitted = false) LIMIT 1',
+                [String(examId), rollNumber]
+            );
+        } else if (studentEmail) {
+            res = await pool.query(
+                'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND student_email = $2 AND (submitted IS NULL OR submitted = false) LIMIT 1',
+                [String(examId), studentEmail]
+            );
+        }
+    } catch (err) {
+        try {
+            if (rollNumber) {
+                res = await pool.query(
+                    'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND roll_number = $2 LIMIT 1',
+                    [String(examId), rollNumber]
+                );
+            } else if (studentEmail) {
+                res = await pool.query(
+                    'SELECT * FROM public.exam_sessions WHERE exam_id = $1 AND student_email = $2 LIMIT 1',
+                    [String(examId), studentEmail]
+                );
+            }
+        } catch (e) {
+            return null;
+        }
     }
     if (res && res.rows[0]) {
         const r = res.rows[0];
