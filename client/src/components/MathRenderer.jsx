@@ -183,6 +183,29 @@ function processMathOnly(text) {
     }).join('');
 }
 
+// High-performance cache for KaTeX + DOMPurify rendered HTML
+const mathRenderCache = new Map();
+const MAX_MATH_CACHE = 6000;
+
+function getCachedMathHtml(rawText) {
+    if (!rawText) return '';
+    const cached = mathRenderCache.get(rawText);
+    if (cached !== undefined) return cached;
+
+    const html = DOMPurify.sanitize(processMathOnly(rawText), KATEX_CONFIG);
+    if (mathRenderCache.size >= MAX_MATH_CACHE) {
+        // Prune oldest 1000 entries to prevent memory growth
+        const iter = mathRenderCache.keys();
+        for (let i = 0; i < 1000; i++) {
+            const next = iter.next();
+            if (next.done) break;
+            mathRenderCache.delete(next.value);
+        }
+    }
+    mathRenderCache.set(rawText, html);
+    return html;
+}
+
 const MathRenderer = ({
     text,
     className = '',
@@ -224,14 +247,14 @@ const MathRenderer = ({
             }
             return {
                 type: 'text',
-                html: DOMPurify.sanitize(processMathOnly(part), KATEX_CONFIG),
+                html: getCachedMathHtml(part),
                 key: index,
             };
         }).filter(Boolean);
     }, [safeText, hasImages]);
 
     if (!hasImages) {
-        const renderedHtml = DOMPurify.sanitize(processMathOnly(safeText), KATEX_CONFIG);
+        const renderedHtml = getCachedMathHtml(safeText);
         return (
             <span
                 className={`math-renderer ${inline ? 'inline-math' : ''} ${className}`}

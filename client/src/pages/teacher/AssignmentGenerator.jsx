@@ -9,7 +9,7 @@
  * - Direct Save Assignment to Department Archives (MongoDB + Supabase)
  * - True A4 Print/PDF output with embedded Analysis, Answer Key, and Solutions
  */
-import React, { useState, useEffect, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
@@ -22,7 +22,7 @@ import ResizableDiagram from '../../components/ResizableDiagram';
 import { optionLabel, getResolvedAnswerLabel } from '../../utils/sanitize';
 
 // Helper component to render complete options for a question
-const QuestionOptionsDisplay = ({ options = [] }) => {
+const QuestionOptionsDisplay = React.memo(({ options = [] }) => {
     if (!options || options.length === 0) return null;
 
     return (
@@ -44,7 +44,89 @@ const QuestionOptionsDisplay = ({ options = [] }) => {
             })}
         </div>
     );
-};
+});
+
+// Memoized individual Question Card to prevent freezing when selecting questions
+const QuestionCard = React.memo(({
+    q,
+    idx,
+    isSelected,
+    swappingIndex,
+    startQNo,
+    fullQualityView,
+    onQuestionClick,
+}) => {
+    const conceptName = q.concept || q.topic;
+    const diagramImg = q.imageUrl || q.image_url;
+
+    return (
+        <div
+            onClick={() => onQuestionClick(q)}
+            className={`p-5 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
+                swappingIndex !== null
+                    ? 'border-amber-400 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 shadow-md'
+                    : isSelected
+                    ? 'border-navy bg-blue-50/40 shadow-sm ring-1 ring-navy/20'
+                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-xs'
+            }`}
+        >
+            <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => {}}
+                className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer flex-shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
+                        {q.type || 'MCQ'}
+                    </span>
+                    <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                        📖 {q.chapter || 'General'}
+                    </span>
+                    {conceptName && conceptName !== 'General' && (
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            💡 {conceptName}
+                        </span>
+                    )}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                        (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
+                        (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
+                        'bg-amber-100 text-amber-800'
+                    }`}>
+                        {q.level || 'Medium'}
+                    </span>
+                    {swappingIndex !== null && (
+                        <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-0.5 rounded animate-pulse">
+                            Click to Swap with Q#{startQNo + swappingIndex}
+                        </span>
+                    )}
+                </div>
+
+                {/* Full Question Text */}
+                <div className="text-xs font-bold text-navy leading-relaxed">
+                    <MathRenderer inline text={q.questionText || q.question} />
+                </div>
+
+                {/* Diagram */}
+                {diagramImg && (
+                    <div className="mt-2.5 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-2 shadow-xs">
+                        <ResizableDiagram
+                            src={diagramImg}
+                            alt="Diagram"
+                            maxWidth="100%"
+                        />
+                    </div>
+                )}
+
+                {/* Options when Full Quality View is enabled */}
+                {fullQualityView && q.options && q.options.length > 0 && (
+                    <QuestionOptionsDisplay options={q.options} />
+                )}
+            </div>
+        </div>
+    );
+});
 
 const AssignmentGenerator = () => {
     const { user } = useContext(AuthContext);
@@ -69,6 +151,10 @@ const AssignmentGenerator = () => {
     const [fullQualityView, setFullQualityView] = useState(true);
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [swappingIndex, setSwappingIndex] = useState(null);
+
+    // Pagination / windowing for ultra-fast rendering (prevents browser freezing)
+    const [pageSize, setPageSize] = useState(30);
+    const [pageNumber, setPageNumber] = useState(1);
 
     // Filters
     const [filterChapter, setFilterChapter] = useState('');
@@ -201,8 +287,20 @@ const AssignmentGenerator = () => {
         });
     }, [scopedPool, searchTerm, filterChapter, filterDifficulty, filterType]);
 
-    // Handle Question Click or Swap
-    const handleQuestionClick = (q) => {
+    // Reset pageNumber when filter or search changes
+    useEffect(() => {
+        setPageNumber(1);
+    }, [searchTerm, filterChapter, filterDifficulty, filterType, selectedChapters, selectedConcepts, subject]);
+
+    // Paginated subset for browser DOM rendering (prevents freezing with 1000s of questions)
+    const paginatedQuestions = useMemo(() => {
+        if (pageSize === 'All') return filteredQuestions;
+        const size = parseInt(pageSize, 10) || 30;
+        return filteredQuestions.slice(0, pageNumber * size);
+    }, [filteredQuestions, pageNumber, pageSize]);
+
+    // Handle Question Click or Swap (memoized callback)
+    const handleQuestionClick = useCallback((q) => {
         const qId = q._id || q.id;
 
         // If swapping
@@ -228,7 +326,7 @@ const AssignmentGenerator = () => {
                 return [...prev, q];
             }
         });
-    };
+    }, [swappingIndex, targetCount]);
 
     const removeQuestionByIndex = (idx) => {
         setSelectedQuestions(prev => prev.filter((_, i) => i !== idx));
@@ -572,11 +670,27 @@ const AssignmentGenerator = () => {
                                     Question Repository ({filteredQuestions.length} in Pool)
                                 </h3>
                                 <p className="text-xs text-gray-500 font-bold">
-                                    {selectedQuestions.length} of {targetCount} Questions Selected
+                                    {selectedQuestions.length} of {targetCount} Questions Selected • Showing {paginatedQuestions.length} of {filteredQuestions.length}
                                 </p>
                             </div>
 
                             <div className="flex items-center gap-3 flex-wrap">
+                                {/* Page size selector */}
+                                <select
+                                    value={pageSize}
+                                    onChange={e => {
+                                        setPageSize(e.target.value === 'All' ? 'All' : parseInt(e.target.value, 10));
+                                        setPageNumber(1);
+                                    }}
+                                    className="border border-gray-300 rounded-xl px-2.5 py-2 text-xs font-bold text-navy outline-none bg-white cursor-pointer"
+                                    title="Number of questions to display at once"
+                                >
+                                    <option value={30}>Show 30 per page</option>
+                                    <option value={60}>Show 60 per page</option>
+                                    <option value={100}>Show 100 per page</option>
+                                    <option value="All">Show All (Slow)</option>
+                                </select>
+
                                 {/* Toggle View Mode */}
                                 <button
                                     onClick={() => setFullQualityView(!fullQualityView)}
@@ -651,81 +765,47 @@ const AssignmentGenerator = () => {
                                 No questions found in this filtered pool.
                             </div>
                         ) : (
-                            <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-                                {filteredQuestions.map((q, idx) => {
-                                    const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
-                                    const conceptName = q.concept || q.topic;
-                                    const diagramImg = q.imageUrl || q.image_url;
-
-                                    return (
-                                        <div
-                                            key={q._id || idx}
-                                            onClick={() => handleQuestionClick(q)}
-                                            className={`p-5 rounded-2xl border-2 transition cursor-pointer flex items-start gap-4 ${
-                                                swappingIndex !== null
-                                                    ? 'border-amber-400 bg-amber-50/60 hover:bg-amber-100 hover:border-amber-500 shadow-md'
-                                                    : isSelected
-                                                    ? 'border-navy bg-blue-50/40 shadow-sm ring-1 ring-navy/20'
-                                                    : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-xs'
-                                            }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={isSelected}
-                                                onChange={() => {}}
-                                                className="mt-1 w-4 h-4 text-navy rounded border-gray-300 cursor-pointer flex-shrink-0"
+                            <div className="space-y-4">
+                                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+                                    {paginatedQuestions.map((q, idx) => {
+                                        const isSelected = selectedQuestions.some(sq => (sq._id || sq.id) === (q._id || q.id));
+                                        return (
+                                            <QuestionCard
+                                                key={q._id || q.id || idx}
+                                                q={q}
+                                                idx={idx}
+                                                isSelected={isSelected}
+                                                swappingIndex={swappingIndex}
+                                                startQNo={startQNo}
+                                                fullQualityView={fullQualityView}
+                                                onQuestionClick={handleQuestionClick}
                                             />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-2 flex-wrap">
-                                                    <span className="text-[10px] font-black bg-navy text-gold px-2 py-0.5 rounded">
-                                                        {q.type || 'MCQ'}
-                                                    </span>
-                                                    <span className="text-[10px] font-bold text-navy bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-                                                        📖 {q.chapter || 'General'}
-                                                    </span>
-                                                    {conceptName && conceptName !== 'General' && (
-                                                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                            💡 {conceptName}
-                                                        </span>
-                                                    )}
-                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                                                        (q.level || 'medium').toLowerCase() === 'easy' ? 'bg-emerald-100 text-emerald-800' :
-                                                        (q.level || 'medium').toLowerCase() === 'hard' ? 'bg-rose-100 text-rose-800' :
-                                                        'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {q.level || 'Medium'}
-                                                    </span>
-                                                    {swappingIndex !== null && (
-                                                        <span className="text-[10px] font-black text-amber-800 bg-amber-200 px-2 py-0.5 rounded animate-pulse">
-                                                            Click to Swap with Q#{startQNo + swappingIndex}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                        );
+                                    })}
+                                </div>
 
-                                                {/* Full Question Text */}
-                                                <div className="text-xs font-bold text-navy leading-relaxed">
-                                                    <MathRenderer inline text={q.questionText || q.question} />
-                                                </div>
-
-                                                {/* Diagram */}
-                                                {diagramImg && (
-                                                    <div className="mt-2.5 max-w-sm border border-gray-200 rounded-xl overflow-hidden bg-white p-2 shadow-xs">
-                                                        <ResizableDiagram
-                                                            src={diagramImg}
-                                                            alt="Diagram"
-                                                            maxWidth="100%"
-                                                        />
-                                                    </div>
-                                                )}
-
-                                                {/* Options when Full Quality View is enabled */}
-                                                {fullQualityView && q.options && q.options.length > 0 && (
-                                                    <QuestionOptionsDisplay options={q.options} />
-                                                )}
-                                            </div>
+                                {/* Pagination / Load More Footer */}
+                                {filteredQuestions.length > paginatedQuestions.length && (
+                                    <div className="pt-3 pb-1 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-gray-100">
+                                        <span className="text-xs font-bold text-gray-500">
+                                            Showing {paginatedQuestions.length} of {filteredQuestions.length} questions
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setPageNumber(prev => prev + 1)}
+                                                className="bg-navy text-gold hover:bg-gold hover:text-navy px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                                            >
+                                                <span>➕</span> Load More (+{pageSize})
+                                            </button>
+                                            <button
+                                                onClick={() => setPageNumber(Math.ceil(filteredQuestions.length / (parseInt(pageSize, 10) || 30)))}
+                                                className="bg-gray-100 text-navy hover:bg-gray-200 px-3.5 py-2 rounded-xl text-xs font-bold transition border border-gray-300 cursor-pointer"
+                                            >
+                                                Load All ({filteredQuestions.length})
+                                            </button>
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
