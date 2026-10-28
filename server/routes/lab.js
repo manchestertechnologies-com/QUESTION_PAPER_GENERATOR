@@ -51,6 +51,25 @@ router.get('/student/:rollNumber', async (req, res) => {
             });
         }
 
+        // Check registered PACE examination candidates
+        try {
+            const paceStudents = require('../data/pace_students.json');
+            const ps = paceStudents.find(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, '') === roll);
+            if (ps) {
+                return res.json({
+                    name: ps.name,
+                    rollNumber: ps.rollNumber,
+                    enrollmentNo: ps.rollNumber,
+                    satsNo: ps.rollNumber,
+                    section: ps.section || 'PACE',
+                    classLevel: ps.class_level || 'I-PUC',
+                    email: ps.email || `${ps.rollNumber}@student.manchester.edu`
+                });
+            }
+        } catch (e) {
+            console.error('PACE candidate lookup error:', e);
+        }
+
         return res.status(404).json({
             error: 'Not Enrolled',
             msg: `Enrollment ID "${roll}" is not recognized. Only enrolled Manchester Technologies students are authorized to access the exam portal.`

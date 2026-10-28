@@ -1206,7 +1206,15 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
                         verifiedSection = s.section || '';
                         if (!studentEmail) studentEmail = s.email || `${s.enrollment_no || rollNumber}@student.manchester.edu`;
                     } else if (isExplicitlyAllowed) {
-                        verifiedName = studentName || `Candidate ${cleanRoll}`;
+                        try {
+                            const paceList = require("../data/pace_students.json");
+                            const ps = paceList.find(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, "") === cleanRoll);
+                            if (ps) {
+                                verifiedName = ps.name;
+                                verifiedSection = ps.section || "PACE";
+                            }
+                        } catch (e) {}
+                        verifiedName = verifiedName || studentName || `Candidate ${cleanRoll}`;
                         verifiedSection = 'PACE';
                         if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;
                     } else {
@@ -1214,7 +1222,15 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
                     }
                 } catch (dbErr) {
                     if (isExplicitlyAllowed) {
-                        verifiedName = studentName || `Candidate ${cleanRoll}`;
+                        try {
+                            const paceList = require("../data/pace_students.json");
+                            const ps = paceList.find(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, "") === cleanRoll);
+                            if (ps) {
+                                verifiedName = ps.name;
+                                verifiedSection = ps.section || "PACE";
+                            }
+                        } catch (e) {}
+                        verifiedName = verifiedName || studentName || `Candidate ${cleanRoll}`;
                         verifiedSection = 'PACE';
                         if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;
                     } else {
