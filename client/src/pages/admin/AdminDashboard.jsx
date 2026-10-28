@@ -16,6 +16,7 @@ import PaperAnalysisModal from '../../components/PaperAnalysisModal';
 import MathRenderer from '../../components/MathRenderer';
 import TeacherOmr from '../teacher/omr/TeacherOmr';
 import CreatePaper from '../teacher/CreatePaper';
+import SavedPapers from '../teacher/SavedPapers';
 import GenerateAllFourModal from '../../components/GenerateAllFourModal';
 import api from '../../api';
 
@@ -1096,6 +1097,7 @@ const AdminDashboard = () => {
         {
             group: 'Academic Vault',
             items: [
+                { title: 'Saved Question Papers', path: '/admin/dashboard/saved-papers', icon: '📁', desc: 'Browse, view, export, and print saved papers' },
                 { title: 'Question Bank', path: '/admin/dashboard/questions', icon: '📚', desc: 'Institutional question repository' },
                 { title: 'Grand Test Papers', path: '/admin/dashboard/grand-tests', icon: '🏆', desc: 'Archive of official grand tests' },
                 { title: 'Previous Year Papers', path: '/admin/dashboard/previous-year-papers', icon: '📑', desc: 'PYQs repository & keys' },
@@ -1114,6 +1116,7 @@ const AdminDashboard = () => {
     // Current page label
     const getCurrentPageTitle = () => {
         if (location.pathname.includes('create-paper')) return 'Create Question Paper';
+        if (location.pathname.includes('saved-papers')) return 'Saved Question Papers';
         if (location.pathname.includes('omr')) return 'OMR Sheet Evaluation';
         if (location.pathname.includes('cbt-exams')) return 'CBT Online Exams';
         if (location.pathname.includes('results')) return 'Result Scorecards';
@@ -1293,6 +1296,7 @@ const AdminDashboard = () => {
             <div className="flex-1 p-6 sm:p-10 max-w-7xl mx-auto w-full">
                 <Routes>
                     <Route path="/" element={<DashboardHome />} />
+                    <Route path="saved-papers" element={<SavedPapers />} />
                     <Route path="create-paper" element={<CreatePaper />} />
                     <Route path="omr/*" element={<TeacherOmr />} />
                     <Route path="cbt-exams" element={<ExamManagement />} />

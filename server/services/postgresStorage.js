@@ -399,7 +399,13 @@ async function getPapers(teacherId = null) {
     let res;
     if (teacherId) {
         res = await pool.query(
-            'SELECT * FROM public.papers WHERE teacher_id = $1 OR created_by = $1 OR author_id = $1 ORDER BY updated_at DESC, created_at DESC',
+            `SELECT * FROM public.papers 
+             WHERE teacher_id = $1 
+                OR created_by = $1 
+                OR author_id = $1 
+                OR status = 'Approved'
+                OR author_id IN (SELECT id::text FROM public.users WHERE role = 'admin')
+             ORDER BY updated_at DESC, created_at DESC`,
             [String(teacherId)]
         );
     } else {
