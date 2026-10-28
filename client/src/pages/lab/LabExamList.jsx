@@ -1,3 +1,4 @@
+import paceStudents from '../../data/pace_students.json';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
@@ -57,6 +58,32 @@ export default function LabExamList() {
     const handleCandidateSubmit = async (e) => {
         e.preventDefault();
         const trimmedRoll = candidateData.rollNumber.trim().toUpperCase().replace(/[\s\-_]/g, '');
+
+        // Instant PACE candidate match
+        const paceMatch = Array.isArray(paceStudents) && paceStudents.find(ps => 
+            String(ps.rollNumber).trim().replace(/[\s\-_]/g, '') === trimmedRoll ||
+            String(ps.name).trim().toLowerCase() === trimmedRoll.toLowerCase()
+        );
+        if (paceMatch) {
+            const info = {
+                studentName: paceMatch.name,
+                rollNumber: paceMatch.rollNumber,
+                enrollmentNo: paceMatch.rollNumber,
+                satsNo: paceMatch.rollNumber,
+                section: paceMatch.section || 'PACE',
+                classLevel: paceMatch.class_level || 'I-PUC',
+                studentEmail: paceMatch.email || `${paceMatch.rollNumber}@student.manchester.edu`
+            };
+            localStorage.setItem('student_info', JSON.stringify(info));
+            const examId = candidateModalExam._id || candidateModalExam.id;
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                }
+            } catch (err) {}
+            navigate(`/exam/${examId}/instructions`);
+            return;
+        }
         if (!trimmedRoll) {
             setCandidateError('Please enter your official Enrollment / Register Number.');
             return;

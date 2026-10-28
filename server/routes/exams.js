@@ -1111,11 +1111,17 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
             const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
                 exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
 
-            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate) {
+            let isPaceCandidate = false;
+            try {
+                const paceList = require('../data/pace_students.json');
+                isPaceCandidate = paceList.some(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, '') === cleanRoll);
+            } catch (e) {}
+
+            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate && !isPaceCandidate) {
                 return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
             }
 
-            if (!isExplicitlyAllowed && !isTestCandidate) {
+            if (!isExplicitlyAllowed && !isTestCandidate && !isPaceCandidate) {
                 const studentCheck = await pool.query(
                     `SELECT name, roll_number, enrollment_no, section, class_level 
                      FROM public.students 
@@ -1183,11 +1189,23 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
             const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
                 exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
 
-            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate) {
+            let isPaceCandidate = false;
+            let paceRecord = null;
+            try {
+                const paceList = require('../data/pace_students.json');
+                paceRecord = paceList.find(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, '') === cleanRoll);
+                if (paceRecord) isPaceCandidate = true;
+            } catch (e) {}
+
+            if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate && !isPaceCandidate) {
                 return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
             }
 
-            if (isTestCandidate) {
+            if (isPaceCandidate && paceRecord) {
+                verifiedName = paceRecord.name;
+                verifiedSection = paceRecord.section || 'PACE';
+                if (!studentEmail) studentEmail = paceRecord.email || `${cleanRoll}@student.manchester.edu`;
+            } else if (isTestCandidate) {
                 verifiedName = verifiedName || `Student ${cleanRoll}`;
                 verifiedSection = testNum <= 1005 ? 'Batch A' : 'Batch B';
                 if (!studentEmail) studentEmail = `${cleanRoll}@student.manchester.edu`;

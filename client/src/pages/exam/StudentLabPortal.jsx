@@ -1,3 +1,4 @@
+import paceStudents from '../../data/pace_students.json';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
@@ -63,6 +64,31 @@ export default function StudentLabPortal() {
     const handleStudentLogin = async (e) => {
         e.preventDefault();
         const trimmedReg = regNo.trim().toUpperCase().replace(/[\s\-_]/g, '');
+
+        // Instant PACE candidate match
+        const paceMatch = Array.isArray(paceStudents) && paceStudents.find(ps => 
+            String(ps.rollNumber).trim().replace(/[\s\-_]/g, '') === trimmedReg ||
+            String(ps.name).trim().toLowerCase() === trimmedReg.toLowerCase()
+        );
+        if (paceMatch) {
+            const info = {
+                studentName: paceMatch.name,
+                rollNumber: paceMatch.rollNumber,
+                enrollmentNo: paceMatch.rollNumber,
+                section: paceMatch.section || 'PACE',
+                class: '11',
+                classLevel: paceMatch.class_level || 'I-PUC',
+                studentEmail: paceMatch.email || `${paceMatch.rollNumber}@student.manchester.edu`
+            };
+            safeStorage.setItem('student_info', JSON.stringify(info));
+            setSavedStudent(info);
+            setStudentName(info.studentName);
+            setStudentClass('11');
+            setIsLoggedIn(true);
+            setError('');
+            setVerifying(false);
+            return;
+        }
 
         const testNum = parseInt(trimmedReg, 10);
         if (testNum >= 1000 && testNum <= 1010 && String(testNum) === trimmedReg) {
