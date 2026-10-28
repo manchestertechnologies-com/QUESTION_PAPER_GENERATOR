@@ -30,8 +30,9 @@ export default function A4PaperEngine({
     const questions = useMemo(() => paper?.questions || [], [paper]);
     const classes = useMemo(() => paper?.classes || [], [paper]);
     const totalMarks = useMemo(() => {
+        if (paper?.total_marks || paper?.totalMarks) return Number(paper.total_marks || paper.totalMarks);
         if (paper?.pattern?.length) return paper.pattern.reduce((s, sec) => s + (sec.marks || 0), 0);
-        return calcTotal(questions, classes);
+        return calcTotal(questions, classes, paper?.examType || paper?.exam_type);
     }, [paper, questions, classes]);
 
     const isAssignmentPaper = isAssignment || paper?.category === 'assignment' || (paper?.title && /assignment/i.test(paper.title));

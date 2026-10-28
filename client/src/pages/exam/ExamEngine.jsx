@@ -706,17 +706,26 @@ export default function ExamEngine() {
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                             <tr>
-                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>Column A</th>
-                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>Column B</th>
+                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>{currentQ.leftHeader || 'List I'}</th>
+                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>{currentQ.rightHeader || 'List II'}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {currentQ.matchPairs?.map((pair, idx) => (
-                                                <tr key={idx}>
-                                                    <td style={{ padding: '0.5rem 0' }}>{String.fromCharCode(65 + idx)}. {pair.left}</td>
-                                                    <td style={{ padding: '0.5rem 0' }}>{idx + 1}. {pair.right}</td>
-                                                </tr>
-                                            ))}
+                                            {currentQ.matchPairs?.map((pair, idx) => {
+                                                const romanLabels = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+                                                return (
+                                                    <tr key={idx}>
+                                                        <td style={{ padding: '0.5rem 0', verticalAlign: 'top' }}>
+                                                            <strong style={{ color: '#001f6d', marginRight: '6px' }}>({String.fromCharCode(65 + idx)})</strong>
+                                                            <MathRenderer inline text={pair.left || ''} />
+                                                        </td>
+                                                        <td style={{ padding: '0.5rem 0', verticalAlign: 'top' }}>
+                                                            <strong style={{ color: '#001f6d', marginRight: '6px' }}>({romanLabels[idx] || (idx + 1)})</strong>
+                                                            <MathRenderer inline text={pair.right || ''} />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>

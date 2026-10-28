@@ -1079,8 +1079,8 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                 <table style={Q.matchTable}>
                     <thead>
                         <tr>
-                            <th style={{ ...Q.matchTh, width: leftWidth }}>Column I</th>
-                            <th style={{ ...Q.matchTh, width: rightWidth }}>Column II</th>
+                            <th style={{ ...Q.matchTh, width: leftWidth }}>{q.leftHeader || q.column_a_header || 'List I'}</th>
+                            <th style={{ ...Q.matchTh, width: rightWidth }}>{q.rightHeader || q.column_b_header || 'List II'}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1091,7 +1091,7 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                                     <MathRenderer inline text={pair.left || ''} />
                                 </td>
                                 <td style={{ ...Q.matchTd, width: rightWidth }}>
-                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({hasRomanOpts ? (romanLabels[pi] || (pi + 1)) : (pi + 1)})</strong>
+                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({hasRomanOpts ? (romanLabels[pi]?.toUpperCase() || (pi + 1)) : (pi + 1)})</strong>
                                     <MathRenderer inline text={pair.right || ''} />
                                 </td>
                             </tr>

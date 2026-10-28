@@ -37,8 +37,13 @@ function filterQuestionsForExamType(questions, examType) {
             ((!Array.isArray(q.options) || q.options.length === 0) && (q.num_answer !== undefined || q.answer !== undefined))
         );
 
-        // 2. Strict 20 + 5 format per subject (Physics: 25, Chemistry: 25, Mathematics: 25) = Exactly 75
-        const subjects = ['Physics', 'Chemistry', 'Mathematics'];
+        // If paper/exam already has 75 questions cleanly arranged with 25 per subject, preserve exact order!
+        if (pcmQuestions.length === 75) {
+            return pcmQuestions;
+        }
+
+        // 2. Strict 20 + 5 format per subject (Mathematics: 25, Physics: 25, Chemistry: 25) = Exactly 75
+        const subjects = ['Mathematics', 'Physics', 'Chemistry'];
         const organized = [];
 
         for (const sub of subjects) {
@@ -841,9 +846,22 @@ async function hydrateExamQuestions(exam) {
                 );
             }
             if (paper) {
-                const pQs = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
-                    ? paper.questionObjects
-                    : (Array.isArray(paper.questions) ? paper.questions : []);
+                let pQs = [];
+                if (Array.isArray(paper.sections) && paper.sections.length > 0) {
+                    const sec = paper.sections.find(s => (s.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase()));
+                    if (sec) {
+                        pQs = (Array.isArray(sec.questionObjects) && sec.questionObjects.length > 0)
+                            ? sec.questionObjects
+                            : (Array.isArray(sec.questions) ? sec.questions : []);
+                    }
+                }
+                if (pQs.length === 0) {
+                    const allQs = (Array.isArray(paper.questionObjects) && paper.questionObjects.length > 0)
+                        ? paper.questionObjects
+                        : (Array.isArray(paper.questions) ? paper.questions : []);
+                    const filtered = allQs.filter(q => (q.subject || '').toLowerCase().includes((sa.subject || '').toLowerCase()));
+                    pQs = filtered.length > 0 ? filtered : allQs;
+                }
                 pQs.forEach(q => {
                     const qClone = typeof q === 'object' && q !== null ? { ...q } : { questionText: String(q) };
                     if (!qClone.subject) qClone.subject = sa.subject;
@@ -998,7 +1016,7 @@ router.get('/admin/:id', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.put('/:id/config', [auth, checkRole(['admin'])], async (req, res) => {
     try {
-        const { start_time, end_time, duration_minutes, instructions, status, allowedStudents, examMode } = req.body;
+        const { start_time, end_time, duration_minutes, instructions, status, allowedStudents, examMode, isOnlineVisible, shuffleQuestions, questions, subjectAssignments, sourcePapers } = req.body;
         const update = {};
         if (start_time !== undefined) update.start_time = start_time;
         if (end_time !== undefined) update.end_time = end_time;
@@ -1006,6 +1024,11 @@ router.put('/:id/config', [auth, checkRole(['admin'])], async (req, res) => {
         if (instructions !== undefined) update.instructions = instructions;
         if (status !== undefined) update.status = status;
         if (examMode !== undefined) update.examMode = examMode;
+        if (isOnlineVisible !== undefined) update.isOnlineVisible = isOnlineVisible;
+        if (shuffleQuestions !== undefined) update.shuffleQuestions = shuffleQuestions;
+        if (questions !== undefined) update.questions = questions;
+        if (subjectAssignments !== undefined) update.subjectAssignments = subjectAssignments;
+        if (sourcePapers !== undefined) update.sourcePapers = sourcePapers;
         if (allowedStudents !== undefined) update.allowedStudents = Array.isArray(allowedStudents) ? allowedStudents : [];
 
         const exam = await storage.updateExam(req.params.id, update);

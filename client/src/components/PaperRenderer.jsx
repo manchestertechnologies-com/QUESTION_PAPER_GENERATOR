@@ -32,11 +32,23 @@ export function formatMarks(type = '', classes = []) {
     return '1 Mark';
 }
 
-export function calcTotal(questions = [], classes = []) {
+export function calcTotal(questions = [], classes = [], examType = '') {
+    // 1. If questions have explicit marks set (> 1), sum them directly
+    const explicitSum = questions.reduce((s, q) => s + (Number(q.marks) || 0), 0);
+    if (explicitSum > 0 && explicitSum !== questions.length) return explicitSum;
+
+    // 2. Competitive exams (JEE, NEET, PACE, or 75-question full papers) are 4 marks per question
+    const isCompetitive = (Array.isArray(classes) && classes.some(c => /JEE|NEET|PACE/i.test(String(c)))) ||
+                          /JEE|NEET|PACE/i.test(String(examType)) ||
+                          questions.length === 75;
+
     return questions.reduce((s, q) => {
+        if (q.marks !== undefined && q.marks !== null && Number(q.marks) > 1) {
+            return s + Number(q.marks);
+        }
         const t = (q.type || '').toUpperCase();
-        const isNeet = Array.isArray(classes) && classes.some(c => String(c).toUpperCase() === 'NEET');
-        if (t === 'MCQ' || t === '1M' || t === 'DIAGRAM_BASED' || t === 'ASSERTION_REASON') return s + (isNeet ? 4 : 1);
+        if (isCompetitive) return s + 4;
+        if (t === 'MCQ' || t === '1M' || t === 'DIAGRAM_BASED' || t === 'ASSERTION_REASON') return s + 1;
         if (t === '2M') return s + 2;
         if (t === '3M') return s + 3;
         if (t === 'NUMERICAL' || t === '4M' || t === 'MATCH_FOLLOWING') return s + 4;
