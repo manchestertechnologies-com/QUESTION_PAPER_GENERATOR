@@ -310,7 +310,7 @@ function parseMatchFromText(q) {
     let rawCol2 = '';
 
     const col1HeaderRegex = /^(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[:\-\s]*/i;
-    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
 
     if (col1HeaderRegex.test(remainder)) {
         const withoutCol1 = remainder.replace(col1HeaderRegex, '').trim();
@@ -326,7 +326,7 @@ function parseMatchFromText(q) {
             rawCol2 = splitMatch[1].trim();
         } else {
             // Fallback: search in full txt if intro was not stripped
-            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
             const fbMatch = txt.match(fallbackRegex);
             if (fbMatch) {
                 introText = txt.substring(0, fbMatch.index).trim();

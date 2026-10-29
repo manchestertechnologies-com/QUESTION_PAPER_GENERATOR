@@ -272,11 +272,21 @@ const AssignmentGenerator = () => {
         }
     }, [subject]);
 
+    // Metadata from backend for lightning-fast chapter discovery
+    const [metaChapters, setMetaChapters] = useState([]);
+    const [metaConcepts, setMetaConcepts] = useState([]);
+
     // Fetch Questions
     const fetchQuestions = async () => {
         setLoading(true);
         try {
-            const res = await api.get(`/api/questions?subject=${encodeURIComponent(subject)}&limit=20000`);
+            let url = `/api/questions?subject=${encodeURIComponent(subject)}`;
+            if (selectedChapters.length > 0) {
+                url += `&chapter=${encodeURIComponent(selectedChapters.join(','))}&limit=3000`;
+            } else {
+                url += `&limit=1500`;
+            }
+            const res = await api.get(url);
             const qs = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
             setQuestionsPool(qs);
         } catch (err) {
@@ -287,12 +297,22 @@ const AssignmentGenerator = () => {
     };
 
     useEffect(() => {
-        if (subject) fetchQuestions();
+        if (!subject) return;
+        api.get(`/api/questions/meta?subject=${encodeURIComponent(subject)}`)
+            .then(res => {
+                if (Array.isArray(res.data?.chapters)) setMetaChapters(res.data.chapters);
+                if (Array.isArray(res.data?.concepts)) setMetaConcepts(res.data.concepts);
+            })
+            .catch(() => {});
     }, [subject]);
+
+    useEffect(() => {
+        if (subject) fetchQuestions();
+    }, [subject, selectedChapters]);
 
     // Chapters and concepts extraction
     const { distinctChapters, chapterConceptsMap } = useMemo(() => {
-        const chaptersSet = new Set();
+        const chaptersSet = new Set(metaChapters);
         const map = {};
 
         questionsPool.forEach(q => {
@@ -312,7 +332,7 @@ const AssignmentGenerator = () => {
         });
 
         return { distinctChapters: sorted, chapterConceptsMap: cleanMap };
-    }, [questionsPool]);
+    }, [questionsPool, metaChapters]);
 
     // Available concepts for checked chapters
     const availableConceptsForSelectedChapters = useMemo(() => {
