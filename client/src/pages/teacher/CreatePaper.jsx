@@ -313,13 +313,18 @@ export default function CreatePaper() {
     // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions / Auto Engine) -> 4 (Preview) -> 5 (Alignment)
     const [currentStep, setCurrentStep] = useState(paperId ? 3 : 1);
 
+    // All system-supported database subjects
+    const ALL_AVAILABLE_SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Botany', 'Zoology'];
+
     // Step 1: Mode & Academic Metadata
     const [paperCategory, setPaperCategory] = useState(initialCategory);
     const [subject, setSubject] = useState(user?.subject || 'Physics');
+    const [customSubjects, setCustomSubjects] = useState(['Physics', 'Chemistry']);
     const [selectedClass, setSelectedClass] = useState('Both');
     const [examType, setExamType] = useState('NEET_PCB');
     const [title, setTitle] = useState('');
     const [duration, setDuration] = useState('180 Minutes');
+    const [questionsPerSubject, setQuestionsPerSubject] = useState(null);
     const [targetCount, setTargetCount] = useState(60);
 
     // Question Type filter in Auto-Fetch
@@ -329,10 +334,13 @@ export default function CreatePaper() {
     // Active drafts available for multi-teacher collaboration
     const [availableDrafts, setAvailableDrafts] = useState([]);
 
-    // Multi-Subject Exam Configuration (NEET: Physics, Chemistry, Botany, Zoology; JEE: Physics, Chemistry, Maths; CET: Physics, Chemistry, Maths, Biology)
+    // Multi-Subject Exam Configuration (NEET, JEE, CET, PCM, PCB, PCMB, Single, or Custom)
     const examSubjects = useMemo(() => {
         if (paperCategory === 'assignment') return [subject || 'Physics'];
         const upperExam = (examType || '').toUpperCase();
+        if (upperExam === 'SINGLE') {
+            return [subject || 'Physics'];
+        }
         if (upperExam.includes('NEET')) {
             return ['Physics', 'Chemistry', 'Botany', 'Zoology'];
         }
@@ -342,12 +350,21 @@ export default function CreatePaper() {
         if (upperExam.includes('CET')) {
             return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
         }
-        if (subject === 'PCM') return ['Physics', 'Chemistry', 'Mathematics'];
-        if (subject === 'PCB') return ['Physics', 'Chemistry', 'Biology'];
-        if (subject === 'PCMB') return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+        if (upperExam === 'PCM' || subject === 'PCM') {
+            return ['Physics', 'Chemistry', 'Mathematics'];
+        }
+        if (upperExam === 'PCB' || subject === 'PCB') {
+            return ['Physics', 'Chemistry', 'Biology'];
+        }
+        if (upperExam === 'PCMB' || subject === 'PCMB') {
+            return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+        }
+        if (upperExam === 'CUSTOM') {
+            return Array.isArray(customSubjects) && customSubjects.length > 0 ? customSubjects : ['Physics', 'Chemistry'];
+        }
         if (subject && subject.includes(',')) return subject.split(',').map(s => s.trim()).filter(Boolean);
         return [subject || 'Physics'];
-    }, [examType, subject, paperCategory]);
+    }, [examType, subject, paperCategory, customSubjects]);
 
     // Active Subject Tab for multi-subject workflow
     const [activeSubjectTab, setActiveSubjectTab] = useState('Physics');
@@ -359,14 +376,56 @@ export default function CreatePaper() {
         }
     }, [examSubjects, activeSubjectTab]);
 
-    // Target per subject defaults
+    // Target per subject defaults (user-configurable, no forced limit of 60 questions!)
     const defaultQuotaForSubject = useMemo(() => {
+        if (typeof questionsPerSubject === 'number' && questionsPerSubject > 0) {
+            return questionsPerSubject;
+        }
         const upperExam = (examType || '').toUpperCase();
         if (upperExam.includes('NEET')) return 45;
         if (upperExam.includes('JEE')) return 25;
         if (upperExam.includes('CET')) return 60;
-        return Math.max(15, Math.round((targetCount || 60) / Math.max(1, examSubjects.length)));
-    }, [examType, targetCount, examSubjects]);
+        if (targetCount && targetCount > 0 && examSubjects.length > 0) {
+            return Math.max(1, Math.round(targetCount / examSubjects.length));
+        }
+        return 30;
+    }, [examType, targetCount, questionsPerSubject, examSubjects.length]);
+
+    // Sync total targetCount whenever defaultQuotaForSubject or examSubjects changes
+    useEffect(() => {
+        setTargetCount(defaultQuotaForSubject * Math.max(1, examSubjects.length));
+    }, [defaultQuotaForSubject, examSubjects.length]);
+
+    const handleExamTypeChange = (newType) => {
+        setExamType(newType);
+        const upper = newType.toUpperCase();
+        if (upper.includes('NEET')) {
+            setQuestionsPerSubject(45);
+        } else if (upper.includes('JEE')) {
+            setQuestionsPerSubject(25);
+        } else if (upper.includes('CET')) {
+            setQuestionsPerSubject(60);
+        } else if (upper === 'PCM' || upper === 'PCB') {
+            setQuestionsPerSubject(30);
+        } else if (upper === 'SINGLE' || upper === 'CUSTOM') {
+            if (!questionsPerSubject) setQuestionsPerSubject(30);
+        }
+    };
+
+    const toggleCustomSubject = (subName) => {
+        setCustomSubjects(prev => {
+            const list = Array.isArray(prev) ? prev : [];
+            if (list.includes(subName)) {
+                if (list.length <= 1) {
+                    alert('At least one subject must be selected for the examination.');
+                    return list;
+                }
+                return list.filter(s => s !== subName);
+            } else {
+                return [...list, subName];
+            }
+        });
+    };
 
     // Assignment custom question numbering
     const [startQNo, setStartQNo] = useState(1);
@@ -2510,25 +2569,71 @@ export default function CreatePaper() {
                         </div>
 
                         {/* Top Config Row */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                             <div>
                                 <label className="block text-[11px] font-black uppercase tracking-wider text-navy mb-1.5">Exam Pattern</label>
                                 <select
                                     value={examType}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setExamType(val);
-                                        if (val.includes('JEE')) setTargetCount(75);
-                                        else if (val.includes('NEET')) setTargetCount(180);
-                                        else if (val.includes('CET')) setTargetCount(240);
-                                    }}
+                                    onChange={(e) => handleExamTypeChange(e.target.value)}
                                     className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-xs font-bold text-navy outline-none bg-white focus:ring-2 focus:ring-gold"
                                 >
-                                    <option value="NEET_PCB">NEET (Physics, Chemistry, Botany, Zoology - 180 Qs)</option>
-                                    <option value="JEE_PCM">JEE Main (Physics, Chemistry, Mathematics - 75 Qs)</option>
-                                    <option value="CET_PCMB">KCET (Physics, Chemistry, Mathematics, Biology - 240 Qs)</option>
-                                    <option value="CUSTOM">Custom Single/Multi-Subject</option>
+                                    <option value="NEET_PCB">NEET (Physics, Chemistry, Botany, Zoology)</option>
+                                    <option value="JEE_PCM">JEE Main (Physics, Chemistry, Mathematics)</option>
+                                    <option value="CET_PCMB">KCET (Physics, Chemistry, Mathematics, Biology)</option>
+                                    <option value="PCM">PCM (Physics, Chemistry, Mathematics)</option>
+                                    <option value="PCB">PCB (Physics, Chemistry, Biology)</option>
+                                    <option value="SINGLE">Single Subject (Pick Any)</option>
+                                    <option value="CUSTOM">Custom Multi-Subject Selection</option>
                                 </select>
+                            </div>
+
+                            {/* Single Subject Picker when SINGLE is chosen */}
+                            {examType === 'SINGLE' && (
+                                <div>
+                                    <label className="block text-[11px] font-black uppercase tracking-wider text-navy mb-1.5">Selected Subject</label>
+                                    <select
+                                        value={subject}
+                                        onChange={(e) => {
+                                            const newSub = e.target.value;
+                                            setSubject(newSub);
+                                            setActiveSubjectTab(newSub);
+                                        }}
+                                        className="w-full border-2 border-gold rounded-xl px-3 py-2.5 text-xs font-bold text-navy outline-none bg-white focus:ring-2 focus:ring-gold"
+                                    >
+                                        {ALL_AVAILABLE_SUBJECTS.map(s => (
+                                            <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="text-[11px] font-black uppercase tracking-wider text-navy">Questions / Subject</label>
+                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">No Limit</span>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={500}
+                                    value={defaultQuotaForSubject}
+                                    onChange={(e) => setQuestionsPerSubject(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                    className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs font-bold text-navy outline-none bg-white focus:ring-2 focus:ring-gold"
+                                />
+                                <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                                    {[15, 25, 30, 45, 60, 100].map(cnt => (
+                                        <button
+                                            key={cnt}
+                                            type="button"
+                                            onClick={() => setQuestionsPerSubject(cnt)}
+                                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded transition cursor-pointer ${
+                                                defaultQuotaForSubject === cnt ? 'bg-navy text-gold font-black' : 'bg-gray-100 hover:bg-gray-200 text-slate-700'
+                                            }`}
+                                        >
+                                            {cnt}Q
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             <div>
@@ -2565,6 +2670,95 @@ export default function CreatePaper() {
                                 />
                             </div>
                         </div>
+
+                        {/* Custom Multi-Subject Selection Banner when CUSTOM is active */}
+                        {examType === 'CUSTOM' && (
+                            <div className="bg-gradient-to-r from-navy via-slate-900 to-navy text-white p-5 rounded-2xl border-2 border-gold/40 shadow-md space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">🎯</span>
+                                            <h3 className="text-xs font-black uppercase tracking-widest text-gold">
+                                                Custom Multi-Subject Selection ({customSubjects.length} Selected)
+                                            </h3>
+                                        </div>
+                                        <p className="text-[11px] text-slate-300 mt-0.5">
+                                            Toggle any subjects you want to include in this custom exam paper:
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[10px] uppercase font-bold text-slate-400 mr-1">Presets:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects(['Physics', 'Chemistry', 'Mathematics'])}
+                                            className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg transition cursor-pointer"
+                                        >
+                                            PCM
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects(['Physics', 'Chemistry', 'Biology'])}
+                                            className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg transition cursor-pointer"
+                                        >
+                                            PCB
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects(['Physics', 'Chemistry', 'Mathematics', 'Biology'])}
+                                            className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg transition cursor-pointer"
+                                        >
+                                            PCMB
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects(['Physics', 'Chemistry'])}
+                                            className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg transition cursor-pointer"
+                                        >
+                                            Phy + Chem
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects(['Botany', 'Zoology'])}
+                                            className="text-[10px] font-bold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg transition cursor-pointer"
+                                        >
+                                            Bot + Zoo
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCustomSubjects([...ALL_AVAILABLE_SUBJECTS])}
+                                            className="text-[10px] font-black bg-gold text-navy px-2.5 py-1 rounded-lg transition cursor-pointer hover:scale-105"
+                                        >
+                                            All 6
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                                    {ALL_AVAILABLE_SUBJECTS.map((subName) => {
+                                        const isChecked = customSubjects.includes(subName);
+                                        return (
+                                            <button
+                                                key={subName}
+                                                type="button"
+                                                onClick={() => toggleCustomSubject(subName)}
+                                                className={`p-3 rounded-xl border-2 transition cursor-pointer flex items-center justify-between gap-2 text-left ${
+                                                    isChecked
+                                                        ? 'border-gold bg-gold/20 text-white shadow-sm ring-1 ring-gold'
+                                                        : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                                                }`}
+                                            >
+                                                <span className="text-xs font-black uppercase tracking-wider">{subName}</span>
+                                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-black ${
+                                                    isChecked ? 'bg-gold text-navy' : 'bg-white/10 text-transparent'
+                                                }`}>
+                                                    ✓
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Subject Tabs Switcher for Chapter Scoping */}
                         {examSubjects.length > 1 && (
@@ -3685,23 +3879,31 @@ export default function CreatePaper() {
                                             <label className="text-xs font-black text-navy uppercase tracking-wider">
                                                 {activeSubjectTab} Target Quota
                                             </label>
-                                            <span className="text-sm font-black text-navy bg-white px-3 py-1 rounded-xl border border-gray-300">
-                                                {autoQtyPerSubject} Questions
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={500}
+                                                    value={autoQtyPerSubject}
+                                                    onChange={(e) => setAutoQtyPerSubject(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                                    className="w-16 border border-gray-300 rounded-lg px-2 py-0.5 text-xs font-black text-navy text-center outline-none focus:ring-1 focus:ring-gold bg-white"
+                                                />
+                                                <span className="text-xs font-bold text-gray-500">Qs</span>
+                                            </div>
                                         </div>
                                         <input
                                             type="range"
-                                            min={5}
-                                            max={120}
-                                            step={5}
+                                            min={1}
+                                            max={300}
+                                            step={1}
                                             value={autoQtyPerSubject}
                                             onChange={(e) => setAutoQtyPerSubject(parseInt(e.target.value, 10))}
                                             className="w-full accent-navy cursor-pointer"
                                         />
                                         <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                                            <span>5 Qs</span>
-                                            <span>Standard ({defaultQuotaForSubject})</span>
-                                            <span>120 Qs</span>
+                                            <span>1 Q</span>
+                                            <span>Target ({defaultQuotaForSubject})</span>
+                                            <span>300 Qs</span>
                                         </div>
                                     </div>
 

@@ -643,22 +643,52 @@ const AssignmentGenerator = () => {
                             </div>
                             <div>
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Subject</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={subject}
-                                    disabled
-                                    className="w-full border-2 border-gray-200 rounded-2xl px-4 py-2.5 text-xs font-bold text-navy bg-gray-100"
-                                />
+                                    onChange={e => {
+                                        const newSub = e.target.value;
+                                        setSubject(newSub);
+                                        setSelectedChapters([]);
+                                        setSelectedConcepts([]);
+                                        setSelectedQuestions([]);
+                                    }}
+                                    className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-2.5 text-xs font-bold text-navy outline-none bg-white cursor-pointer"
+                                >
+                                    <option value="Physics">Physics</option>
+                                    <option value="Chemistry">Chemistry</option>
+                                    <option value="Mathematics">Mathematics</option>
+                                    <option value="Biology">Biology</option>
+                                    <option value="Botany">Botany</option>
+                                    <option value="Zoology">Zoology</option>
+                                </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Target Questions Count</label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-black text-navy uppercase tracking-wider">Target Questions Count</label>
+                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">No Limit</span>
+                                </div>
                                 <input
                                     type="number"
                                     min={1}
+                                    max={500}
                                     value={targetCount}
-                                    onChange={e => setTargetCount(parseInt(e.target.value) || 10)}
+                                    onChange={e => setTargetCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
                                     className="w-full border-2 border-gray-200 focus:border-navy rounded-2xl px-4 py-2.5 text-xs font-bold text-navy outline-none"
                                 />
+                                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    {[15, 25, 30, 50, 75, 100].map(cnt => (
+                                        <button
+                                            key={cnt}
+                                            type="button"
+                                            onClick={() => setTargetCount(cnt)}
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition cursor-pointer ${
+                                                targetCount === cnt ? 'bg-navy text-gold font-black' : 'bg-gray-100 hover:bg-gray-200 text-slate-700'
+                                            }`}
+                                        >
+                                            {cnt} Qs
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-black text-navy uppercase tracking-wider mb-2">Start Question No.</label>
