@@ -5,6 +5,7 @@ import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import { checkAnswerCorrect, resolveOptionIndex, stripLeadingLabel, normalizeText } from '../../utils/answerEvaluation';
 import safeStorage from '../../utils/safeStorage';
+import { downloadIndividualScorecardPdf } from '../../utils/resultPdfExport';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -328,9 +329,12 @@ export default function Scorecard() {
     }, [data, examId, sessionId]);
 
     const downloadPDF = () => {
-        const token = localStorage.getItem('token');
-        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${examId}/pdf-report/${sessionId}?token=${token}`;
-        window.open(downloadUrl, '_blank');
+        if (!evalData) return;
+        downloadIndividualScorecardPdf(evalData, {
+            title: evalData.examTitle || 'Examination Scorecard',
+            examType: evalData.examType || 'CBT Exam',
+            questions: evalData.breakdown || []
+        });
     };
 
     if (loading) return <div style={styles.center}>Loading scorecard...</div>;

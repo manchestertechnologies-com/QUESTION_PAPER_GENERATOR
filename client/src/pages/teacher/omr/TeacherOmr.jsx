@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../../api';
 import { AuthContext } from '../../../context/AuthContext';
+import { downloadClassResultSheetPdf, downloadIndividualScorecardPdf } from '../../../utils/resultPdfExport';
 
 const TeacherOmr = () => {
     const { user } = useContext(AuthContext);
@@ -744,6 +745,25 @@ const TeacherOmr = () => {
                                 >
                                     <span>📥</span> Export CSV
                                 </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (!resultsData?.submissions || resultsData.submissions.length === 0) {
+                                            alert('No result data to export.');
+                                            return;
+                                        }
+                                        downloadClassResultSheetPdf({
+                                            title: paperKeyData?.title || 'OMR Exam Results',
+                                            examType: examType || 'OMR Exam',
+                                            institutionName: 'MANCHESTER TECHNOLOGIES',
+                                            results: resultsData.submissions,
+                                            aggregate: resultsData.aggregate
+                                        });
+                                    }}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
+                                >
+                                    <span>📄</span> Download Class PDF
+                                </button>
                             </div>
                         </div>
 
@@ -807,12 +827,32 @@ const TeacherOmr = () => {
                                                 </td>
 
                                                 <td className="p-3 text-center">
-                                                    <button
-                                                        onClick={() => handleViewStudentAnalysis(s.rollNumber)}
-                                                        className="bg-gold/20 text-navy hover:bg-gold px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
-                                                    >
-                                                        Analysis →
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            onClick={() => handleViewStudentAnalysis(s.rollNumber)}
+                                                            className="bg-gold/20 text-navy hover:bg-gold px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer"
+                                                        >
+                                                            Analysis →
+                                                        </button>
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    let analysis = studentAnalysis;
+                                                                    if (!analysis || String(analysis.rollNumber) !== String(s.rollNumber)) {
+                                                                        const res = await api.get(`/api/omr/results/${selectedPaperId}/student/${encodeURIComponent(s.rollNumber)}`);
+                                                                        analysis = res.data;
+                                                                    }
+                                                                    downloadIndividualScorecardPdf(analysis || s, paperKeyData || { title: paperKeyData?.title, examType });
+                                                                } catch (e) {
+                                                                    downloadIndividualScorecardPdf(s, paperKeyData || { title: paperKeyData?.title, examType });
+                                                                }
+                                                            }}
+                                                            className="bg-navy text-gold hover:bg-gold hover:text-navy px-2 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1 shadow-xs"
+                                                            title="Download Candidate PDF Scorecard"
+                                                        >
+                                                            <span>📄</span> PDF
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -878,7 +918,7 @@ const TeacherOmr = () => {
                                     </p>
                                 </div>
 
-                                <div className="flex items-center gap-6 text-center">
+                                <div className="flex items-center gap-6 text-center flex-wrap">
                                     <div>
                                         <span className="text-[10px] font-black text-gold uppercase tracking-widest block">Total Score</span>
                                         <span className="text-3xl font-black text-white">{studentAnalysis.scoreData?.totalScore || 0}</span>
@@ -892,6 +932,16 @@ const TeacherOmr = () => {
                                     <div>
                                         <span className="text-[10px] font-black text-red-400 uppercase tracking-widest block">Wrong</span>
                                         <span className="text-3xl font-black text-red-400">{studentAnalysis.scoreData?.wrongCount || 0}</span>
+                                    </div>
+                                    <div className="h-10 w-px bg-white/20"></div>
+                                    <div>
+                                        <button
+                                            onClick={() => downloadIndividualScorecardPdf(studentAnalysis, paperKeyData || { title: paperKeyData?.title, examType })}
+                                            className="bg-gold text-navy hover:bg-white px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-2"
+                                            title="Download Official PDF Scorecard"
+                                        >
+                                            <span>📄</span> Download Scorecard PDF
+                                        </button>
                                     </div>
                                 </div>
                             </div>

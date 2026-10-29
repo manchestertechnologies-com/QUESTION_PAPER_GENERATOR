@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { checkAnswerCorrect } from '../../utils/answerEvaluation';
+import { downloadClassResultSheetPdf, downloadIndividualScorecardPdf } from '../../utils/resultPdfExport';
 
 export default function AdminResults() {
     const navigate = useNavigate();
@@ -122,10 +121,8 @@ export default function AdminResults() {
     };
 
     const downloadIndividualPDF = (student) => {
-        const token = localStorage.getItem('token');
-        const sId = student._id || student.id;
-        const downloadUrl = `${api.defaults.baseURL || ''}/api/exams/${selectedExam}/pdf-report/${sId}?token=${token}`;
-        window.open(downloadUrl, '_blank');
+        const exam = exams.find(e => String(e._id || e.id) === String(selectedExam)) || {};
+        downloadIndividualScorecardPdf(student, exam);
     };
 
     const downloadAllScorecardsZip = () => {
@@ -179,7 +176,7 @@ export default function AdminResults() {
                 'Correct Qs': correct.join(', '),
                 'Wrong Qs': wrong.join(', '),
                 'Unattempted Qs': unattempted.join(', '),
-                'Submitted At': new Date(r.createdAt).toLocaleString()
+                'Submitted At': new Date(r.createdAt || r.endTime || Date.now()).toLocaleString()
             };
         });
         const worksheet = XLSX.utils.json_to_sheet(data);
@@ -190,70 +187,25 @@ export default function AdminResults() {
     };
 
     const exportPDF = () => {
-        if (!displayResults || displayResults.length === 0) return;
-        const doc = new jsPDF('landscape');
-        const exam = exams.find(e => String(e._id || e.id) === String(selectedExam));
-        const examName = exam?.title || 'Exam Results';
-        
-        doc.setFontSize(16);
-        doc.text(examName, 14, 15);
-        doc.setFontSize(10);
-        doc.text(`Total Students: ${displayResults.length}`, 14, 22);
-
-        const tableColumn = ["#", "Student", "Roll No", "Score", "Attempted Qs", "Correct Qs", "Wrong Qs", "Unattempted Qs"];
-        const tableRows = [];
-
-        displayResults.forEach((r, i) => {
-            const attempted = [];
-            const unattempted = [];
-            const correct = [];
-            const wrong = [];
-            if (exam && exam.questions) {
-                exam.questions.forEach((q, idx) => {
-                    const qNum = idx + 1;
-                    const ans = r.answers?.find(a => String(a.questionId) === String(q._id || q.id));
-                    if (ans && ans.selectedOption !== null && ans.selectedOption !== undefined && ans.selectedOption !== '') {
-                        attempted.push(qNum);
-                        const isCorrect = checkAnswerCorrect(ans.selectedOption, q.answer ?? q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
-                        if (isCorrect) {
-                            correct.push(qNum);
-                        } else {
-                            wrong.push(qNum);
-                        }
-                    } else {
-                        unattempted.push(qNum);
-                    }
-                });
-            }
-
-            const rowData = [
-                i + 1,
-                r.studentName,
-                r.rollNumber || 'N/A',
-                r.score,
-                attempted.join(', '),
-                correct.join(', '),
-                wrong.join(', '),
-                unattempted.join(', ')
-            ];
-            tableRows.push(rowData);
-        });
-
-        autoTable(doc, {
-            head: [tableColumn],
-            body: tableRows,
-            startY: 28,
-            styles: { fontSize: 8 },
-            headStyles: { fillColor: [59, 130, 246] },
-            columnStyles: {
-                4: { cellWidth: 50 },
-                5: { cellWidth: 50 },
-                6: { cellWidth: 50 },
-                7: { cellWidth: 50 }
+        if (!displayResults || displayResults.length === 0) {
+            alert('No results available to export.');
+            return;
+        }
+        const exam = exams.find(e => String(e._id || e.id) === String(selectedExam)) || {};
+        downloadClassResultSheetPdf({
+            title: exam.title || 'Exam Results',
+            examType: exam.examType || 'CBT Exam',
+            institutionName: 'MANCHESTER TECHNOLOGIES',
+            results: displayResults,
+            aggregate: {
+                totalStudents: displayResults.length,
+                topScore: displayResults.length > 0 ? Math.max(...displayResults.map(r => r.score || 0)) : 0,
+                avgScore: displayResults.length > 0 ? Math.round(displayResults.reduce((acc, r) => acc + (r.score || 0), 0) / displayResults.length) : 0,
+                totalCorrect: displayResults.reduce((acc, r) => acc + (r.correct || 0), 0),
+                totalWrong: displayResults.reduce((acc, r) => acc + (r.incorrect || 0), 0),
+                totalBlank: displayResults.reduce((acc, r) => acc + (r.unattempted || 0), 0)
             }
         });
-
-        doc.save(`${examName}_Results.pdf`);
     };
 
     return (
