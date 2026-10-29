@@ -14,8 +14,24 @@ import React, { useState, useMemo } from 'react';
 import api from '../api';
 import A4PaperEngine from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
-import { optionLabel } from '../utils/sanitize';
-import { generatePaperSet } from '../utils/pqrsGenerator';
+import A4SolutionKey from './A4SolutionKey';
+import { optionLabel, stripOptionPrefix } from '../utils/sanitize';
+import { generatePaperSet, shuffleQuestionsWithinSections } from '../utils/pqrsGenerator';
+
+// ─── Format Class Display Helper ──────────────────────────────────────────────
+export function formatClassDisplay(classes = [], headerConfig = null) {
+    if (headerConfig?.streamClass) return headerConfig.streamClass;
+    const rawList = Array.isArray(classes) ? classes : [classes].filter(Boolean);
+    const strList = rawList.map(c => String(c).trim().toLowerCase());
+    const has11 = strList.some(c => c.includes('11') || c === 'xi' || c === 'puc 1' || c === '1st puc');
+    const has12 = strList.some(c => c.includes('12') || c === 'xii' || c === 'puc 2' || c === '2nd puc');
+
+    if (has11 && has12) return 'Class: 11th & 12th';
+    if (has11) return 'Class: 11th';
+    if (has12) return 'Class: 12th';
+    if (rawList.length > 0) return `Class: ${rawList.join(', ')}`;
+    return 'Class: 11th & 12th';
+}
 
 // ─── Marks helpers ────────────────────────────────────────────────────────────
 export function formatMarks(type = '', classes = []) {
@@ -59,8 +75,9 @@ export function calcTotal(questions = [], classes = [], examType = '') {
 
 // ─── Default settings ─────────────────────────────────────────────────────────
 export const DEFAULT_SETTINGS = {
-    fontFamily: 'Georgia, "Times New Roman", serif',
-    fontSize: '13px',
+    fontFamily: '"Times New Roman", Times, serif',
+    fontSize: '14px',
+    optionStyle: 'ABCD',
     lineHeight: '1.42',
     columns: 1,
     columnGap: '18px',
@@ -138,11 +155,19 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                     </select>
                 </SettingField>
 
+                {/* ── Option Numbering Style ── */}
+                <SettingField label="Option Style">
+                    <select style={selectStyle} value={settings.optionStyle || 'ABCD'} onChange={e => update('optionStyle', e.target.value)}>
+                        <option value="ABCD">(A), (B), (C), (D) - Standard Alpha</option>
+                        <option value="1234">(1), (2), (3), (4) - Numeric Style</option>
+                    </select>
+                </SettingField>
+
                 {/* ── Typography ── */}
                 <SettingField label="Font Style">
-                    <select style={selectStyle} value={settings.fontFamily} onChange={e => update('fontFamily', e.target.value)}>
-                        <option value='Georgia, "Times New Roman", serif'>Georgia (Classic)</option>
-                        <option value='"Times New Roman", Times, serif'>Times New Roman</option>
+                    <select style={selectStyle} value={settings.fontFamily || '"Times New Roman", Times, serif'} onChange={e => update('fontFamily', e.target.value)}>
+                        <option value='"Times New Roman", Times, serif'>Times New Roman (Standard)</option>
+                        <option value='Georgia, "Times New Roman", serif'>Georgia (Serif)</option>
                         <option value='Calibri, Candara, Segoe, sans-serif'>Calibri</option>
                         <option value='Arial, Helvetica, sans-serif'>Arial</option>
                         <option value="'Inter', system-ui, sans-serif">Inter (Modern)</option>
@@ -150,10 +175,13 @@ export function SettingsPanel({ settings, setSettings, totalQuestions = 0 }) {
                 </SettingField>
 
                 <SettingField label="Font Size">
-                    <select style={selectStyle} value={settings.fontSize} onChange={e => update('fontSize', e.target.value)}>
+                    <select style={selectStyle} value={settings.fontSize || '14px'} onChange={e => update('fontSize', e.target.value)}>
                         <option value="12px">Compact (12px)</option>
-                        <option value="13px">Standard (13px)</option>
-                        <option value="14px">Large (14px)</option>
+                        <option value="13px">13px</option>
+                        <option value="14px">Standard (14px - Recommended)</option>
+                        <option value="15px">15px</option>
+                        <option value="16px">Large (16px)</option>
+                        <option value="18px">Extra Large (18px)</option>
                     </select>
                 </SettingField>
 
@@ -266,19 +294,8 @@ export function PaperHeader({
     setName = 'P',
     headerConfig = null,
 }) {
-    // Clean assignment title
-    let displayTitle = title;
-    if (isAssignment) {
-        if (!displayTitle || /assessment|test|exam|jee|neet|cet|paper/i.test(displayTitle)) {
-            displayTitle = `${subject || ''} ASSIGNMENT`.trim().toUpperCase();
-        } else {
-            // Strip out any accidental CET/NEET/JEE references
-            displayTitle = displayTitle.replace(/\b(jee|neet|cet|kcet|bitsat|mains|advanced|board)\b/gi, '').replace(/\s+/g, ' ').trim();
-            if (!/assignment/i.test(displayTitle)) {
-                displayTitle = `${displayTitle} ASSIGNMENT`.trim();
-            }
-        }
-    }
+    // Strictly preserve user-defined title or exam type without stripping keywords
+    const displayTitle = (title || headerConfig?.examTitle || (isAssignment ? `${subject || 'Academic'} Assignment` : `${subject || 'Academic'} Examination`)).trim();
 
     const currentSet = (setName || 'P').toUpperCase();
 
@@ -287,7 +304,11 @@ export function PaperHeader({
     const subTitle = headerConfig?.subTitle || 'DAVANAGERE • THE LAND OF OPPORTUNITY';
     const subjectCode = headerConfig?.subjectCode ? ` (Code: ${headerConfig.subjectCode})` : '';
     const displaySubject = (headerConfig?.subject || subject || 'General') + subjectCode;
-    const displayClass = headerConfig?.streamClass || (classes && classes.length > 0 ? `PUC ${classes.join(', ')}` : 'PUC Science');
+
+    // Strict Dynamic Class Display: 11th, 12th, or 11th & 12th
+    const cleanClassRaw = formatClassDisplay(classes, headerConfig);
+    const displayClass = cleanClassRaw.replace(/^Class:\s*/i, '');
+
     const displayDuration = headerConfig?.timeAllowed || duration || '3 Hours 15 Minutes';
     const displayMarks = headerConfig?.maxMarks || totalMarks || '70';
     const instructions = headerConfig?.generalInstructions || [];
@@ -321,7 +342,7 @@ export function PaperHeader({
                             {subTitle}
                         </div>
                         <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#000', marginTop: '4px' }}>
-                            {displayTitle || (isAssignment ? `${subject} ASSIGNMENT` : (title || `${subject} Examination`))}
+                            {displayTitle}
                         </div>
                     </div>
                     {!isAssignment && (
@@ -380,6 +401,7 @@ export default function PaperRenderer({
     onProceedToAlignment,
     onProceedToFinalize,
     onDiagramResize,
+    onShuffleQuestions,
 }) {
     const [internalSettings, setInternalSettings] = useState(DEFAULT_SETTINGS);
     const settings = externalSettings || internalSettings;
@@ -391,6 +413,7 @@ export default function PaperRenderer({
 
     // Preview Controls state
     const [zoom, setZoom] = useState(100);
+    const [showSolutionModal, setShowSolutionModal] = useState(false);
 
     // Generate active set paper only when sets are active, otherwise return master paper
     const activePaper = useMemo(() => {
@@ -412,7 +435,10 @@ export default function PaperRenderer({
                 ...activePaper,
                 questions: activeQs,
                 setName: setsActive ? activeSet : (paper?.setName || 'P'),
-                startQNo: settings?.startQNo || 1
+                startQNo: settings?.startQNo || 1,
+                optionStyle: settings?.optionStyle || 'ABCD',
+                fontSize: settings?.fontSize || '14px',
+                fontFamily: settings?.fontFamily || '"Times New Roman", Times, serif',
             };
 
             const res = await api.post('/api/papers/export-word', paperData, { responseType: 'blob' });
@@ -504,19 +530,88 @@ export default function PaperRenderer({
                     </div>
                 )}
 
+                {/* Option Style Selector: (A)-(D) vs (1)-(4) */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-300">
+                    <span className="text-[10px] font-black text-navy uppercase tracking-wider px-1">Options:</span>
+                    <button
+                        type="button"
+                        onClick={() => setSettings(s => ({ ...s, optionStyle: 'ABCD' }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                            (settings.optionStyle || 'ABCD') === 'ABCD'
+                                ? 'bg-navy text-gold shadow-sm'
+                                : 'bg-white text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Display options as (A), (B), (C), (D)"
+                    >
+                        (A)-(D)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSettings(s => ({ ...s, optionStyle: '1234' }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                            settings.optionStyle === '1234'
+                                ? 'bg-navy text-gold shadow-sm'
+                                : 'bg-white text-slate-700 hover:bg-slate-200'
+                        }`}
+                        title="Display options as (1), (2), (3), (4)"
+                    >
+                        (1)-(4)
+                    </button>
+                </div>
+
+                {/* Font Size Reactive Selector */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-300">
+                    <span className="text-[10px] font-black text-navy uppercase tracking-wider px-1">Font:</span>
+                    <select
+                        value={settings.fontSize || '14px'}
+                        onChange={e => setSettings(s => ({ ...s, fontSize: e.target.value }))}
+                        className="bg-white text-slate-800 text-xs font-bold rounded-lg px-2 py-1 border border-slate-200 outline-none cursor-pointer"
+                        title="Paper font size"
+                    >
+                        <option value="12px">12px</option>
+                        <option value="13px">13px</option>
+                        <option value="14px">14px</option>
+                        <option value="15px">15px</option>
+                        <option value="16px">16px</option>
+                        <option value="18px">18px</option>
+                    </select>
+                </div>
+
                 {/* Mode & Columns Switcher */}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setSettings(s => ({ ...s, columns: s.columns === 2 ? 1 : 2 }))}
-                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3.5 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3 py-1.5 rounded-xl font-bold text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1.5"
                     >
-                        <span>{settings.columns === 2 ? '📰 2-Columns (Dense)' : '📄 Single Column'}</span>
-                        <span className="text-[10px] bg-navy text-gold px-1.5 py-0.5 rounded">Switch</span>
+                        <span>{settings.columns === 2 ? '📰 2-Col' : '📄 1-Col'}</span>
                     </button>
                     <span className="text-xs font-bold text-gray-500">
-                        {questions.length} Questions
+                        {questions.length} Qs
                     </span>
                 </div>
+
+                {/* Shuffle Questions Trigger */}
+                {onShuffleQuestions && (
+                    <button
+                        type="button"
+                        onClick={onShuffleQuestions}
+                        className="bg-slate-100 hover:bg-slate-200 text-navy px-3 py-1.5 rounded-xl font-black text-xs border border-slate-300 transition cursor-pointer flex items-center gap-1"
+                        title="Shuffle question order within sections (Fisher-Yates)"
+                    >
+                        <span>🔀</span>
+                        <span>Shuffle</span>
+                    </button>
+                )}
+
+                {/* Detailed Solution Viewer Trigger */}
+                <button
+                    type="button"
+                    onClick={() => setShowSolutionModal(true)}
+                    className="bg-navy text-gold hover:bg-gold hover:text-navy px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1"
+                    title="View step-by-step solutions and derivations"
+                >
+                    <span>💡</span> Solutions
+                </button>
 
                 {/* View Controls (Zoom, Mode) */}
                 <div className="flex items-center gap-3">
@@ -548,18 +643,18 @@ export default function PaperRenderer({
                         type="button"
                         onClick={handleDownloadWord}
                         disabled={downloadingWord}
-                        className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
-                        title="Download 100% editable Microsoft Word document (.docx) with editable math characters"
+                        className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        title="Download 100% editable Microsoft Word document (.docx)"
                     >
-                        <span>📝</span> {downloadingWord ? 'Exporting Word...' : 'Download Word (.docx)'}
+                        <span>📝</span> Word
                     </button>
                     <button
                         type="button"
                         onClick={handlePrint}
-                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                         title="Print or Save as vector PDF"
                     >
-                        <span>📄</span> Download PDF / Print
+                        <span>📄</span> PDF
                     </button>
                 </div>
 
@@ -568,17 +663,17 @@ export default function PaperRenderer({
                     {onProceedToAlignment && (
                         <button
                             onClick={onProceedToAlignment}
-                            className="bg-navy text-gold px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
+                            className="bg-navy text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>⚙️</span> Alignment Controls →
+                            <span>⚙️</span> Alignment →
                         </button>
                     )}
                     {onProceedToFinalize && (
                         <button
                             onClick={onProceedToFinalize}
-                            className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
+                            className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>✓</span> Finalize & Save →
+                            <span>✓</span> Save →
                         </button>
                     )}
                 </div>
@@ -600,6 +695,17 @@ export default function PaperRenderer({
                 zoom={zoom}
                 onDiagramResize={onDiagramResize}
             />
+
+            {/* ── DETAILED SOLUTION MODAL VIEWER ── */}
+            {showSolutionModal && (
+                <A4SolutionKey
+                    paper={activePaper}
+                    questions={questions}
+                    setName={setsActive ? activeSet : (paper?.setName || 'P')}
+                    optionStyle={settings?.optionStyle || 'ABCD'}
+                    onClose={() => setShowSolutionModal(false)}
+                />
+            )}
         </div>
     );
 }

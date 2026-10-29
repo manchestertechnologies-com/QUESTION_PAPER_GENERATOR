@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import MathRenderer from './MathRenderer';
-import { getResolvedAnswerLabel, getQuestionOptionLabels, isOptionCorrect } from '../utils/sanitize';
+import { getResolvedAnswerLabel, getQuestionOptionLabels, isOptionCorrect, stripOptionPrefix, cleanItalicsPreservingBinomial } from '../utils/sanitize';
 import { generatePaperSet } from '../utils/pqrsGenerator';
 
 export default function A4SolutionKey({
@@ -8,9 +8,11 @@ export default function A4SolutionKey({
     questions = [],
     startQNo = 1,
     setName = 'P',
+    optionStyle = 'ABCD',
     onClose,
 }) {
     const [activeSet, setActiveSet] = useState(setName || paper?.setName || 'P');
+    const [zoom, setZoom] = useState(100);
 
     // Sync activeSet if setName prop changes
     React.useEffect(() => {
@@ -81,6 +83,34 @@ export default function A4SolutionKey({
                         </h3>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* Zoom Controls */}
+                        <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1 mr-1">
+                            <button
+                                type="button"
+                                onClick={() => setZoom(z => Math.max(60, z - 15))}
+                                className="px-2 py-0.5 text-xs font-black text-gray-700 hover:bg-white rounded transition"
+                                title="Zoom Out"
+                            >
+                                −
+                            </button>
+                            <span className="text-xs font-bold text-navy px-1">{zoom}%</span>
+                            <button
+                                type="button"
+                                onClick={() => setZoom(z => Math.min(150, z + 15))}
+                                className="px-2 py-0.5 text-xs font-black text-gray-700 hover:bg-white rounded transition"
+                                title="Zoom In"
+                            >
+                                +
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setZoom(100)}
+                                className="px-1.5 py-0.5 text-[10px] font-bold bg-white text-gray-700 rounded shadow-xs"
+                            >
+                                Reset
+                            </button>
+                        </div>
+
                         <button
                             onClick={handlePrint}
                             className="bg-navy text-gold hover:bg-gold hover:text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
@@ -107,14 +137,14 @@ export default function A4SolutionKey({
 
                 {/* ── A4 Sheet Preview Area (Expands seamlessly to enclose 100% of questions) ── */}
                 <div className="a4-solution-key-body flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-300/80 min-h-0">
-                    <div className="mx-auto w-full max-w-[794px]">
+                    <div className="mx-auto w-full max-w-[794px]" style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center', transition: 'transform 0.15s ease' }}>
                         <div
                             id="print-target-solution-key"
                             className="a4-solution-key-sheet bg-white shadow-2xl rounded-2xl p-6 sm:p-10 w-full text-slate-800 space-y-6 border border-slate-300 relative"
                             style={{
                                 minHeight: 'auto',
                                 boxSizing: 'border-box',
-                                fontFamily: 'Calibri, "Segoe UI", Arial, sans-serif',
+                                fontFamily: '"Times New Roman", Times, serif',
                             }}
                         >
                             {/* Official Manchester Technologies Crest Watermark - Non-intrusive background layer */}
@@ -187,11 +217,12 @@ export default function A4SolutionKey({
                                 <div className="space-y-6">
                                     {resolvedQuestions.map((q, idx) => {
                                         const currentQNo = q.setQNo || (startQNo + idx);
-                                        const answerLabel = getResolvedAnswerLabel(q);
-                                        const labels = getQuestionOptionLabels(q);
-                                        const qText = q.questionText || q.question || '';
-                                        const diagramImg = q.imageUrl || q.image_url;
-                                        const explanation = q.solutionText || q.solution || q.explanation || '';
+                                        const answerLabel = getResolvedAnswerLabel(q, optionStyle);
+                                        const labels = getQuestionOptionLabels(q, optionStyle);
+                                        const qText = cleanItalicsPreservingBinomial(q.questionText || q.question || '');
+                                        const diagramImg = q.solutionImageUrl || q.solution_image_url || q.imageUrl || q.image_url;
+                                        const rawExplanation = q.solutionText || q.solution_text || q.solution || q.explanation || q.explanationText || q.detailed_solution || q.detailedSolution || q.derivation || '';
+                                        const explanation = cleanItalicsPreservingBinomial(rawExplanation);
                                         const options = Array.isArray(q.options) ? q.options : [];
 
                                         return (
@@ -231,6 +262,8 @@ export default function A4SolutionKey({
                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 text-[11px] text-slate-600">
                                                         {options.map((opt, oi) => {
                                                             const isCorrect = isOptionCorrect(q, oi);
+                                                            const optRaw = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt);
+                                                            const optClean = cleanItalicsPreservingBinomial(stripOptionPrefix(optRaw));
                                                             return (
                                                                 <div
                                                                     key={oi}
@@ -240,9 +273,9 @@ export default function A4SolutionKey({
                                                                             : 'bg-white border border-slate-100'
                                                                     }`}
                                                                 >
-                                                                    <span className="font-semibold">({labels[oi] || String.fromCharCode(65 + oi)})</span>
+                                                                    <span className="font-semibold">({labels[oi] || (optionStyle === '1234' ? String(oi + 1) : String.fromCharCode(65 + oi))})</span>
                                                                     <div className="flex-1 min-w-0">
-                                                                        <MathRenderer inline text={typeof opt === 'object' ? (opt.text || '') : String(opt)} />
+                                                                        <MathRenderer inline text={optClean} />
                                                                     </div>
                                                                     {isCorrect && <span className="text-emerald-700 font-bold">✓</span>}
                                                                 </div>
@@ -253,7 +286,7 @@ export default function A4SolutionKey({
 
                                                 {/* Explanation Box with full KaTeX Math Rendering */}
                                                 <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-xs text-slate-700 space-y-1">
-                                                    <span className="font-bold text-navy block">Explanation:</span>
+                                                    <span className="font-bold text-navy block">Explanation & Derivation:</span>
                                                     {explanation ? (
                                                         <div className="leading-relaxed">
                                                             <MathRenderer inline text={explanation} />

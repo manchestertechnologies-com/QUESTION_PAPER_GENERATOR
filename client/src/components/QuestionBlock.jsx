@@ -14,7 +14,7 @@
 import React from 'react';
 import MathRenderer from './MathRenderer';
 import ResizableDiagram from './ResizableDiagram';
-import { optionLabel, getQuestionOptionLabels } from '../utils/sanitize';
+import { optionLabel, getQuestionOptionLabels, stripOptionPrefix, cleanItalicsPreservingBinomial } from '../utils/sanitize';
 
 /**
  * Dynamic option grid calculator based on length and complexity:
@@ -177,7 +177,7 @@ function getDynamicOptGrid(options = [], isTwoColMode = false) {
 
 const Q = {
     wrap: {
-        display: 'inline-block',
+        display: 'block',
         width: '100%',
         breakInside: 'avoid',
         WebkitColumnBreakInside: 'avoid',
@@ -402,7 +402,7 @@ function parseAssertionReason(q) {
 
     // 3. Match Assertion (A) and Reason (R)
     const aMatch = txt.match(/Assertion\s*(?:\(A\))?\s*[:\-]?\s*([\s\S]*?)(?=Reason\s*(?:\(R\))?[:\-]|$)/i);
-    const rMatch = txt.match(/Reason\s*(?:\(R\))?\s*[:\-]?\s*([\s\S]*)$/i);
+    const rMatch = txt.match(/Reason\s*(?:\(R\))?\s*[:\-]?\s*([\s\S]*?)(?=(?:\([A-Da-d1-4]\)|[A-Da-d1-4][\.\)]|Options?[:\-]|$))/i) || txt.match(/Reason\s*(?:\(R\))?\s*[:\-]?\s*([\s\S]*)$/i);
 
     let assertion = aMatch ? aMatch[1].trim() : txt;
     let reason = rMatch ? rMatch[1].trim() : '';
@@ -416,25 +416,15 @@ function parseAssertionReason(q) {
     reason = reason.replace(/\s*The\s*two\s*statements\s*are\s*therefore[\s\S]*/i, '').replace(/\s*Reference\s+case[\s\S]*$/i, '').trim();
 
     return {
-        assertion: cleanStatementText(assertion),
-        reason: cleanStatementText(reason)
+        assertion: cleanItalicsPreservingBinomial(cleanStatementText(assertion)),
+        reason: cleanItalicsPreservingBinomial(cleanStatementText(reason))
     };
 }
 
 export function cleanOptionText(text) {
-    if (!text) return '';
-    let str = String(text)
-        .replace(/&#x27;/g, "'")
-        .replace(/&#39;/g, "'")
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&nbsp;/g, ' ')
-        .trim();
-    // Strip leading duplicate option indicators like (A), (1), A., 1., (a), (i), etc.
-    // ONLY if followed by actual option content (don't strip if option itself is just "1" or "A")
-    str = str.replace(/^(\s*[\(\[]?(?:[A-Da-d]|[1-4])[\)\]\.:\-]\s+)(?=\S)/i, '');
+    if (!text && text !== 0) return '';
+    let str = stripOptionPrefix(text);
+    str = cleanItalicsPreservingBinomial(str);
     return str.trim();
 }
 
@@ -484,6 +474,7 @@ export function cleanQuestionText(text) {
     // 6. Strip trailing isolated newline numbers like "\n1" or "\n 2"
     str = str.replace(/(?:\r?\n)\s*\d{1,2}\s*$/i, '');
 
+    str = cleanItalicsPreservingBinomial(str);
     return str.trim();
 }
 
@@ -531,12 +522,12 @@ function extractDiagramFromText(rawText, existingImageUrl) {
 /**
  * MCQ Body with Intelligent Diagram Placement & Resizing
  */
-function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum }) {
+function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
     const rawQText = cleanQuestionText(q.questionText || q.question || '');
     const { cleanText: qText, diagramUrl: imageUrl } = extractDiagramFromText(rawQText, q.imageUrl || q.image_url);
     const options = Array.isArray(q.options) ? q.options : [];
     const isSideBySide = shouldRenderSideBySide(q, isTwoCol, imageUrl);
-    const labels = getQuestionOptionLabels(q);
+    const labels = getQuestionOptionLabels(q, optionStyle);
     const qId = q._id || q.id || displayNum;
     const currentDiagramHeight = q.customDiagramSizes?.['main'] || q.customDiagramHeight || diagramMaxHeight;
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
@@ -561,6 +552,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                     const rawOpt = typeof opt === 'object' ? (opt.text || opt.optionText || opt.value || opt.option || '') : String(opt || '');
                     const optText = cleanOptionText(rawOpt);
                     const optHeight = q.customDiagramSizes?.[`opt_${i}`] || q.customOptionDiagramHeight || '60px';
+                    const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
 
                     return (
                         <div
@@ -573,7 +565,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                                 gap: '4px',
                             }}
                         >
-                            <span style={Q.optLbl}>({labels[i] || optionLabel(i, classes)})</span>
+                            <span style={Q.optLbl}>({labelText})</span>
                             <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
                                 <MathRenderer
                                     inline
@@ -667,17 +659,19 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
 /**
  * Assertion & Reason Body
  */
-/**
- * Assertion & Reason Body
- */
-function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum }) {
+function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
     const { assertion, reason } = parseAssertionReason(q);
-    const opts = q.options && q.options.length > 0 ? q.options : AR_OPTIONS;
+    const isDummy = !Array.isArray(q.options) || q.options.length < 2 || q.options.every(o => {
+        const s = String(typeof o === 'object' ? (o.text || '') : o).trim();
+        return /^[A-Da-d1-4\(\)\[\]\.\:\-]+$/.test(s);
+    });
+    const opts = isDummy ? AR_OPTIONS : q.options;
     const rawQText = cleanQuestionText(q.questionText || q.question || '');
     const { cleanText: qText, diagramUrl: imageUrl } = extractDiagramFromText(rawQText, q.imageUrl || q.image_url);
     const qId = q._id || q.id || displayNum;
     const currentDiagramHeight = q.customDiagramSizes?.['main'] || q.customDiagramHeight || diagramMaxHeight;
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
+    const labels = getQuestionOptionLabels(q, optionStyle);
 
     // Check if there is introductory directions text BEFORE the word "Assertion"
     let introText = '';
@@ -689,10 +683,16 @@ function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px',
         }
     }
 
+    // Assertion-Reasoning Formatting:
+    // Options stacked (1-column) in 2-column paper mode, or 2x2 grid in 1-column mode, never collapsed into a single inline run.
+    const arOptGrid = isTwoCol
+        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '4px 6px', marginTop: '4px' }
+        : { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '4px 14px', marginTop: '4px' };
+
     return (
-        <>
+        <div className="assertion-reason-card" style={{ display: 'block', width: '100%', marginBottom: '4px' }}>
             {introText && (
-                <div style={{ ...Q.qTextBold, marginBottom: '2px', display: 'block' }}>
+                <div style={{ ...Q.qTextBold, marginBottom: '3px', display: 'block' }}>
                     <MathRenderer
                         inline
                         text={introText}
@@ -702,13 +702,13 @@ function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px',
                     />
                 </div>
             )}
-            <div style={{ marginBottom: '3px' }}>
-                <div style={{ marginBottom: '2px', lineHeight: '1.42' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '4px' }}>
+                <div style={{ lineHeight: '1.45' }}>
                     <strong style={{ color: '#000', marginRight: '6px' }}>Assertion (A):</strong>
                     <MathRenderer inline text={assertion} />
                 </div>
                 {reason && (
-                    <div style={{ marginBottom: '2px', lineHeight: '1.42' }}>
+                    <div style={{ lineHeight: '1.45' }}>
                         <strong style={{ color: '#000', marginRight: '6px' }}>Reason (R):</strong>
                         <MathRenderer inline text={reason} />
                     </div>
@@ -728,17 +728,22 @@ function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px',
                     />
                 </div>
             )}
-            <div style={{ marginTop: '3px', ...getDynamicOptGrid(opts, isTwoCol) }}>
-                {opts.map((opt, i) => (
-                    <div key={i} style={Q.optRow}>
-                        <span style={Q.optLbl}>({optionLabel(i, classes)})</span>
-                        <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
-                            <MathRenderer inline text={cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt)} />
-                        </span>
-                    </div>
-                ))}
+            <div style={arOptGrid}>
+                {opts.map((opt, i) => {
+                    const rawOpt = typeof opt === 'object' ? (opt.text || opt.option || '') : String(opt || '');
+                    const cleanOpt = cleanOptionText(rawOpt);
+                    const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                    return (
+                        <div key={i} style={Q.optRow}>
+                            <span style={Q.optLbl}>({labelText})</span>
+                            <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
+                                <MathRenderer inline text={cleanOpt} />
+                            </span>
+                        </div>
+                    );
+                })}
             </div>
-        </>
+        </div>
     );
 }
 
@@ -1030,7 +1035,7 @@ function parseStatementsFromText(q) {
 /**
  * Match the Following Body
  */
-function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum }) {
+function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
     const { introText, pairs: parsedPairs } = parseMatchFromText(q);
     const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ? q.matchPairs : parsedPairs;
     const opts = q.options || [];
@@ -1039,6 +1044,7 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
     const qId = q._id || q.id || displayNum;
     const currentDiagramHeight = q.customDiagramSizes?.['main'] || q.customDiagramHeight || diagramMaxHeight;
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
+    const labels = getQuestionOptionLabels(q, optionStyle);
 
     const romanLabels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'];
     const hasRomanOpts = opts.some(o => /[\-\s\(](?:i|ii|iii|iv|v|vi)\b/i.test(typeof o === 'object' ? (o.text || '') : String(o)));
@@ -1102,12 +1108,13 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
             {opts.length > 0 && (
                 <div style={getDynamicOptGrid(opts, isTwoCol)}>
                     {opts.map((opt, i) => {
-                        const labels = getQuestionOptionLabels(q);
+                        const optText = cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt);
+                        const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
                         return (
                             <div key={i} style={Q.optRow}>
-                                <span style={Q.optLbl}>({labels[i] || optionLabel(i, classes)})</span>
+                                <span style={Q.optLbl}>({labelText})</span>
                                 <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
-                                    <MathRenderer inline text={cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt)} />
+                                    <MathRenderer inline text={optText} />
                                 </span>
                             </div>
                         );
@@ -1121,7 +1128,7 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
 /**
  * Statement-Based Body
  */
-function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum }) {
+function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
     const { introText, statements: parsedStmts, outroText } = parseStatementsFromText(q);
     const statements = (Array.isArray(q.statements) && q.statements.length > 0) 
         ? q.statements.map((s, idx) => ({ label: `Statement ${idx + 1}:`, text: typeof s === 'object' ? (s.text || '') : String(s) }))
@@ -1129,7 +1136,7 @@ function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
     const opts = q.options || [];
     const rawQText = cleanQuestionText(statements.length > 0 ? (introText || '') : (q.questionText || q.question || ''));
     const { cleanText: qText, diagramUrl: imageUrl } = extractDiagramFromText(rawQText, q.imageUrl || q.image_url);
-    const labels = getQuestionOptionLabels(q);
+    const labels = getQuestionOptionLabels(q, optionStyle);
     const qId = q._id || q.id || displayNum;
     const currentDiagramHeight = q.customDiagramSizes?.['main'] || q.customDiagramHeight || diagramMaxHeight;
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
@@ -1182,14 +1189,18 @@ function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
             )}
             {opts.length > 0 && (
                 <div style={getDynamicOptGrid(opts, isTwoCol)}>
-                    {opts.map((opt, i) => (
-                        <div key={i} style={Q.optRow}>
-                            <span style={Q.optLbl}>({labels[i] || optionLabel(i, classes)})</span>
-                            <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
-                                <MathRenderer inline text={cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt)} />
-                            </span>
-                        </div>
-                    ))}
+                    {opts.map((opt, i) => {
+                        const optText = cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt);
+                        const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                        return (
+                            <div key={i} style={Q.optRow}>
+                                <span style={Q.optLbl}>({labelText})</span>
+                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
+                                    <MathRenderer inline text={optText} />
+                                </span>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </>
@@ -1290,19 +1301,21 @@ export default function QuestionBlock({
     showMarks = false,
     singleColMode = false,
     isTwoCol = false,
-    fontSize = '13px',
-    lineHeight = '1.45',
+    fontSize = '14px',
+    lineHeight = '1.42',
     formatMarks,
     extraStyle = {},
     diagramMaxHeight = '180px',
     onDiagramResize,
+    optionStyle = null,
 }) {
     if (!q) return null;
 
-    const activeFontSize = q.fontSize || fontSize;
+    const activeFontSize = fontSize || 'inherit';
     const qType = (q.type || q.q_type || 'MCQ').toUpperCase();
     const qTextRaw = q.questionText || q.question || '';
     const effectiveIsTwoCol = Boolean(isTwoCol);
+    const resolvedOptionStyle = optionStyle || q.optionStyle || null;
 
     const matchData = parseMatchFromText(q);
     const hasMatchPairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) || (matchData.pairs && matchData.pairs.length >= 2);
@@ -1333,6 +1346,7 @@ export default function QuestionBlock({
                     diagramMaxHeight={diagramMaxHeight}
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
+                    optionStyle={resolvedOptionStyle}
                 />
             );
         }
@@ -1345,6 +1359,7 @@ export default function QuestionBlock({
                     diagramMaxHeight={diagramMaxHeight}
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
+                    optionStyle={resolvedOptionStyle}
                 />
             );
         }
@@ -1357,6 +1372,7 @@ export default function QuestionBlock({
                     diagramMaxHeight={diagramMaxHeight}
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
+                    optionStyle={resolvedOptionStyle}
                 />
             );
         }
@@ -1381,6 +1397,7 @@ export default function QuestionBlock({
                 diagramMaxHeight={diagramMaxHeight}
                 onDiagramResize={onDiagramResize}
                 displayNum={displayNum}
+                optionStyle={resolvedOptionStyle}
             />
         );
     };

@@ -52,6 +52,12 @@ export default function A4PaperEngine({
             <div
                 className="a4-print-document"
                 style={{
+                    '--paper-font-size': settings.fontSize || '14px',
+                    '--paper-font-family': settings.fontFamily || '"Times New Roman", Times, serif',
+                    '--paper-line-height': settings.lineHeight || '1.42',
+                    fontFamily: settings.fontFamily || '"Times New Roman", Times, serif',
+                    fontSize: settings.fontSize || '14px',
+                    lineHeight: settings.lineHeight || '1.42',
                     transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
                     transformOrigin: 'top center',
                     transition: 'transform 0.2s ease',
@@ -97,9 +103,9 @@ export default function A4PaperEngine({
                     <div
                         className="a4-page-content"
                         style={{
-                            fontFamily: settings.fontFamily,
-                            fontSize: settings.fontSize,
-                            lineHeight: settings.lineHeight,
+                            fontFamily: 'inherit',
+                            fontSize: 'inherit',
+                            lineHeight: 'inherit',
                             position: 'relative',
                             zIndex: 1
                         }}
@@ -219,6 +225,7 @@ export default function A4PaperEngine({
                                                 extraStyle={{ marginBottom: '0px' }}
                                                 diagramMaxHeight={settings.diagramMaxHeight}
                                                 onDiagramResize={onDiagramResize}
+                                                optionStyle={settings.optionStyle || 'ABCD'}
                                             />
                                         </div>
                                     </React.Fragment>
@@ -293,6 +300,14 @@ export default function A4PaperEngine({
 
             {/* ── CSS STYLES FOR ON-SCREEN AND PRINT ── */}
             <style>{`
+                .a4-print-document {
+                    --paper-font-size: ${settings.fontSize || '14px'};
+                    --paper-font-family: ${settings.fontFamily || '"Times New Roman", Times, serif'};
+                    --paper-line-height: ${settings.lineHeight || '1.42'};
+                    font-family: var(--paper-font-family) !important;
+                    font-size: var(--paper-font-size) !important;
+                    line-height: var(--paper-line-height) !important;
+                }
                 .a4-sheet-page {
                     width: 794px;
                     min-height: 1123px;
@@ -302,6 +317,8 @@ export default function A4PaperEngine({
                     margin: 0 auto 28px auto;
                     box-sizing: border-box;
                     position: relative;
+                    font-family: var(--paper-font-family) !important;
+                    font-size: var(--paper-font-size) !important;
                 }
                 .a4-cover-page {
                     page-break-after: always;
@@ -314,6 +331,23 @@ export default function A4PaperEngine({
                     color: #000000;
                     position: relative;
                     z-index: 1;
+                    font-family: var(--paper-font-family) !important;
+                    font-size: var(--paper-font-size) !important;
+                    line-height: var(--paper-line-height) !important;
+                }
+                .a4-questions-flow,
+                .question-print-item,
+                .question-block {
+                    font-family: var(--paper-font-family) !important;
+                    font-size: var(--paper-font-size) !important;
+                    line-height: var(--paper-line-height) !important;
+                }
+                .question-block * {
+                    font-family: inherit;
+                }
+                .a4-print-document .opt-lbl,
+                .a4-print-document .q-num {
+                    font-style: normal !important;
                 }
                 .a4-subtle-running-header {
                     display: flex;
@@ -514,6 +548,8 @@ export default function A4PaperEngine({
                         padding: 0 !important;
                         transform: none !important;
                         overflow: visible !important;
+                        font-family: var(--paper-font-family, "Times New Roman", Times, serif) !important;
+                        font-size: var(--paper-font-size, 14px) !important;
                     }
 
                     .a4-sheet-page {
@@ -525,6 +561,8 @@ export default function A4PaperEngine({
                         min-height: auto !important;
                         height: auto !important;
                         overflow: visible !important;
+                        font-family: var(--paper-font-family, "Times New Roman", Times, serif) !important;
+                        font-size: var(--paper-font-size, 14px) !important;
                     }
                     .a4-questions-page {
                         overflow: visible !important;
@@ -538,6 +576,23 @@ export default function A4PaperEngine({
                         overflow: visible !important;
                         position: relative !important;
                         z-index: 1 !important;
+                        font-family: var(--paper-font-family, "Times New Roman", Times, serif) !important;
+                        font-size: var(--paper-font-size, 14px) !important;
+                        line-height: var(--paper-line-height, 1.42) !important;
+                    }
+                    .a4-questions-flow,
+                    .question-print-item,
+                    .question-block {
+                        font-family: var(--paper-font-family, "Times New Roman", Times, serif) !important;
+                        font-size: var(--paper-font-size, 14px) !important;
+                        line-height: var(--paper-line-height, 1.42) !important;
+                    }
+                    .question-block * {
+                        font-family: inherit;
+                    }
+                    .a4-print-document .opt-lbl,
+                    .a4-print-document .q-num {
+                        font-style: normal !important;
                     }
                     .no-print {
                         display: none !important;

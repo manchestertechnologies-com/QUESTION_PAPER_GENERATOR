@@ -212,6 +212,27 @@ function extractDiagramFromQuestion(q) {
     return diagramUrl;
 }
 
+function stripOptionPrefix(text) {
+    if (!text) return '';
+    const str = String(text).trim();
+    if (/^[A-Da-d1-4]$/.test(str)) return str;
+    return str.replace(/^[A-Da-d1-4][\.\)\-\:]\s*/, '');
+}
+
+function formatClassDisplay(classes = [], headerConfig = null) {
+    if (headerConfig?.streamClass) return headerConfig.streamClass;
+    const rawList = Array.isArray(classes) ? classes : [classes].filter(Boolean);
+    const strList = rawList.map(c => String(c).trim().toLowerCase());
+    const has11 = strList.some(c => c.includes('11') || c === 'xi' || c === 'puc 1' || c === '1st puc');
+    const has12 = strList.some(c => c.includes('12') || c === 'xii' || c === 'puc 2' || c === '2nd puc');
+
+    if (has11 && has12) return 'Class: 11th & 12th';
+    if (has11) return 'Class: 11th';
+    if (has12) return 'Class: 12th';
+    if (rawList.length > 0) return `Class: ${rawList.join(', ')}`;
+    return 'Class: 11th & 12th';
+}
+
 /**
  * Extract image URL from an individual option string
  */
@@ -636,7 +657,7 @@ async function generatePaperDoc(paper, template = null) {
 
     // ── 2. METADATA STRIP TABLE (Matching PDF) ──
     const subText = paper.subject || 'All Subjects';
-    const classText = Array.isArray(paper.classes) ? paper.classes.join(', ') : (paper.classes || '12');
+    const classDisplay = formatClassDisplay(paper.classes, paper.headerConfig);
     const durText = paper.duration || '180 Minutes';
     const maxMarksText = paper.headerConfig?.maxMarks || (paper.exam_type?.includes('JEE') ? '100' : '180');
 
@@ -659,7 +680,7 @@ async function generatePaperDoc(paper, template = null) {
                             borders: metaBorders
                         }),
                         new TableCell({
-                            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `Class: ${classText}`, bold: true, font: 'Calibri', size: 19 })] })],
+                            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: classDisplay, bold: true, font: 'Calibri', size: 19 })] })],
                             borders: metaBorders
                         }),
                         new TableCell({
@@ -798,7 +819,8 @@ async function generatePaperDoc(paper, template = null) {
         const hasOptionImages = optionImageUrls.some(Boolean);
         const optionImageBuffers = hasOptionImages ? await Promise.all(optionImageUrls.map(u => fetchImageBuffer(u))) : [];
 
-        const labels = ['(A)', '(B)', '(C)', '(D)', '(E)'];
+        const optionStyle = paper.optionStyle || 'ABCD';
+        const labels = optionStyle === '1234' ? ['(1)', '(2)', '(3)', '(4)', '(5)'] : ['(A)', '(B)', '(C)', '(D)', '(E)'];
 
         // ── Detect Match the Following Questions ──
         const matchData = parseMatchFromText(q);
@@ -916,8 +938,9 @@ async function generatePaperDoc(paper, template = null) {
                 );
             } else if (opts.length > 0) {
                 const optRunsList = opts.map(o => {
-                    const str = typeof o === 'object' ? (o.text || o.optionText || o.option || '') : String(o || '');
-                    return textToRuns(str, { font: 'Calibri', size: 20 });
+                    const rawStr = typeof o === 'object' ? (o.text || o.optionText || o.option || '') : String(o || '');
+                    const cleanStr = stripOptionPrefix(rawStr);
+                    return textToRuns(cleanStr, { font: 'Calibri', size: 20 });
                 });
 
                 opts.forEach((_, optIdx) => {
@@ -1016,8 +1039,9 @@ async function generatePaperDoc(paper, template = null) {
                 );
             } else if (opts.length > 0) {
                 const optRunsList = opts.map(o => {
-                    const str = typeof o === 'object' ? (o.text || o.optionText || o.option || '') : String(o || '');
-                    return textToRuns(str, { font: 'Calibri', size: 20 });
+                    const rawStr = typeof o === 'object' ? (o.text || o.optionText || o.option || '') : String(o || '');
+                    const cleanStr = stripOptionPrefix(rawStr);
+                    return textToRuns(cleanStr, { font: 'Calibri', size: 20 });
                 });
 
                 // Short text options or match options: 2x2 borderless grid

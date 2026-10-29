@@ -249,3 +249,50 @@ export function generateAllPQRS(paper) {
         S: generatePaperSet(paper, 'S'),
     };
 }
+
+/**
+ * Robust Fisher-Yates question shuffling function within assigned sections / subjects.
+ * Guarantees Section A (MCQs) and Section B (Numericals) or distinct subjects are never mixed,
+ * while reliably jumbling question order without desynchronizing solution keys.
+ */
+export function shuffleQuestionsWithinSections(questions = []) {
+    if (!Array.isArray(questions) || questions.length <= 1) return [...(questions || [])];
+
+    // Partition questions by subject/section AND part
+    const groups = new Map();
+    const groupKeys = [];
+
+    questions.forEach((q, idx) => {
+        const isNum = Boolean(
+            q.isNumerical ||
+            (q.type && String(q.type).toUpperCase().includes('NUMERICAL')) ||
+            (q.part && String(q.part).toUpperCase().includes('SECTION B')) ||
+            (!q.options?.length && q.num_answer)
+        );
+        const sub = q.sectionSubject || q.sectionName || q.subject || 'Default';
+        const partTag = isNum ? 'SECTION_B' : 'SECTION_A';
+        const key = `${sub}:::${partTag}`;
+        if (!groups.has(key)) {
+            groups.set(key, []);
+            groupKeys.push(key);
+        }
+        groups.get(key).push({
+            ...q,
+            originalQNo: q.originalQNo || (idx + 1)
+        });
+    });
+
+    const shuffledResult = [];
+    groupKeys.forEach(key => {
+        const items = [...groups.get(key)];
+        // Unbiased Fisher-Yates algorithm
+        for (let i = items.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [items[i], items[j]] = [items[j], items[i]];
+        }
+        shuffledResult.push(...items);
+    });
+
+    return shuffledResult;
+}
+

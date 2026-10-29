@@ -3,6 +3,33 @@ const { preRenderMath, getCss } = require('../utils/latexPreRenderer');
 
 let browserInstance = null;
 
+function stripOptionPrefix(text) {
+    if (!text) return '';
+    const str = String(text).trim();
+    if (/^[A-Da-d1-4]$/.test(str)) return str;
+    return str.replace(/^[A-Da-d1-4][\.\)\-\:]\s*/, '');
+}
+
+function formatClassDisplay(classes = []) {
+    const rawList = Array.isArray(classes) ? classes : [classes].filter(Boolean);
+    const strList = rawList.map(c => String(c).trim().toLowerCase());
+    const has11 = strList.some(c => c.includes('11') || c === 'xi' || c === 'puc 1' || c === '1st puc');
+    const has12 = strList.some(c => c.includes('12') || c === 'xii' || c === 'puc 2' || c === '2nd puc');
+
+    if (has11 && has12) return 'Class: 11th & 12th';
+    if (has11) return 'Class: 11th';
+    if (has12) return 'Class: 12th';
+    if (rawList.length > 0) return `Class: ${rawList.join(', ')}`;
+    return 'Class: 11th & 12th';
+}
+
+function getOptionLabel(optIdx, optionStyle = 'ABCD') {
+    if (optionStyle === '1234') {
+        return `(${optIdx + 1})`;
+    }
+    return `(${String.fromCharCode(65 + optIdx)})`;
+}
+
 async function getBrowser() {
     if (browserInstance && browserInstance.process() && browserInstance.process().signalCode === null) {
         return browserInstance;
@@ -34,6 +61,8 @@ async function generatePaperPdf(paper, options = {}) {
     const totalMarks = paper.total_marks || (questions.length * 4);
     const instructions = paper.instructions || 'Read all questions carefully. Each question carries 4 marks. -1 mark for each incorrect response in single-correct MCQs.';
     const katexCss = getCss();
+    const optionStyle = paper.optionStyle || options.optionStyle || 'ABCD';
+    const paperFontSize = paper.fontSize || options.fontSize || '10.5pt';
 
     // Group questions by section / subject
     const sections = Array.isArray(paper.sections) && paper.sections.length > 0 ? paper.sections : null;
@@ -82,8 +111,8 @@ async function generatePaperPdf(paper, options = {}) {
                 if (Array.isArray(opts) && opts.length > 0) {
                     renderedSectionsHtml += `<div class="options-container">`;
                     opts.forEach((opt, optIdx) => {
-                        const optLabel = `(${optIdx + 1})`;
-                        const cleanOptText = preRenderMath(String(opt));
+                        const optLabel = getOptionLabel(optIdx, optionStyle);
+                        const cleanOptText = preRenderMath(stripOptionPrefix(String(opt)));
                         renderedSectionsHtml += `
                             <div class="opt-item">
                                 <span class="opt-label">${optLabel}</span>
@@ -126,8 +155,8 @@ async function generatePaperPdf(paper, options = {}) {
             if (Array.isArray(opts) && opts.length > 0) {
                 renderedSectionsHtml += `<div class="options-container">`;
                 opts.forEach((opt, optIdx) => {
-                    const optLabel = `(${optIdx + 1})`;
-                    const cleanOptText = preRenderMath(String(opt));
+                    const optLabel = getOptionLabel(optIdx, optionStyle);
+                    const cleanOptText = preRenderMath(stripOptionPrefix(String(opt)));
                     renderedSectionsHtml += `
                         <div class="opt-item">
                             <span class="opt-label">${optLabel}</span>
@@ -170,7 +199,7 @@ async function generatePaperPdf(paper, options = {}) {
 
                 body {
                     font-family: "Times New Roman", Times, serif;
-                    font-size: 11pt;
+                    font-size: ${paperFontSize};
                     line-height: 1.35;
                     color: #000;
                     margin: 0;
@@ -328,10 +357,10 @@ async function generatePaperPdf(paper, options = {}) {
             <div class="header-wrapper">
                 <div class="inst-name">MANCHESTER TECHNOLOGIES</div>
                 <div class="inst-sub">DAVANAGERE • DEPARTMENT OF PRE-UNIVERSITY EDUCATION</div>
-                <div class="exam-title">${title} (${examType.replace('_', ' ')})</div>
+                <div class="exam-title">${title}</div>
                 <table class="meta-table">
                     <tr>
-                        <td style="text-align: left;">Class: PUC ${classes.join(' & ')}</td>
+                        <td style="text-align: left;">${formatClassDisplay(classes)}</td>
                         <td style="text-align: center;">Time: ${duration}</td>
                         <td style="text-align: right;">Max. Marks: ${totalMarks}</td>
                     </tr>

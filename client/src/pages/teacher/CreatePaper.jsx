@@ -24,6 +24,7 @@ import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 import { optionLabel, getResolvedAnswerLabel, getQuestionOptionLabels } from '../../utils/sanitize';
+import { shuffleQuestionsWithinSections } from '../../utils/pqrsGenerator';
 
 // Reference UI QuestionCardOptions with crisp white contrast
 const QuestionCardOptions = ({ q, options = [], answer = '', showAnswer = true }) => {
@@ -517,6 +518,13 @@ export default function CreatePaper() {
     const [showReviewSelectedModal, setShowReviewSelectedModal] = useState(false);
     const [editingQuestionModal, setEditingQuestionModal] = useState(null);
 
+    // Mandatory Selection Step Gating State (Step 6)
+    const [incompleteSelectionModal, setIncompleteSelectionModal] = useState({
+        open: false,
+        missingSubjects: []
+    });
+    const [attemptedStep1Proceed, setAttemptedStep1Proceed] = useState(false);
+
     // Default Institutional Header & Part Directives
     const DEFAULT_HEADER_CONFIG = {
         collegeName: 'MANCHESTER TECHNOLOGIES',
@@ -562,13 +570,58 @@ export default function CreatePaper() {
     const [editorTab, setEditorTab] = useState('split'); // 'split' | 'edit' | 'preview'
     const [activeEditorField, setActiveEditorField] = useState('questionText');
 
-    // Standard Step Wizard Navigation Handlers
+    // Standard Step Wizard Navigation Handlers & Mandatory Selection Step Gating
+    const validateStep1Selections = () => {
+        const missing = [];
+        for (const sub of examSubjects) {
+            const sel = subjectSelections[sub] || { chapters: [], concepts: [] };
+            const hasChapters = Array.isArray(sel.chapters) && sel.chapters.length > 0;
+            const hasConcepts = Array.isArray(sel.concepts) && sel.concepts.length > 0;
+            if (!hasChapters || !hasConcepts) {
+                missing.push({
+                    subject: sub,
+                    missingChapters: !hasChapters,
+                    missingConcepts: !hasConcepts
+                });
+            }
+        }
+        return missing;
+    };
+
+    const handleProceedFromStep1 = (targetStep = 2) => {
+        if (currentStep === 1) {
+            const missing = validateStep1Selections();
+            if (missing.length > 0) {
+                setAttemptedStep1Proceed(true);
+                setIncompleteSelectionModal({
+                    open: true,
+                    missingSubjects: missing
+                });
+                return false;
+            }
+        }
+        setAttemptedStep1Proceed(false);
+        setCurrentStep(targetStep);
+        return true;
+    };
+
     const handlePrevStep = () => {
         setCurrentStep(prev => Math.max(1, prev - 1));
     };
 
     const handleNextStep = () => {
-        setCurrentStep(prev => Math.min(5, prev + 1));
+        if (currentStep === 1) {
+            handleProceedFromStep1(2);
+        } else {
+            setCurrentStep(prev => Math.min(5, prev + 1));
+        }
+    };
+
+    const handleShuffleQuestions = () => {
+        if (!selectedQuestions || selectedQuestions.length === 0) return;
+        const shuffled = shuffleQuestionsWithinSections(selectedQuestions);
+        setSelectedQuestions(shuffled);
+        showToastNotification('🔀 Questions shuffled cleanly within assigned sections (Fisher-Yates)!', 'success');
     };
 
     // Toast notification helper with auto-dismiss
@@ -2288,7 +2341,13 @@ export default function CreatePaper() {
                         <button
                             key={st.num}
                             type="button"
-                            onClick={() => setCurrentStep(st.num)}
+                            onClick={() => {
+                                if (currentStep === 1 && st.num > 1) {
+                                    handleProceedFromStep1(st.num);
+                                } else {
+                                    setCurrentStep(st.num);
+                                }
+                            }}
                             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
                                 currentStep === st.num
                                     ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
@@ -2432,6 +2491,8 @@ export default function CreatePaper() {
                                         const isTabActive = activeSubjectTab === sub;
                                         const subSel = subjectSelections[sub] || { chapters: [], concepts: [] };
                                         const chCount = subSel.chapters.length;
+                                        const cptCount = subSel.concepts.length;
+                                        const isSubMissing = attemptedStep1Proceed && (chCount === 0 || cptCount === 0);
 
                                         return (
                                             <button
@@ -2439,17 +2500,25 @@ export default function CreatePaper() {
                                                 type="button"
                                                 onClick={() => setActiveSubjectTab(sub)}
                                                 className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-2 ${
-                                                    isTabActive
+                                                    isSubMissing
+                                                        ? 'border-2 border-red-500 bg-red-50 text-red-700 animate-pulse'
+                                                        : isTabActive
                                                         ? 'bg-navy text-gold ring-2 ring-gold shadow-md scale-105'
                                                         : 'bg-white text-slate-700 border border-gray-300 hover:bg-slate-100'
                                                 }`}
                                             >
                                                 <span>Section {sIdx + 1}: {sub}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                                                    chCount > 0 ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700'
-                                                }`}>
-                                                    {chCount > 0 ? `${chCount} Ch` : 'All Ch'}
-                                                </span>
+                                                {isSubMissing ? (
+                                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white">
+                                                        ⚠️ Needs Setup
+                                                    </span>
+                                                ) : (
+                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                        chCount > 0 ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700'
+                                                    }`}>
+                                                        {chCount > 0 ? `${chCount} Ch` : '0 Ch'}
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -2458,177 +2527,203 @@ export default function CreatePaper() {
                         )}
 
                         {/* Chapter Multi-Select Grid for Active Subject */}
-                        <div className="space-y-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="text-sm font-black text-navy uppercase tracking-wider">
-                                            {activeSubjectTab} Chapters ({distinctChapters.length} Available)
-                                        </h3>
-                                        {selectedChapters.length > 0 && (
-                                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                                                totalAllocatedChapterQs === defaultQuotaForSubject
-                                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                                    : 'bg-amber-100 text-amber-900 border border-amber-300'
-                                            }`}>
-                                                Allocated: {totalAllocatedChapterQs} / {defaultQuotaForSubject} Qs
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">
-                                        Check chapters and specify the number of questions to pick from each chapter.
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <button
-                                        type="button"
-                                        onClick={distributeChapterQuotasEvenly}
-                                        disabled={selectedChapters.length === 0}
-                                        className="text-[11px] font-black text-navy bg-gold hover:bg-gold/80 disabled:opacity-40 disabled:pointer-events-none px-3 py-1 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                                        title={`Distribute ${defaultQuotaForSubject} questions evenly across checked chapters`}
-                                    >
-                                        <span>⚡ Distribute Evenly</span>
-                                        <span className="text-[9px] bg-navy text-gold px-1.5 py-0.2 rounded-full font-black">
-                                            {defaultQuotaForSubject} Qs
-                                        </span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={selectAllChapters}
-                                        className="text-[11px] font-bold text-navy bg-gold/20 hover:bg-gold/40 px-3 py-1 rounded-xl transition cursor-pointer"
-                                    >
-                                        Select All
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={deselectAllChapters}
-                                        className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            </div>
-
-                            {loadingMeta || loadingQuestions ? (
-                                <div className="p-8 text-center text-xs font-bold text-gray-400">Loading chapters for {activeSubjectTab}...</div>
-                            ) : distinctChapters.length === 0 ? (
-                                <div className="p-8 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                    No chapters found for {activeSubjectTab}. Questions from the general pool will be used.
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
-                                    {distinctChapters.map(ch => {
-                                        const isChecked = selectedChapters.includes(ch);
-                                        const cCount = (chapterConceptsMap[ch] || []).length;
-                                        return (
-                                            <div
-                                                key={ch}
-                                                className={`p-3 rounded-2xl border-2 transition flex flex-col justify-between gap-2 ${
-                                                    isChecked
-                                                        ? 'border-navy bg-navy/5 shadow-xs'
-                                                        : 'border-gray-200 bg-white hover:border-gray-300'
-                                                }`}
-                                            >
-                                                <div
-                                                    onClick={() => toggleChapter(ch)}
-                                                    className="flex items-center gap-3 cursor-pointer"
-                                                >
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isChecked}
-                                                        onChange={() => {}}
-                                                        className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <span className="text-xs font-bold text-navy block truncate" title={ch}>
-                                                            {ch}
-                                                        </span>
-                                                        {cCount > 0 && (
-                                                            <span className="text-[10px] text-gray-500 font-medium">
-                                                                {cCount} Concept(s)
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Chapter selected count badge */}
-                                                {isChecked && (chapterQuotas[ch] || 0) > 0 && (
-                                                    <div className="mt-1 pt-1 border-t border-navy/10 text-right">
-                                                        <span className="text-[10px] font-black text-navy/70 uppercase">
-                                                            {chapterQuotas[ch]} Qs configured
-                                                        </span>
-                                                    </div>
+                        {(() => {
+                            const isMissingChForActive = attemptedStep1Proceed && selectedChapters.length === 0;
+                            return (
+                                <div className={`space-y-4 rounded-2xl p-3 transition ${isMissingChForActive ? 'border-2 border-red-500 bg-red-50/20' : ''}`}>
+                                    {isMissingChForActive && (
+                                        <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                                            <span>⚠️</span>
+                                            <span>Incomplete Selection: Please select at least one Chapter for <strong>{activeSubjectTab}</strong> before proceeding.</span>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-2">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="text-sm font-black text-navy uppercase tracking-wider">
+                                                    {activeSubjectTab} Chapters ({distinctChapters.length} Available)
+                                                </h3>
+                                                {selectedChapters.length > 0 && (
+                                                    <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                                                        totalAllocatedChapterQs === defaultQuotaForSubject
+                                                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                                            : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                    }`}>
+                                                        Allocated: {totalAllocatedChapterQs} / {defaultQuotaForSubject} Qs
+                                                    </span>
                                                 )}
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Concept Multi-Select if Chapters are Selected */}
-                        {selectedChapters.length > 0 && availableConceptsForSelectedChapters.length > 0 && (
-                            <div className="space-y-4 pt-4 border-t border-gray-100">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                    <div>
-                                        <h3 className="text-sm font-black text-navy uppercase tracking-wider">
-                                            Specific Concepts in Selected Chapters ({availableConceptsForSelectedChapters.length})
-                                        </h3>
-                                        <p className="text-[11px] text-gray-500 font-medium">
-                                            Optional: Select specific sub-concepts or leave blank to include full chapters.
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={selectAllConcepts}
-                                            className="text-[11px] font-bold text-navy bg-gold/20 hover:bg-gold/40 px-3 py-1 rounded-xl transition cursor-pointer"
-                                        >
-                                            Select All Concepts
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={deselectAllConcepts}
-                                            className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
-                                    {availableConceptsForSelectedChapters.map(({ concept: cpt, chapter: ch }) => {
-                                        const isChecked = selectedConcepts.includes(cpt);
-                                        return (
-                                            <div
-                                                key={`${ch}-${cpt}`}
-                                                onClick={() => toggleConcept(cpt)}
-                                                className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
-                                                    isChecked
-                                                        ? 'border-emerald-600 bg-emerald-50/60 shadow-xs'
-                                                        : 'border-gray-200 bg-white hover:border-gray-300'
-                                                }`}
+                                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                                                Check chapters and specify the number of questions to pick from each chapter.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <button
+                                                type="button"
+                                                onClick={distributeChapterQuotasEvenly}
+                                                disabled={selectedChapters.length === 0}
+                                                className="text-[11px] font-black text-navy bg-gold hover:bg-gold/80 disabled:opacity-40 disabled:pointer-events-none px-3 py-1 rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                                                title={`Distribute ${defaultQuotaForSubject} questions evenly across checked chapters`}
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => {}}
-                                                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
-                                                />
-                                                <div className="flex-1 min-w-0">
-                                                    <span className="text-xs font-bold text-navy block truncate" title={cpt}>
-                                                        {cpt}
-                                                    </span>
-                                                    <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
-                                                        📖 {ch}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                                                <span>⚡ Distribute Evenly</span>
+                                                <span className="text-[9px] bg-navy text-gold px-1.5 py-0.2 rounded-full font-black">
+                                                    {defaultQuotaForSubject} Qs
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={selectAllChapters}
+                                                className="text-[11px] font-bold text-navy bg-gold/20 hover:bg-gold/40 px-3 py-1 rounded-xl transition cursor-pointer"
+                                            >
+                                                Select All
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={deselectAllChapters}
+                                                className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {loadingMeta || loadingQuestions ? (
+                                        <div className="p-8 text-center text-xs font-bold text-gray-400">Loading chapters for {activeSubjectTab}...</div>
+                                    ) : distinctChapters.length === 0 ? (
+                                        <div className="p-8 text-center text-xs font-bold text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
+                                            No chapters found for {activeSubjectTab}. Questions from the general pool will be used.
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-72 overflow-y-auto p-1">
+                                            {distinctChapters.map(ch => {
+                                                const isChecked = selectedChapters.includes(ch);
+                                                const cCount = (chapterConceptsMap[ch] || []).length;
+                                                return (
+                                                    <div
+                                                        key={ch}
+                                                        className={`p-3 rounded-2xl border-2 transition flex flex-col justify-between gap-2 ${
+                                                            isChecked
+                                                                ? 'border-navy bg-navy/5 shadow-xs'
+                                                                : 'border-gray-200 bg-white hover:border-gray-300'
+                                                        }`}
+                                                    >
+                                                        <div
+                                                            onClick={() => toggleChapter(ch)}
+                                                            className="flex items-center gap-3 cursor-pointer"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isChecked}
+                                                                onChange={() => {}}
+                                                                className="w-4 h-4 text-navy rounded border-gray-300 cursor-pointer"
+                                                            />
+                                                            <div className="flex-1 min-w-0">
+                                                                <span className="text-xs font-bold text-navy block truncate" title={ch}>
+                                                                    {ch}
+                                                                </span>
+                                                                {cCount > 0 && (
+                                                                    <span className="text-[10px] text-gray-500 font-medium">
+                                                                        {cCount} Concept(s)
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Chapter selected count badge */}
+                                                        {isChecked && (chapterQuotas[ch] || 0) > 0 && (
+                                                            <div className="mt-1 pt-1 border-t border-navy/10 text-right">
+                                                                <span className="text-[10px] font-black text-navy/70 uppercase">
+                                                                    {chapterQuotas[ch]} Qs configured
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
+
+                        {/* Concept Multi-Select for Active Subject */}
+                        {(() => {
+                            const isMissingCptForActive = attemptedStep1Proceed && selectedConcepts.length === 0;
+                            return (
+                                <div className={`space-y-4 pt-4 border-t border-gray-100 rounded-2xl p-3 transition ${isMissingCptForActive ? 'border-2 border-red-500 bg-red-50/20' : ''}`}>
+                                    {isMissingCptForActive && (
+                                        <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                                            <span>⚠️</span>
+                                            <span>Incomplete Selection: Please select at least one Concept for <strong>{activeSubjectTab}</strong> before proceeding.</span>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                        <div>
+                                            <h3 className="text-sm font-black text-navy uppercase tracking-wider">
+                                                Specific Concepts in Selected Chapters ({availableConceptsForSelectedChapters.length})
+                                            </h3>
+                                            <p className="text-[11px] text-gray-500 font-medium">
+                                                Select the concepts to focus on for this assessment.
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={selectAllConcepts}
+                                                className="text-[11px] font-bold text-navy bg-gold/20 hover:bg-gold/40 px-3 py-1 rounded-xl transition cursor-pointer"
+                                            >
+                                                Select All Concepts
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={deselectAllConcepts}
+                                                className="text-[11px] font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-xl transition cursor-pointer"
+                                            >
+                                                Clear
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {availableConceptsForSelectedChapters.length === 0 ? (
+                                        <div className="p-6 text-center text-xs font-bold text-gray-400 border border-dashed border-gray-200 rounded-2xl">
+                                            {selectedChapters.length === 0 ? 'Please select at least one Chapter above to view and choose Concepts.' : 'No discrete sub-concepts tagged for selected chapters.'}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-56 overflow-y-auto p-1">
+                                            {availableConceptsForSelectedChapters.map(({ concept: cpt, chapter: ch }) => {
+                                                const isChecked = selectedConcepts.includes(cpt);
+                                                return (
+                                                    <div
+                                                        key={`${ch}-${cpt}`}
+                                                        onClick={() => toggleConcept(cpt)}
+                                                        className={`p-3 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                                                            isChecked
+                                                                ? 'border-emerald-600 bg-emerald-50/60 shadow-xs'
+                                                                : 'border-gray-200 bg-white hover:border-gray-300'
+                                                        }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => {}}
+                                                            className="w-4 h-4 text-emerald-600 rounded border-gray-300 cursor-pointer"
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="text-xs font-bold text-navy block truncate" title={cpt}>
+                                                                {cpt}
+                                                            </span>
+                                                            <span className="text-[9px] text-gray-500 font-medium block truncate" title={ch}>
+                                                                📖 {ch}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* Bottom Scope Summary Bar */}
                         <div className="bg-navy text-white p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
@@ -2639,12 +2734,70 @@ export default function CreatePaper() {
                                 </div>
                             </div>
                             <button
-                                onClick={() => setCurrentStep(2)}
+                                onClick={() => handleProceedFromStep1(2)}
                                 className="bg-gold text-navy hover:scale-105 px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                             >
                                 <span>Proceed to Method</span>
                                 <span>→</span>
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── MODAL: INCOMPLETE SELECTION ALERT (STEP 6) ── */}
+                {incompleteSelectionModal.open && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-fade-in">
+                        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 border-4 border-red-500/20 space-y-5 animate-scale-up">
+                            <div className="flex items-center gap-3 pb-3 border-b border-gray-100">
+                                <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl font-black shrink-0">
+                                    ⚠️
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-black text-navy uppercase tracking-tight">
+                                        Incomplete Selection
+                                    </h3>
+                                    <p className="text-xs text-gray-500 font-semibold">
+                                        Action required before proceeding
+                                    </p>
+                                </div>
+                            </div>
+
+                            <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                                <strong>Incomplete Selection:</strong> Please select at least one Chapter and Concept for each subject before proceeding.
+                            </p>
+
+                            <div className="space-y-2 bg-red-50/60 p-4 rounded-2xl border border-red-200">
+                                <span className="text-[10px] font-black text-red-800 uppercase tracking-widest block">
+                                    Missing Configurations:
+                                </span>
+                                {incompleteSelectionModal.missingSubjects.map((m, idx) => (
+                                    <div key={idx} className="flex items-center justify-between text-xs text-red-900 bg-white p-2.5 rounded-xl border border-red-200 shadow-2xs">
+                                        <span className="font-black text-navy">{m.subject}</span>
+                                        <span className="font-bold text-red-600">
+                                            {m.missingChapters && m.missingConcepts
+                                                ? 'Select Chapter & Concept'
+                                                : m.missingChapters
+                                                ? 'Select at least 1 Chapter'
+                                                : 'Select at least 1 Concept'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (incompleteSelectionModal.missingSubjects.length > 0) {
+                                            setActiveSubjectTab(incompleteSelectionModal.missingSubjects[0].subject);
+                                        }
+                                        setIncompleteSelectionModal({ open: false, missingSubjects: [] });
+                                    }}
+                                    className="bg-navy hover:bg-gold hover:text-navy text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition cursor-pointer shadow-md"
+                                >
+                                    Select Now →
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -4047,7 +4200,7 @@ export default function CreatePaper() {
                                                         </div>
 
                                                         <div className="flex items-center gap-2">
-                                                            {(q.answer || q.solutionText || q.solution) && (
+                                                            {(q.answer || q.correct_option || q.solutionText || q.solution_text || q.solution || q.explanation || q.explanationText || q.detailed_solution || q.solutionImageUrl || q.solution_image_url) && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => {
@@ -4064,14 +4217,26 @@ export default function CreatePaper() {
 
                                                     {/* Solution Preview */}
                                                     {isSolutionOpen && (
-                                                        <div className="mt-2 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-2 animate-fade-in">
-                                                            {q.solutionText || q.solution ? (
-                                                                <div className="leading-relaxed">
-                                                                    <MathRenderer inline text={q.solutionText || q.solution} />
+                                                        <div className="mt-2 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 space-y-3 animate-fade-in">
+                                                            {(q.solutionImageUrl || q.solution_image_url) && (
+                                                                <div className="my-1 max-w-sm border border-slate-200 rounded-lg p-1.5 bg-white">
+                                                                    <img
+                                                                        src={q.solutionImageUrl || q.solution_image_url}
+                                                                        alt="Solution Diagram"
+                                                                        className="max-h-36 object-contain mx-auto"
+                                                                        onError={e => { e.currentTarget.parentElement.style.display = 'none'; }}
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                            {(q.solutionText || q.solution_text || q.solution || q.explanation || q.explanationText || q.detailed_solution) ? (
+                                                                <div className="leading-relaxed space-y-1">
+                                                                    <span className="font-bold text-navy block text-[11px] uppercase tracking-wider">Step-by-Step Derivation & Explanation:</span>
+                                                                    <MathRenderer inline text={q.solutionText || q.solution_text || q.solution || q.explanation || q.explanationText || q.detailed_solution} />
                                                                 </div>
                                                             ) : null}
-                                                            <div className="text-emerald-700 font-bold pt-1.5 border-t border-slate-200">
-                                                                Therefore, option {getResolvedAnswerLabel(q)} is correct.
+                                                            <div className="text-emerald-700 font-bold pt-2 border-t border-slate-200 flex items-center gap-1.5">
+                                                                <span>✓</span>
+                                                                <span>Verified Correct Answer: Option ({getResolvedAnswerLabel(q, settings?.optionStyle || 'ABCD')})</span>
                                                             </div>
                                                         </div>
                                                     )}
@@ -4378,6 +4543,7 @@ export default function CreatePaper() {
                                 onProceedToAlignment={() => setCurrentStep(5)}
                                 onProceedToFinalize={handleFinalizeAndSave}
                                 onDiagramResize={handleDiagramResize}
+                                onShuffleQuestions={handleShuffleQuestions}
                             />
                         </div>
                     </div>
@@ -4407,6 +4573,14 @@ export default function CreatePaper() {
                             </div>
 
                             <div className="flex items-center gap-2.5 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={handleShuffleQuestions}
+                                    className="bg-slate-100 hover:bg-slate-200 text-navy px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer"
+                                    title="Shuffle questions within sections (Fisher-Yates)"
+                                >
+                                    <span>🔀</span> Shuffle Qs
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setShowAnalysisModal(true)}
@@ -4448,6 +4622,7 @@ export default function CreatePaper() {
                                 showSettingsPanel={true}
                                 onProceedToFinalize={handleFinalizeAndSave}
                                 onDiagramResize={handleDiagramResize}
+                                onShuffleQuestions={handleShuffleQuestions}
                             />
                         </div>
                     </div>
@@ -4472,6 +4647,7 @@ export default function CreatePaper() {
                         paper={currentPaperObject}
                         questions={currentPaperObject.questions}
                         startQNo={startQNo}
+                        optionStyle={settings?.optionStyle || 'ABCD'}
                         onClose={() => setShowSolutionsModal(false)}
                         onQuestionsUpdated={(updatedQs) => {
                             setSelectedQuestions(updatedQs);

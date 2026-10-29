@@ -1,7 +1,6 @@
 /**
  * client/src/utils/sanitize.js
- * Client-side HTML sanitization using DOMPurify.
- * Apply to ALL dangerouslySetInnerHTML content to prevent XSS.
+ * Client-side HTML sanitization and examination formatting utilities.
  */
 import DOMPurify from 'dompurify';
 
@@ -39,24 +38,104 @@ export function safeHtml(dirty) {
 }
 
 /**
- * Returns the option label for a given index based on exam type.
- * JEE → A, B, C, D   |   NEET / CET → 1, 2, 3, 4
+ * Strips existing option prefixes (e.g., "(A) ", "A. ", "(1) ", "1. ", "a) ", "1: ", "[B] ")
+ * from option strings before rendering.
+ * Does NOT strip if the option itself is merely a scalar answer like "1", "4", "A", or "10".
+ */
+export function stripOptionPrefix(text) {
+    if (!text && text !== 0) return '';
+    let str = String(text)
+        .replace(/&#x27;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
+        .trim();
+
+    // Pattern 1: Enclosed with punctuation e.g. "(A)", "[1]", "A.", "1.", "A)", "1)", "A:", "1:", "A-", "1-" followed by content
+    const prefixRegex = /^[\(\[]?\s*([A-Da-d1-4])\s*[\)\]\.\:\-]\s*(?=\S)/i;
+    if (prefixRegex.test(str)) {
+        const stripped = str.replace(prefixRegex, '').trim();
+        if (stripped.length > 0) {
+            return stripped;
+        }
+    }
+
+    // Pattern 2: Naked letter/number followed by dot/colon/dash with space e.g. "A. Value" or "1: Value"
+    const nakedRegex = /^([A-Da-d1-4])[\.\:\-]\s+(?=\S)/i;
+    if (nakedRegex.test(str)) {
+        const stripped = str.replace(nakedRegex, '').trim();
+        if (stripped.length > 0) {
+            return stripped;
+        }
+    }
+
+    return str;
+}
+
+/**
+ * Cleans unintentional italic styling from digits, numbers, or standard text
+ * while strictly preserving biological binomial nomenclature (e.g. *Homo sapiens*, *Mangifera indica*).
+ */
+export function cleanItalicsPreservingBinomial(html) {
+    if (!html || typeof html !== 'string') return '';
+
+    // Regex for biological binomial / trinomial names:
+    // Capitalized Genus + lowercase species (e.g., "Homo sapiens", "Mangifera indica", "Escherichia coli", "Pisum sativum")
+    const isBinomialName = (str) => {
+        const clean = str.replace(/<[^>]+>/g, '').trim();
+        return /^[A-Z][a-z]+(?:\s+[a-z]+){1,2}(?:\s+(?:subsp\.|var\.|spp?\.)?\s*[a-z]+)?$/.test(clean);
+    };
+
+    // Replace <i>...</i> or <em>...</em> tags:
+    return html.replace(/<(i|em)(\s+[^>]*)?>([\s\S]*?)<\/\1>/gi, (match, tag, attrs, content) => {
+        // If it's a genuine biological scientific name, preserve italics!
+        if (isBinomialName(content)) {
+            return `<${tag} class="scientific-name">${content}</${tag}>`;
+        }
+        // If content contains digits, standard formulas, punctuation, or regular words, unwrap to normal font style
+        return `<span style="font-style: normal;">${content}</span>`;
+    });
+}
+
+/**
+ * Returns the option label for a given index based on optionStyle or exam type.
  * @param {number} idx - 0-based option index
  * @param {string[]} classes - array of exam classes on the question (e.g. ['JEE'] or ['NEET'])
+ * @param {string} optionStyle - 'ABCD' | '1234'
  * @returns {string} - label string like 'A' or '1'
  */
-export function optionLabel(idx, classes = []) {
+export function optionLabel(idx, classes = [], optionStyle = null) {
+    if (optionStyle === '1234' || optionStyle === 'NUMERIC') {
+        return String(idx + 1);
+    }
+    if (optionStyle === 'ABCD' || optionStyle === 'ALPHA') {
+        return String.fromCharCode(65 + idx);
+    }
+
     const isJEE = Array.isArray(classes) && classes.some(c => String(c).toUpperCase() === 'JEE');
     return isJEE ? String.fromCharCode(65 + idx) : String(idx + 1);
 }
 
 /**
  * Detects the exact option labels used by a question (e.g. ['A', 'B', 'C', 'D'] vs ['1', '2', '3', '4'])
+ * If optionStyle is passed ('ABCD' or '1234'), it is strictly enforced.
  */
-export function getQuestionOptionLabels(q) {
-    if (!q) return ['A', 'B', 'C', 'D'];
-    const options = Array.isArray(q.options) ? q.options : [];
+export function getQuestionOptionLabels(q, optionStyle = null) {
+    const options = Array.isArray(q?.options) ? q.options : [];
     const count = options.length || 4;
+
+    // Explicit override from toolbar / settings
+    if (optionStyle === '1234' || optionStyle === 'NUMERIC') {
+        return Array.from({ length: count }, (_, i) => String(i + 1));
+    }
+    if (optionStyle === 'ABCD' || optionStyle === 'ALPHA') {
+        return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
+    }
+
+    if (!q) return ['A', 'B', 'C', 'D'];
 
     // 1. If options array contains objects with explicit label property (e.g. { label: '1', text: '...' })
     const explicitLabels = options
@@ -101,8 +180,8 @@ export function getQuestionOptionLabels(q) {
         return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
     }
 
-    // 5. Default fallback to numeric
-    return Array.from({ length: count }, (_, i) => String(i + 1));
+    // 5. Default fallback to alphabetic A, B, C, D
+    return Array.from({ length: count }, (_, i) => String.fromCharCode(65 + i));
 }
 
 /**
@@ -216,15 +295,15 @@ export function parseAnswerIndices(rawAns, options = []) {
 
 /**
  * Returns the exact option label for a question's correct answer.
- * Seamlessly resolves single or multiple options:
- * - If question options are numeric (1, 2, 3, 4) and answer is 1 & 2 / AB / Both A and B -> returns "12" or "1, 2"
- * - If question options are alphabetic (A, B, C, D) and answer is 1 & 2 / AB / Both A and B -> returns "AB" or "A, B"
+ * Seamlessly resolves single or multiple options with optionStyle support:
+ * - If optionStyle is '1234' -> returns '1', '2', '3', '4' (or '1, 2')
+ * - If optionStyle is 'ABCD' -> returns 'A', 'B', 'C', 'D' (or 'A, B')
  */
-export function getResolvedAnswerLabel(q) {
+export function getResolvedAnswerLabel(q, optionStyle = null) {
     if (!q) return 'N/A';
     const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
     const options = Array.isArray(q.options) ? q.options : [];
-    const labels = getQuestionOptionLabels(q);
+    const labels = getQuestionOptionLabels(q, optionStyle);
 
     const indices = parseAnswerIndices(rawAns, options);
     if (indices.length > 0) {
@@ -250,11 +329,11 @@ export function getResolvedAnswerLabel(q) {
 /**
  * Returns compact code for answer (e.g. "12" or "AB")
  */
-export function getResolvedAnswerCode(q) {
+export function getResolvedAnswerCode(q, optionStyle = null) {
     if (!q) return 'N/A';
     const rawAns = q.answer ?? q.correct_option ?? q.correctAnswer ?? '';
     const options = Array.isArray(q.options) ? q.options : [];
-    const labels = getQuestionOptionLabels(q);
+    const labels = getQuestionOptionLabels(q, optionStyle);
     const indices = parseAnswerIndices(rawAns, options);
     if (indices.length > 0) {
         return indices
@@ -279,9 +358,6 @@ export function isOptionCorrect(q, optIndex) {
 
 /**
  * Strips QPV, QBP, and internal metadata difficulty tags before display.
- * Removes patterns like [QPV_DIFFICULTY:Easy], [QBP_DIFFICULTY:Medium], [DIFFICULTY:Hard], etc.
- * @param {string} text
- * @returns {string}
  */
 export function stripQBPTags(text) {
     if (!text || typeof text !== 'string') return '';
@@ -290,4 +366,3 @@ export function stripQBPTags(text) {
         .replace(/\[(?:QPV|QBP)_[A-Za-z0-9_]+:[^\]]*\]/gi, '')
         .trim();
 }
-
