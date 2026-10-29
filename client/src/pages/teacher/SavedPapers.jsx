@@ -240,8 +240,13 @@ const S = {
 
 /* ─── toDateStr ─── */
 const toDateStr = (date) => {
-    const d = new Date(date);
-    return d.toISOString().split('T')[0];
+    if (!date) return '';
+    try {
+        const d = new Date(date);
+        return isNaN(d.getTime()) ? '' : d.toISOString().split('T')[0];
+    } catch {
+        return '';
+    }
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
@@ -443,8 +448,8 @@ const SavedPapers = () => {
 
     /* ── Unique class options from all papers ── */
     const classOptions = [...new Set(
-        papers.flatMap(p => p.classes || [])
-    )].sort();
+        papers.flatMap(p => Array.isArray(p.classes) ? p.classes : [p.classes || p.class_level || '12'])
+    )].filter(Boolean).sort();
 
     /* ── Helper to extract/compute section badges for multi-teacher collaboration ── */
     const getPaperSectionBadges = (p) => {
@@ -804,17 +809,17 @@ const SavedPapers = () => {
 
                                     {/* Class */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-                                        <span style={S.tagClass}>Class {p.classes?.join(', ')}</span>
+                                        <span style={S.tagClass}>Class {Array.isArray(p.classes) ? p.classes.join(', ') : (p.classes || p.class_level || '12')}</span>
                                     </td>
 
                                     {/* Questions */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-                                        <span style={S.tagQ}>{p.questions?.length} Qs</span>
+                                        <span style={S.tagQ}>{Array.isArray(p.questions) ? p.questions.length : (p.questions || 0)} Qs</span>
                                     </td>
 
                                     {/* Date */}
                                     <td style={{ ...S.td, borderBottom: i === filteredPapers.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
-                                        <span style={S.dateCell}>{new Date(p.createdAt).toLocaleDateString()}</span>
+                                        <span style={S.dateCell}>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'Recent'}</span>
                                     </td>
 
                                     {/* Status */}

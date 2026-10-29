@@ -300,6 +300,54 @@ export const isNumericalQuestion = (q) => {
     return false;
 };
 
+// Safe error boundary specifically protecting preview pagination from crashing CreatePaper
+class SafePaperPreviewBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error, errorInfo) {
+        console.error('[Paper Preview Error Caught Safely]', error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="bg-white p-8 rounded-3xl border-2 border-amber-400 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-4">
+                    <div className="text-4xl">🛡️</div>
+                    <h3 className="text-lg font-black text-navy uppercase">Preview Display Safe Guard</h3>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                        A rendering or formatting issue occurred while generating page preview ({this.state.error?.message || 'Display formatting'}).
+                        <br />
+                        <strong className="text-emerald-700">All your selected questions remain 100% safe and intact in your auto-save session.</strong>
+                    </p>
+                    <div className="flex justify-center gap-3 pt-2">
+                        {this.props.onProceedToFinalize && (
+                            <button
+                                type="button"
+                                onClick={() => this.props.onProceedToFinalize()}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase cursor-pointer shadow"
+                            >
+                                ✓ Save & Export Paper Anyway
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => this.setState({ hasError: false })}
+                            className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-xs cursor-pointer hover:bg-gray-200"
+                        >
+                            Retry Preview
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 export default function CreatePaper() {
     const { user } = useContext(AuthContext);
     const navigate = useNavigate();
@@ -333,6 +381,8 @@ export default function CreatePaper() {
     const [savingSection, setSavingSection] = useState(false);
     // Active drafts available for multi-teacher collaboration
     const [availableDrafts, setAvailableDrafts] = useState([]);
+    // Top-right draft details dropdown state
+    const [showDraftDropdown, setShowDraftDropdown] = useState(false);
 
     // Multi-Subject Exam Configuration (NEET, JEE, CET, PCM, PCB, PCMB, Single, or Custom)
     const examSubjects = useMemo(() => {
@@ -824,10 +874,15 @@ export default function CreatePaper() {
 
     // ── Persistent Draft Synchronization (localStorage) ──
     const DRAFT_STORAGE_KEY = 'sapthagiri_pu_wizard_draft_v3';
+    const isDraftRestoredRef = useRef(false);
+    const [restoredDraftInfo, setRestoredDraftInfo] = useState(null);
 
     // 1. Auto-restore draft on mount if not loading existing paperId
     useEffect(() => {
-        if (paperId) return;
+        if (paperId) {
+            isDraftRestoredRef.current = true;
+            return;
+        }
         try {
             const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
             if (saved) {
@@ -841,14 +896,25 @@ export default function CreatePaper() {
                     if (draft.paperCategory) setPaperCategory(draft.paperCategory);
                     if (draft.method) setMethod(draft.method);
                     if (draft.autoDist) setAutoDist(draft.autoDist);
-                    if (draft.selectedChapters && Array.isArray(draft.selectedChapters)) setSelectedChapters(draft.selectedChapters);
-                    if (draft.selectedConcepts && Array.isArray(draft.selectedConcepts)) setSelectedConcepts(draft.selectedConcepts);
-                    if (draft.subjectSelections && typeof draft.subjectSelections === 'object') setSubjectSelections(draft.subjectSelections);
-                    if (draft.selectedQuestions && Array.isArray(draft.selectedQuestions) && draft.selectedQuestions.length > 0) {
+                    if (draft.questionsPerSubject) setQuestionsPerSubject(draft.questionsPerSubject);
+                    if (Array.isArray(draft.customSubjects)) setCustomSubjects(draft.customSubjects);
+                    if (draft.subjectSelections && typeof draft.subjectSelections === 'object') {
+                        setSubjectSelections(draft.subjectSelections);
+                    }
+                    if (Array.isArray(draft.selectedQuestions) && draft.selectedQuestions.length > 0) {
                         setSelectedQuestions(draft.selectedQuestions);
+                        setRestoredDraftInfo({
+                            count: draft.selectedQuestions.length,
+                            title: draft.title || draft.examType || 'Exam Paper',
+                            time: draft.timestamp ? new Date(draft.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'
+                        });
                     }
                     if (draft.headerConfig) setHeaderConfig(draft.headerConfig);
                     if (draft.partDirectives) setPartDirectives(draft.partDirectives);
+                    if (draft.settings) setSettings(draft.settings);
+                    if (draft.startQNo) setStartQNo(draft.startQNo);
+                    if (draft.endQNo) setEndQNo(draft.endQNo);
+                    if (draft.activeSubjectTab) setActiveSubjectTab(draft.activeSubjectTab);
                     if (draft.currentStep && draft.currentStep >= 1 && draft.currentStep <= 5) {
                         setCurrentStep(draft.currentStep);
                     }
@@ -856,12 +922,14 @@ export default function CreatePaper() {
             }
         } catch (e) {
             console.warn('Failed to restore draft from localStorage', e);
+        } finally {
+            isDraftRestoredRef.current = true;
         }
     }, [paperId]);
 
-    // 2. Auto-save draft on state updates
+    // 2. Auto-save draft on state updates (strictly guarded to never overwrite on initial mount)
     useEffect(() => {
-        if (paperId) return;
+        if (paperId || !isDraftRestoredRef.current) return;
         try {
             const draftData = {
                 currentStep,
@@ -872,25 +940,42 @@ export default function CreatePaper() {
                 title,
                 duration,
                 targetCount,
+                questionsPerSubject,
+                customSubjects,
                 method,
                 autoDist,
-                selectedChapters,
-                selectedConcepts,
                 subjectSelections,
                 selectedQuestions,
                 headerConfig,
                 partDirectives,
+                settings,
+                startQNo,
+                endQNo,
+                activeSubjectTab,
                 timestamp: Date.now()
             };
             localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+            window.dispatchEvent(new Event('pu_wizard_draft_changed'));
         } catch (e) {
             console.warn('Failed to save draft to localStorage', e);
         }
     }, [
         paperId, currentStep, paperCategory, subject, selectedClass, examType,
-        title, duration, targetCount, method, autoDist, selectedChapters,
-        selectedConcepts, subjectSelections, selectedQuestions, headerConfig, partDirectives
+        title, duration, targetCount, questionsPerSubject, customSubjects, method, autoDist,
+        subjectSelections, selectedQuestions, headerConfig, partDirectives, settings,
+        startQNo, endQNo, activeSubjectTab
     ]);
+
+    const handleDiscardDraft = () => {
+        if (window.confirm('Are you sure you want to discard this unsaved question paper draft and start fresh? All selected questions in this draft will be cleared.')) {
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
+            setSelectedQuestions([]);
+            setSubjectSelections({});
+            setCurrentStep(1);
+            setRestoredDraftInfo(null);
+            window.dispatchEvent(new Event('pu_wizard_draft_changed'));
+        }
+    };
 
     // Selected questions grouped by subject
     const selectedQuestionsBySubject = useMemo(() => {
@@ -2234,12 +2319,14 @@ export default function CreatePaper() {
             // Organize questions into strict subject order with section headers
             const organizedQuestions = [];
             const sections = [];
-            const subjectsToProcess = isJEE ? ['Physics', 'Chemistry', 'Mathematics'] : examSubjects;
+            const subjectsToProcess = (isJEE && examSubjects.length > 1 && !examSubjects.some(s => !['Physics', 'Chemistry', 'Mathematics'].includes(s)))
+                ? ['Physics', 'Chemistry', 'Mathematics']
+                : examSubjects;
 
             subjectsToProcess.forEach((sub, sIdx) => {
                 let subQuestions = (selectedQuestionsBySubject[sub] || []);
-                if (isJEE) {
-                    // Strictly enforce 20 Section A (non-numericals) + 5 Section B (numericals) = exactly 25 questions
+                if (isJEE && subQuestions.length === 25) {
+                    // Strictly enforce 20 Section A (non-numericals) + 5 Section B (numericals) when exactly 25 questions
                     const nonNums = subQuestions.filter(q => !isNumericalQuestion(q) && Array.isArray(q.options) && q.options.length >= 2);
                     const nums = subQuestions.filter(q => isNumericalQuestion(q));
 
@@ -2289,10 +2376,18 @@ export default function CreatePaper() {
                 });
             });
 
-            let finalQuestionsList = organizedQuestions.length > 0 ? organizedQuestions : selectedQuestions;
-            if (isJEE) {
-                finalQuestionsList = finalQuestionsList.slice(0, 75);
+            // Ensure every single question the user selected is preserved, even if not matched by standard subject buckets
+            const capturedIds = new Set(organizedQuestions.map(q => String(q._id || q.id)));
+            const uncaptured = selectedQuestions.filter(q => !capturedIds.has(String(q._id || q.id)));
+            if (uncaptured.length > 0) {
+                organizedQuestions.push(...uncaptured.map(q => ({
+                    ...q,
+                    subject: q.subject || q.sectionSubject || subject || 'General',
+                    sectionSubject: q.sectionSubject || q.subject || subject || 'General'
+                })));
             }
+
+            let finalQuestionsList = organizedQuestions.length > 0 ? organizedQuestions : selectedQuestions;
 
             const payload = {
                 title: title || `${examType} Examination (${examSubjects.join(' + ')})`,
@@ -2319,6 +2414,13 @@ export default function CreatePaper() {
                 res = await api.post('/api/papers', payload);
             }
 
+            // CRITICAL: Successfully saved! Clear the draft so it doesn't prompt again
+            try {
+                localStorage.removeItem(DRAFT_STORAGE_KEY);
+                setRestoredDraftInfo(null);
+                window.dispatchEvent(new Event('pu_wizard_draft_changed'));
+            } catch (_) {}
+
             alert(`✓ ${paperCategory === 'assignment' ? 'Assignment' : 'Master Multi-Subject Exam Paper'} successfully merged and saved!`);
             if (user?.role === 'admin') {
                 navigate(`/admin/dashboard/preview/${res.data._id || paperId}`);
@@ -2328,7 +2430,7 @@ export default function CreatePaper() {
         } catch (err) {
             console.error('Error saving paper:', err);
             const serverMsg = err.response?.data?.msg || err.response?.data?.message || err.message;
-            alert('Failed to save paper: ' + serverMsg + '\n\nPlease verify details and try again.');
+            alert('Notice while saving paper: ' + serverMsg + '\n\nDon\'t worry! All your ' + selectedQuestions.length + ' selected questions remain 100% safely preserved in your draft.');
         } finally {
             setSaving(false);
         }
@@ -2479,37 +2581,165 @@ export default function CreatePaper() {
                     </div>
                 </div>
 
-                {/* Step Indicators */}
-                <div className="hidden md:flex items-center gap-2 mr-4">
-                    {[
-                        { num: 1, label: 'Scope & Setup' },
-                        { num: 2, label: 'Method' },
-                        { num: 3, label: 'Questions & Engine' },
-                        { num: 4, label: 'Preview & Merge' },
-                        { num: 5, label: 'Alignment' },
-                    ].map((st) => (
+                {/* Right Header Area: Step Indicators + Bell Icon */}
+                <div className="flex items-center gap-3 mr-4">
+                    {/* Step Indicators */}
+                    <div className="hidden md:flex items-center gap-2">
+                        {[
+                            { num: 1, label: 'Scope & Setup' },
+                            { num: 2, label: 'Method' },
+                            { num: 3, label: 'Questions & Engine' },
+                            { num: 4, label: 'Preview & Merge' },
+                            { num: 5, label: 'Alignment' },
+                        ].map((st) => (
+                            <button
+                                key={st.num}
+                                type="button"
+                                onClick={() => {
+                                    if (currentStep === 1 && st.num > 1) {
+                                        handleProceedFromStep1(st.num);
+                                    } else {
+                                        setCurrentStep(st.num);
+                                    }
+                                }}
+                                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                                    currentStep === st.num
+                                        ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
+                                        : 'bg-white/10 hover:bg-white/20 text-white/90'
+                                }`}
+                            >
+                                <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
+                                <span>{st.label}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Auto-Save & Draft Bell */}
+                    <div className="relative">
                         <button
-                            key={st.num}
                             type="button"
-                            onClick={() => {
-                                if (currentStep === 1 && st.num > 1) {
-                                    handleProceedFromStep1(st.num);
-                                } else {
-                                    setCurrentStep(st.num);
-                                }
-                            }}
-                            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
-                                currentStep === st.num
-                                    ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
-                                    : 'bg-white/10 hover:bg-white/20 text-white/90'
+                            onClick={() => setShowDraftDropdown(prev => !prev)}
+                            className={`relative px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 border ${
+                                selectedQuestions.length > 0
+                                    ? 'bg-amber-400/20 text-gold border-gold/50 shadow-sm ring-1 ring-gold/30'
+                                    : 'bg-white/10 hover:bg-white/20 text-white/80 border-white/20'
                             }`}
+                            title="Active Session Auto-Save & Draft Details"
                         >
-                            <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
-                            <span>{st.label}</span>
+                            <span className="text-sm">🔔</span>
+                            <span className="hidden sm:inline">Draft</span>
+                            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                selectedQuestions.length > 0 ? 'bg-amber-500 text-white shadow-xs' : 'bg-white/20 text-white'
+                            }`}>
+                                {selectedQuestions.length}
+                            </span>
                         </button>
-                    ))}
+
+                        {showDraftDropdown && (
+                            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-50 overflow-hidden text-slate-800 animate-fade-in-up">
+                                <div className="p-3.5 bg-navy text-white flex justify-between items-center border-b border-gold/30">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-gold font-bold">🛡️</span>
+                                        <span className="font-black text-xs uppercase tracking-wider">Draft Session Status</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowDraftDropdown(false)}
+                                        className="text-white/60 hover:text-white text-sm"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="p-4 space-y-3">
+                                    <div className="flex items-center justify-between text-xs font-bold text-navy">
+                                        <span>Selected Questions:</span>
+                                        <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-black">
+                                            {selectedQuestions.length} / {defaultQuotaForSubject * examSubjects.length} Qs
+                                        </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                                        <div className="font-bold text-navy mb-1 uppercase tracking-wider text-[10px]">Questions Per Subject:</div>
+                                        {examSubjects.map(sub => {
+                                            const subCount = (selectedQuestionsBySubject[sub] || []).length;
+                                            return (
+                                                <div key={sub} className="flex justify-between">
+                                                    <span>{sub}:</span>
+                                                    <span className="font-mono font-bold">{subCount} / {defaultQuotaForSubject}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-[10.5px] text-slate-500">
+                                        All questions are automatically preserved in local storage. You can refresh or leave at any time and return with zero questions lost.
+                                    </p>
+                                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDraftDropdown(false);
+                                                setShowReviewSelectedModal(true);
+                                            }}
+                                            className="flex-1 bg-navy text-gold py-1.5 rounded-xl font-bold text-xs uppercase cursor-pointer hover:bg-navy/90"
+                                        >
+                                            View Basket
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDraftDropdown(false);
+                                                handleDiscardDraft();
+                                            }}
+                                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 cursor-pointer"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
+
+            {/* Persistent Auto-Save Safety Ribbon */}
+            {selectedQuestions.length > 0 && (
+                <div className="bg-gradient-to-r from-navy via-slate-900 to-navy text-white px-4 py-2 border-b-2 border-gold/40 flex flex-wrap items-center justify-between gap-2 text-xs shadow-inner">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="flex h-2.5 w-2.5 relative">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                        </span>
+                        <span className="font-bold text-slate-100">
+                            🛡️ Auto-Save Active: <strong className="text-gold">{selectedQuestions.length} Questions</strong> safely preserved across refreshes and restarts.
+                        </span>
+                        {restoredDraftInfo && (
+                            <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-500/40">
+                                Restored from previous session ({restoredDraftInfo.time})
+                            </span>
+                        )}
+                        <span className="text-[11px] text-slate-400 hidden sm:inline">
+                            ({examSubjects.map(sub => `${sub}: ${(selectedQuestionsBySubject[sub] || []).length}`).join(' • ')})
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setShowReviewSelectedModal(true)}
+                            className="bg-gold/20 hover:bg-gold/30 text-gold px-2.5 py-1 rounded-lg font-black text-[11px] transition cursor-pointer flex items-center gap-1 border border-gold/30"
+                        >
+                            <span>👁 View Basket ({selectedQuestions.length})</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleDiscardDraft}
+                            className="bg-red-500/20 hover:bg-red-500/40 text-red-300 px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer"
+                            title="Discard saved draft questions and start fresh"
+                        >
+                            Clear Draft
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ── MAIN CONTENT CONTAINER ── */}
             <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
@@ -4881,20 +5111,22 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* A4 Paper Renderer */}
+                        {/* A4 Paper Renderer with Safe Preview Boundary */}
                         <div className="w-full flex justify-center">
-                            <PaperRenderer
-                                paper={currentPaperObject}
-                                isAssignment={paperCategory === 'assignment'}
-                                activeTemplate={activeTemplate}
-                                settings={{ ...settings, startQNo, endQNo }}
-                                setSettings={setSettings}
-                                showSettingsPanel={false}
-                                onProceedToAlignment={() => setCurrentStep(5)}
-                                onProceedToFinalize={handleFinalizeAndSave}
-                                onDiagramResize={handleDiagramResize}
-                                onShuffleQuestions={handleShuffleQuestions}
-                            />
+                            <SafePaperPreviewBoundary onProceedToFinalize={handleFinalizeAndSave}>
+                                <PaperRenderer
+                                    paper={currentPaperObject}
+                                    isAssignment={paperCategory === 'assignment'}
+                                    activeTemplate={activeTemplate}
+                                    settings={{ ...settings, startQNo, endQNo }}
+                                    setSettings={setSettings}
+                                    showSettingsPanel={false}
+                                    onProceedToAlignment={() => setCurrentStep(5)}
+                                    onProceedToFinalize={handleFinalizeAndSave}
+                                    onDiagramResize={handleDiagramResize}
+                                    onShuffleQuestions={handleShuffleQuestions}
+                                />
+                            </SafePaperPreviewBoundary>
                         </div>
                     </div>
                 )}
@@ -4960,20 +5192,22 @@ export default function CreatePaper() {
                             </div>
                         </div>
 
-                        {/* Renderer with Alignment panel open */}
+                        {/* Renderer with Alignment panel open & Safe Preview Boundary */}
                         <div className="w-full flex justify-center">
-                            <PaperRenderer
-                                paper={currentPaperObject}
-                                isAssignment={paperCategory === 'assignment'}
-                                enableSets={paperCategory !== 'assignment'}
-                                activeTemplate={activeTemplate}
-                                settings={{ ...settings, startQNo, endQNo }}
-                                setSettings={setSettings}
-                                showSettingsPanel={true}
-                                onProceedToFinalize={handleFinalizeAndSave}
-                                onDiagramResize={handleDiagramResize}
-                                onShuffleQuestions={handleShuffleQuestions}
-                            />
+                            <SafePaperPreviewBoundary onProceedToFinalize={handleFinalizeAndSave}>
+                                <PaperRenderer
+                                    paper={currentPaperObject}
+                                    isAssignment={paperCategory === 'assignment'}
+                                    enableSets={paperCategory !== 'assignment'}
+                                    activeTemplate={activeTemplate}
+                                    settings={{ ...settings, startQNo, endQNo }}
+                                    setSettings={setSettings}
+                                    showSettingsPanel={true}
+                                    onProceedToFinalize={handleFinalizeAndSave}
+                                    onDiagramResize={handleDiagramResize}
+                                    onShuffleQuestions={handleShuffleQuestions}
+                                />
+                            </SafePaperPreviewBoundary>
                         </div>
                     </div>
                 )}

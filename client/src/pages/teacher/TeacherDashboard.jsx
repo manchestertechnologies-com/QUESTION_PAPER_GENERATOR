@@ -25,7 +25,32 @@ const TeacherNotificationBell = () => {
     const navigate = useNavigate();
     const [notifications, setNotifications] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [draftAlert, setDraftAlert] = useState(null);
     const dropdownRef = useRef(null);
+
+    const checkDraftAlert = () => {
+        try {
+            const raw = localStorage.getItem('sapthagiri_pu_wizard_draft_v3');
+            if (raw) {
+                const draft = JSON.parse(raw);
+                if (draft && Array.isArray(draft.selectedQuestions) && draft.selectedQuestions.length > 0) {
+                    const count = draft.selectedQuestions.length;
+                    const target = draft.targetCount || (draft.questionsPerSubject ? draft.questionsPerSubject * (draft.examSubjects?.length || 1) : 0) || 60;
+                    setDraftAlert({
+                        title: draft.title || (draft.examType ? `${draft.examType} Exam` : 'Question Paper'),
+                        subject: draft.subject || 'Multi-Subject',
+                        count,
+                        target,
+                        isComplete: count >= target && target > 0,
+                        step: draft.currentStep || 3,
+                        updatedAt: draft.timestamp ? new Date(draft.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently'
+                    });
+                    return;
+                }
+            }
+        } catch (_) {}
+        setDraftAlert(null);
+    };
 
     const fetchNotifications = async () => {
         try {
@@ -40,8 +65,21 @@ const TeacherNotificationBell = () => {
 
     useEffect(() => {
         fetchNotifications();
-        const interval = setInterval(fetchNotifications, 20000);
-        return () => clearInterval(interval);
+        checkDraftAlert();
+        const interval = setInterval(() => {
+            fetchNotifications();
+            checkDraftAlert();
+        }, 15000);
+
+        const handleDraftChange = () => checkDraftAlert();
+        window.addEventListener('storage', handleDraftChange);
+        window.addEventListener('pu_wizard_draft_changed', handleDraftChange);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('storage', handleDraftChange);
+            window.removeEventListener('pu_wizard_draft_changed', handleDraftChange);
+        };
     }, []);
 
     // Close dropdown on outside click
@@ -55,7 +93,7 @@ const TeacherNotificationBell = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const unreadCount = notifications.filter(n => !n.is_read).length;
+    const unreadCount = notifications.filter(n => !n.is_read).length + (draftAlert ? 1 : 0);
 
     const handleMarkAllRead = async () => {
         try {
@@ -63,6 +101,15 @@ const TeacherNotificationBell = () => {
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
         } catch (err) {
             console.error('Error marking read:', err);
+        }
+    };
+
+    const handleDiscardDraft = (e) => {
+        e.stopPropagation();
+        if (window.confirm('Are you sure you want to discard this unsaved question paper draft? All selected questions in this draft will be removed.')) {
+            localStorage.removeItem('sapthagiri_pu_wizard_draft_v3');
+            setDraftAlert(null);
+            window.dispatchEvent(new Event('pu_wizard_draft_changed'));
         }
     };
 
@@ -90,23 +137,27 @@ const TeacherNotificationBell = () => {
         <div className="relative" ref={dropdownRef}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative bg-white/10 hover:bg-white/20 text-gold w-10 h-10 rounded-xl flex items-center justify-center transition border border-gold/30 cursor-pointer"
-                title="Notifications from Admin"
+                className={`relative bg-white/10 hover:bg-white/20 text-gold w-10 h-10 rounded-xl flex items-center justify-center transition border cursor-pointer ${
+                    draftAlert ? 'border-amber-400 ring-2 ring-amber-400/50 shadow-md' : 'border-gold/30'
+                }`}
+                title={draftAlert ? `Draft Paper Available: ${draftAlert.count} questions preserved` : "Notifications"}
             >
                 <span className="text-lg">🔔</span>
                 {unreadCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-pulse">
+                    <span className={`absolute -top-1.5 -right-1.5 text-white text-[9px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md animate-pulse ${
+                        draftAlert ? 'bg-amber-500' : 'bg-red-500'
+                    }`}>
                         {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                 )}
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-50 overflow-hidden animate-fade-in-up text-left">
+                <div className="absolute right-0 mt-3 w-84 sm:w-96 bg-white rounded-2xl shadow-2xl border-2 border-navy/20 z-50 overflow-hidden animate-fade-in-up text-left">
                     <div className="p-4 bg-navy text-white flex justify-between items-center border-b border-gold/30">
                         <div className="flex items-center gap-2">
                             <span className="text-gold font-bold">🔔</span>
-                            <span className="font-black text-xs uppercase tracking-wider">Admin Notifications</span>
+                            <span className="font-black text-xs uppercase tracking-wider">Alerts & Notifications</span>
                         </div>
                         {unreadCount > 0 && (
                             <button
@@ -117,6 +168,49 @@ const TeacherNotificationBell = () => {
                             </button>
                         )}
                     </div>
+
+                    {/* Unsaved / Incomplete Draft High-Priority Alert Card */}
+                    {draftAlert && (
+                        <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50/80 border-b-2 border-amber-300 text-left">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="flex items-center gap-1.5 text-xs font-black text-amber-900 uppercase tracking-wider">
+                                    <span className="animate-bounce">⚠️</span> Incomplete Exam Draft
+                                </span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs ${
+                                    draftAlert.isComplete ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+                                }`}>
+                                    {draftAlert.count}/{draftAlert.target} Qs {draftAlert.isComplete ? '✓' : '(Incomplete)'}
+                                </span>
+                            </div>
+                            <p className="text-[11.5px] text-slate-800 font-bold leading-tight">
+                                {draftAlert.title}
+                            </p>
+                            <p className="text-[10.5px] text-slate-600 font-medium mt-0.5">
+                                {draftAlert.count} questions are safely preserved intact in your auto-save session (updated {draftAlert.updatedAt}).
+                                {!draftAlert.isComplete && ` Needs ${Math.max(0, draftAlert.target - draftAlert.count)} more question(s) for full exam quota.`}
+                            </p>
+                            <div className="flex items-center gap-2 mt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        navigate('/teacher/create-paper');
+                                    }}
+                                    className="bg-navy hover:bg-navy/90 text-gold text-xs font-black px-3.5 py-1.5 rounded-xl cursor-pointer shadow flex items-center gap-1.5 transition"
+                                >
+                                    <span>✏️ Resume Paper ({draftAlert.count} Qs)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDiscardDraft}
+                                    className="text-[11px] text-red-600 hover:text-red-800 font-bold px-2 py-1 cursor-pointer transition"
+                                    title="Discard this draft and start fresh"
+                                >
+                                    Discard
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
                         {notifications.length === 0 ? (

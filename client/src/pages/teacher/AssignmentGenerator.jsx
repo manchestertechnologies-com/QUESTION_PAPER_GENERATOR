@@ -265,6 +265,53 @@ const AssignmentGenerator = () => {
         showMarks: false,
     });
 
+    // Draft Persistence
+    const ASSIGNMENT_DRAFT_KEY = 'sapthagiri_assignment_draft_v1';
+    const isDraftRestoredRef = useRef(false);
+
+    // Auto-restore draft on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(ASSIGNMENT_DRAFT_KEY);
+            if (saved) {
+                const draft = JSON.parse(saved);
+                if (draft && typeof draft === 'object') {
+                    if (draft.subject) setSubject(draft.subject);
+                    if (draft.title) setTitle(draft.title);
+                    if (Array.isArray(draft.selectedChapters)) setSelectedChapters(draft.selectedChapters);
+                    if (Array.isArray(draft.selectedConcepts)) setSelectedConcepts(draft.selectedConcepts);
+                    if (draft.targetCount) setTargetCount(draft.targetCount);
+                    if (Array.isArray(draft.selectedQuestions) && draft.selectedQuestions.length > 0) {
+                        setSelectedQuestions(draft.selectedQuestions);
+                    }
+                    if (draft.settings) setSettings(draft.settings);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to restore assignment draft', e);
+        } finally {
+            isDraftRestoredRef.current = true;
+        }
+    }, []);
+
+    // Auto-save draft on state updates
+    useEffect(() => {
+        if (!isDraftRestoredRef.current) return;
+        try {
+            const data = {
+                subject,
+                title,
+                selectedChapters,
+                selectedConcepts,
+                targetCount,
+                selectedQuestions,
+                settings,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(ASSIGNMENT_DRAFT_KEY, JSON.stringify(data));
+        } catch (_) {}
+    }, [subject, title, selectedChapters, selectedConcepts, targetCount, selectedQuestions, settings]);
+
     // Default title based on subject
     useEffect(() => {
         if (!title || title.includes('Assignment')) {
@@ -488,6 +535,9 @@ const AssignmentGenerator = () => {
             };
 
             await api.post('/api/papers', payload);
+            try {
+                localStorage.removeItem(ASSIGNMENT_DRAFT_KEY);
+            } catch (_) {}
             alert('✓ Assignment successfully finalized and saved! It is now visible in Department Archives / Saved Papers.');
             navigate('/teacher/dashboard/saved-papers');
         } catch (err) {
