@@ -391,6 +391,23 @@ function parseAssertionReason(q) {
             reason: cleanStatementText(q.reason || '')
         };
     }
+    const sol = q.solutionText || q.solution_text || q.solution || q.questionText || q.question || '';
+    const match = typeof sol === 'string' ? sol.match(/\[QBP_DATA:([^\]]+)\]/i) : null;
+    if (match) {
+        try {
+            const rawB64 = match[1].trim();
+            const decodedStr = typeof window !== 'undefined' && window.atob ? window.atob(rawB64) : (typeof Buffer !== 'undefined' ? Buffer.from(rawB64, 'base64').toString('utf-8') : null);
+            if (decodedStr) {
+                const qbp = JSON.parse(decodedStr);
+                if (qbp.assertion || qbp.reason) {
+                    return {
+                        assertion: cleanItalicsPreservingBinomial(cleanStatementText(qbp.assertion || '')),
+                        reason: cleanItalicsPreservingBinomial(cleanStatementText(qbp.reason || ''))
+                    };
+                }
+            }
+        } catch (e) {}
+    }
     let txt = q.questionText || q.question || '';
 
     // 1. Remove markdown code fences e.g. ```
@@ -764,28 +781,13 @@ export function repairBrokenLatexFraction(str) {
 
 /** Parse match the following from text when matchPairs array is empty */
 function parseMatchFromText(q) {
-    if (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) {
-        return { introText: cleanQuestionText(q.questionText || q.question || ''), pairs: q.matchPairs };
-    }
-    if (Array.isArray(q.column_a) && q.column_a.length > 0 && Array.isArray(q.column_b) && q.column_b.length > 0) {
-        const maxL = Math.max(q.column_a.length, q.column_b.length);
-        const pairs = [];
-        for (let i = 0; i < maxL; i++) {
-            pairs.push({
-                left: q.column_a[i] || '',
-                right: q.column_b[i] || ''
-            });
-        }
-        return { introText: cleanQuestionText(q.questionText || q.question || ''), pairs };
-    }
     let txt = cleanQuestionText(q.questionText || q.question || '');
-    if (!txt) return { introText: '', pairs: [] };
 
     // Clean up bold asterisks around headers e.g. **Column I** -> Column I
     txt = txt.replace(/\*\*(Column|List)\s*[-:]?\s*(I|II|1|2|A|B)\*\*/gi, '$1 $2');
 
     // 1. Strip and preserve introductory sentence like "Match Column-I with Column-II" or "Match the items in Column I with Column II:"
-    const introSentenceRegex = /^([\s\S]*?Match\s+[a-zA-Z\s\-']*\b(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[a-zA-Z\s\-']*?\bwith\b[a-zA-Z\s\-']*?\b(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[\.:\-]?)(\s+|$)/i;
+    const introSentenceRegex = /^([\s\S]*?Match\s+[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$))/i;
     let introText = '';
     let remainder = txt;
 
@@ -798,14 +800,61 @@ function parseMatchFromText(q) {
         if (genIntroMatch && genIntroMatch[1].length < 120) {
             introText = genIntroMatch[1].trim();
             remainder = txt.substring(genIntroMatch[0].length).trim();
+        } else {
+            const splitMatch = txt.split(/\*\*(?:Column|List)|\n\s*(?:Column|List)\s*[-:]?\s*(?:I|1|A)/i);
+            if (splitMatch.length > 1) {
+                introText = splitMatch[0].trim();
+            }
         }
     }
+
+    let pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ? q.matchPairs : null;
+    if (!pairs && Array.isArray(q.column_a) && q.column_a.length > 0 && Array.isArray(q.column_b) && q.column_b.length > 0) {
+        const maxL = Math.max(q.column_a.length, q.column_b.length);
+        pairs = [];
+        for (let i = 0; i < maxL; i++) {
+            pairs.push({
+                left: q.column_a[i] || '',
+                right: q.column_b[i] || ''
+            });
+        }
+    }
+    if (!pairs) {
+        const sol = q.solutionText || q.solution_text || q.solution || q.questionText || q.question || '';
+        const match = typeof sol === 'string' ? sol.match(/\[QBP_DATA:([^\]]+)\]/i) : null;
+        if (match) {
+            try {
+                const rawB64 = match[1].trim();
+                const decodedStr = typeof window !== 'undefined' && window.atob ? window.atob(rawB64) : (typeof Buffer !== 'undefined' ? Buffer.from(rawB64, 'base64').toString('utf-8') : null);
+                if (decodedStr) {
+                    const qbp = JSON.parse(decodedStr);
+                    const cA = qbp.columnA || qbp.column_a;
+                    const cB = qbp.columnB || qbp.column_b;
+                    if (Array.isArray(cA) && Array.isArray(cB) && cA.length > 0) {
+                        const isInstructionText = (s) => /^(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option|statement|code)|\b(?:from\s+the\s+options|given\s+below|options?\s+given)\b/i.test(String(s).trim());
+                        const fA = cA.filter(s => s && !isInstructionText(s));
+                        const fB = cB.filter(s => s && !isInstructionText(s));
+                        const maxLen = Math.max(fA.length, fB.length);
+                        pairs = [];
+                        for (let i = 0; i < maxLen; i++) {
+                            pairs.push({ left: fA[i] || '', right: fB[i] || '' });
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+
+    if (pairs && pairs.length > 0) {
+        return { introText: introText || 'Match List I with List II:', pairs };
+    }
+    if (!txt) return { introText: '', pairs: [] };
 
     let rawCol1 = '';
     let rawCol2 = '';
 
     const col1HeaderRegex = /^(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[:\-\s]*/i;
-    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:Choose\s+the\s+correct|Select\s+the\s+correct|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
 
     if (col1HeaderRegex.test(remainder)) {
         const withoutCol1 = remainder.replace(col1HeaderRegex, '').trim();
@@ -821,7 +870,7 @@ function parseMatchFromText(q) {
             rawCol2 = splitMatch[1].trim();
         } else {
             // Fallback: search in full txt if intro was not stripped
-            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:Choose\s+the\s+correct|Select\s+the\s+correct|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
             const fbMatch = txt.match(fallbackRegex);
             if (fbMatch) {
                 introText = txt.substring(0, fbMatch.index).trim();
@@ -953,6 +1002,30 @@ function parseStatementsFromText(q) {
             outroText: '' 
         };
     }
+    const sol = q.solutionText || q.solution_text || q.solution || q.questionText || q.question || '';
+    const match = typeof sol === 'string' ? sol.match(/\[QBP_DATA:([^\]]+)\]/i) : null;
+    if (match) {
+        try {
+            const rawB64 = match[1].trim();
+            const decodedStr = typeof window !== 'undefined' && window.atob ? window.atob(rawB64) : (typeof Buffer !== 'undefined' ? Buffer.from(rawB64, 'base64').toString('utf-8') : null);
+            if (decodedStr) {
+                const qbp = JSON.parse(decodedStr);
+                const stmts = [];
+                if (Array.isArray(qbp.statements) && qbp.statements.length > 0) {
+                    stmts.push(...qbp.statements.map((s, idx) => ({ label: `Statement ${idx + 1}`, text: cleanStatementText(typeof s === 'object' ? (s.text || s.statement || '') : s) })));
+                } else {
+                    ['statement1', 'statement2', 'statement3', 'statement4', 'statementI', 'statementII'].forEach((k, idx) => {
+                        if (qbp[k] && typeof qbp[k] === 'string' && qbp[k].trim()) {
+                            stmts.push({ label: `Statement ${idx + 1}`, text: cleanStatementText(qbp[k].trim()) });
+                        }
+                    });
+                }
+                if (stmts.length >= 2) {
+                    return { introText: cleanQuestionText(q.questionText || q.question || ''), statements: stmts, outroText: '' };
+                }
+            }
+        } catch (e) {}
+    }
     const rawTxt = cleanQuestionText(q.questionText || q.question || '');
     if (!rawTxt) return { introText: '', statements: [], outroText: '' };
 
@@ -1047,7 +1120,12 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
     const labels = getQuestionOptionLabels(q, optionStyle);
 
     const romanLabels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'];
-    const hasRomanOpts = opts.some(o => /[\-\s\(](?:i|ii|iii|iv|v|vi)\b/i.test(typeof o === 'object' ? (o.text || '') : String(o)));
+    const hasLowerRoman = opts.some(o => /[\-\s\(](?:i{1,4}|iv|v|vi{0,3})\b/.test(typeof o === 'object' ? (o.text || '') : String(o)));
+    const hasUpperRoman = opts.some(o => /[\-\s\(](?:I{1,4}|IV|V|VI{0,3})\b/.test(typeof o === 'object' ? (o.text || '') : String(o)));
+    const hasLowerLetter = opts.some(o => /^[a-e][\-–—]/i.test(typeof o === 'object' ? (o.text || '') : String(o)));
+    const isList = /List/i.test(q.questionText || q.question || '');
+    const col1Header = q.leftHeader || q.column_a_header || (isList ? 'List I' : 'Column I');
+    const col2Header = q.rightHeader || q.column_b_header || (isList ? 'List II' : 'Column II');
 
     const avgLeftLen = pairs.reduce((acc, p) => acc + (p.left || '').length, 0) / (pairs.length || 1);
     const avgRightLen = pairs.reduce((acc, p) => acc + (p.right || '').length, 0) / (pairs.length || 1);
@@ -1085,19 +1163,19 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                 <table style={Q.matchTable}>
                     <thead>
                         <tr>
-                            <th style={{ ...Q.matchTh, width: leftWidth }}>{q.leftHeader || q.column_a_header || 'List I'}</th>
-                            <th style={{ ...Q.matchTh, width: rightWidth }}>{q.rightHeader || q.column_b_header || 'List II'}</th>
+                            <th style={{ ...Q.matchTh, width: leftWidth }}>{col1Header}</th>
+                            <th style={{ ...Q.matchTh, width: rightWidth }}>{col2Header}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {pairs.map((pair, pi) => (
                             <tr key={pi}>
                                 <td style={{ ...Q.matchTd, width: leftWidth }}>
-                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({String.fromCharCode(65 + pi)})</strong>
+                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({hasLowerLetter ? String.fromCharCode(97 + pi) : String.fromCharCode(65 + pi)})</strong>
                                     <MathRenderer inline text={pair.left || ''} />
                                 </td>
                                 <td style={{ ...Q.matchTd, width: rightWidth }}>
-                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({hasRomanOpts ? (romanLabels[pi]?.toUpperCase() || (pi + 1)) : (pi + 1)})</strong>
+                                    <strong style={{ marginRight: '6px', color: '#001f6d' }}>({hasLowerRoman ? (romanLabels[pi] || (pi + 1)) : hasUpperRoman ? (romanLabels[pi]?.toUpperCase() || (pi + 1)) : (pi + 1)})</strong>
                                     <MathRenderer inline text={pair.right || ''} />
                                 </td>
                             </tr>
@@ -1318,8 +1396,9 @@ export default function QuestionBlock({
     const resolvedOptionStyle = optionStyle || q.optionStyle || null;
 
     const matchData = parseMatchFromText(q);
-    const hasMatchPairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) || (matchData.pairs && matchData.pairs.length >= 2);
-    const isMatch = qType.includes('MATCH') || hasMatchPairs;
+    const hasMatchOpts = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(opt => /^[a-dA-D1-4][\-–—]\(?[ivx0-9p-t]+\)?/i.test(String(typeof opt === 'object' ? (opt.text || '') : opt).trim()));
+    const hasMatchPairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) || (matchData.pairs && matchData.pairs.length > 0);
+    const isMatch = qType.includes('MATCH') || hasMatchPairs || hasMatchOpts;
 
     const isAssertion = qType.includes('ASSERTION') || (/Assertion\s*(?:\(A\))?/i.test(qTextRaw) && /Reason\s*(?:\(R\))?/i.test(qTextRaw));
 
@@ -1353,7 +1432,7 @@ export default function QuestionBlock({
         if (isMatch && hasMatchPairs) {
             return (
                 <BodyMatchFollowing
-                    q={q}
+                    q={{ ...q, matchPairs: matchData.pairs || q.matchPairs }}
                     classes={classes}
                     isTwoCol={effectiveIsTwoCol}
                     diagramMaxHeight={diagramMaxHeight}

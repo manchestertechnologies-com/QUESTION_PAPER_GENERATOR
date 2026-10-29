@@ -24,7 +24,7 @@ export function parseMTFFromText(text) {
     const clean = text.replace(/\*\*/g, '');
 
     let searchStart = 0;
-    const introSentenceMatch = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+(?:the\s+)?(?:following\s+)?(?:items\s+in\s+)?(?:Column|List)\s*[-–—\s]*(?:I|1|A)\s+with\s+(?:Column|List)\s*[-–—\s]*(?:II|2|B)[^.\n]*[.\n:\-]?\s*/i);
+    const introSentenceMatch = clean.match(/^[\s\S]*?(?:Match|Connect|Pair)\s+[^\n.]*?\b(?:Column|List)\s*[-–—\s]*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—\s]*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$)/i);
     if (introSentenceMatch) {
         searchStart = introSentenceMatch[0].length;
     }
@@ -80,7 +80,7 @@ export function parseMTFFromText(text) {
     let col1Raw = clean.substring(col1Offset + col1HeaderLen, col2Offset).trim();
     let col2Raw = clean.substring(col2Offset + col2HeaderLen).trim();
 
-    col2Raw = col2Raw.replace(/(?:\n|\s)*(?:(?:\([1-4A-D]\)|[1-4A-D]\.|\b(?:Codes?|Options?))\s*(?:[a-d][\-–—\s]*\(?[ivx0-9p-t]+\)?[\s,;]*)+|(?:\([1-4A-D]\)\s+[A-Da-d][\-–—].*)|(?:Choose|Select)\s+(?:the\s+)?correct[\s\S]*)$/i, '').trim();
+    col2Raw = col2Raw.replace(/(?:\n|\s)*(?:(?:\([1-4A-D]\)|[1-4A-D]\.|\b(?:Codes?|Options?))\s*(?:[a-d][\-–—\s]*\(?[ivx0-9p-t]+\)?[\s,;]*)+|(?:\([1-4A-D]\)\s+[A-Da-d][\-–—].*)|(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)[\s\S]*)$/i, '').trim();
 
     function extractItems(raw, isLeft = true, defaultLabels) {
         if (!raw) return [];
@@ -131,32 +131,85 @@ export function parseMTFFromText(text) {
 }
 
 /**
+ * Helper to extract match pairs from structured fields or encoded QBP_DATA
+ */
+export function extractPairsFromQuestion(question) {
+    if (!question) return null;
+    if (Array.isArray(question.matchPairs) && question.matchPairs.length > 0) {
+        return question.matchPairs;
+    }
+    if (Array.isArray(question.column_a) && question.column_a.length > 0 && Array.isArray(question.column_b) && question.column_b.length > 0) {
+        const maxLen = Math.max(question.column_a.length, question.column_b.length);
+        const pairs = [];
+        for (let i = 0; i < maxLen; i++) {
+            pairs.push({ left: question.column_a[i] || '', right: question.column_b[i] || '' });
+        }
+        return pairs;
+    }
+    // Check if encoded in QBP_DATA
+    const sol = question.solutionText || question.solution_text || question.solution || question.questionText || question.question || '';
+    const match = typeof sol === 'string' ? sol.match(/\[QBP_DATA:([^\]]+)\]/i) : null;
+    if (match) {
+        try {
+            const rawB64 = match[1].trim();
+            const decodedStr = typeof window !== 'undefined' && window.atob ? window.atob(rawB64) : (typeof Buffer !== 'undefined' ? Buffer.from(rawB64, 'base64').toString('utf-8') : null);
+            if (decodedStr) {
+                const qbp = JSON.parse(decodedStr);
+                const cA = qbp.columnA || qbp.column_a;
+                const cB = qbp.columnB || qbp.column_b;
+                if (Array.isArray(cA) && Array.isArray(cB) && cA.length > 0) {
+                    const isInstructionText = (s) => /^(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option|statement|code)|\b(?:from\s+the\s+options|given\s+below|options?\s+given)\b/i.test(String(s).trim());
+                    const fA = cA.filter(s => s && !isInstructionText(s));
+                    const fB = cB.filter(s => s && !isInstructionText(s));
+                    const maxLen = Math.max(fA.length, fB.length);
+                    const pairs = [];
+                    for (let i = 0; i < maxLen; i++) {
+                        pairs.push({ left: fA[i] || '', right: fB[i] || '' });
+                    }
+                    if (pairs.length > 0) return pairs;
+                }
+            }
+        } catch (e) {}
+    }
+    return null;
+}
+
+/**
  * MatchTable Component
  * Renders structured match pairs or parsed MTF text into a clean side-by-side 2-column table.
  */
 const MatchTable = ({ question, className = '', isPrint = false }) => {
     if (!question) return null;
 
-    // Option A: Structured matchPairs on the question object
-    if (Array.isArray(question.matchPairs) && question.matchPairs.length > 0) {
+    // Option A: Structured matchPairs or column_a/column_b or QBP_DATA on the question object
+    const pairs = extractPairsFromQuestion(question);
+
+    if (pairs && pairs.length > 0) {
+        const qOpts = question.options || [];
+        const hasRomanOpts = qOpts.some(o => /[\-\s\(](?:i{1,4}|iv|v|vi{0,3})\b/i.test(typeof o === 'object' ? (o.text || '') : String(o)));
+        const romanLabels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'];
+        const isList = /List/i.test(question.questionText || question.question || '');
+        const col1Title = question.leftHeader || question.column_a_header || (isList ? 'List I' : 'Column I');
+        const col2Title = question.rightHeader || question.column_b_header || (isList ? 'List II' : 'Column II');
+
         return (
             <div className={`my-3 overflow-hidden rounded-xl border border-gray-300 shadow-sm bg-white ${className}`}>
                 <table className="w-full border-collapse text-left text-xs sm:text-sm">
                     <thead>
                         <tr className="bg-slate-100/90 text-navy font-black border-b border-gray-300">
-                            <th className="p-2.5 sm:p-3 border-r border-gray-300 w-1/2 uppercase tracking-wider">Column I</th>
-                            <th className="p-2.5 sm:p-3 w-1/2 uppercase tracking-wider">Column II</th>
+                            <th className="p-2.5 sm:p-3 border-r border-gray-300 w-1/2 uppercase tracking-wider">{col1Title}</th>
+                            <th className="p-2.5 sm:p-3 w-1/2 uppercase tracking-wider">{col2Title}</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {question.matchPairs.map((pair, idx) => (
+                        {pairs.map((pair, idx) => (
                             <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                                 <td className="p-2.5 sm:p-3 border-r border-gray-200 align-top">
-                                    <span className="font-bold text-navy mr-1.5">({String.fromCharCode(65 + idx)})</span>
+                                    <span className="font-bold text-navy mr-1.5">({String.fromCharCode(97 + idx)})</span>
                                     <MathRenderer inline text={pair.left || ''} />
                                 </td>
                                 <td className="p-2.5 sm:p-3 align-top">
-                                    <span className="font-bold text-navy mr-1.5">({idx + 1})</span>
+                                    <span className="font-bold text-navy mr-1.5">({hasRomanOpts ? (romanLabels[idx] || (idx + 1)) : (idx + 1)})</span>
                                     <MathRenderer inline text={pair.right || ''} />
                                 </td>
                             </tr>

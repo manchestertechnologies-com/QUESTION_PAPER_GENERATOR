@@ -263,28 +263,13 @@ function repairBrokenLatexFraction(str) {
  * Robust Match the Following parser
  */
 function parseMatchFromText(q) {
-    if (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) {
-        return { introText: cleanQuestionText(q.questionText || q.question || ''), pairs: q.matchPairs };
-    }
-    if (Array.isArray(q.column_a) && q.column_a.length > 0 && Array.isArray(q.column_b) && q.column_b.length > 0) {
-        const maxL = Math.max(q.column_a.length, q.column_b.length);
-        const pairs = [];
-        for (let i = 0; i < maxL; i++) {
-            pairs.push({
-                left: q.column_a[i] || '',
-                right: q.column_b[i] || ''
-            });
-        }
-        return { introText: cleanQuestionText(q.questionText || q.question || ''), pairs };
-    }
     let txt = cleanQuestionText(q.questionText || q.question || '');
-    if (!txt) return { introText: '', pairs: [] };
 
     // Clean up bold asterisks around headers e.g. **Column I** -> Column I
     txt = txt.replace(/\*\*(Column|List)\s*[-:]?\s*(I|II|1|2|A|B)\*\*/gi, '$1 $2');
 
     // 1. Strip and preserve introductory sentence like "Match Column-I with Column-II" or "Match the items in Column I with Column II:"
-    const introSentenceRegex = /^([\s\S]*?Match\s+[a-zA-Z\s\-']*\b(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[a-zA-Z\s\-']*?\bwith\b[a-zA-Z\s\-']*?\b(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[\.:\-]?)(\s+|$)/i;
+    const introSentenceRegex = /^([\s\S]*?Match\s+[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$))/i;
     let introText = '';
     let remainder = txt;
 
@@ -297,14 +282,35 @@ function parseMatchFromText(q) {
         if (genIntroMatch && genIntroMatch[1].length < 120) {
             introText = genIntroMatch[1].trim();
             remainder = txt.substring(genIntroMatch[0].length).trim();
+        } else {
+            const splitMatch = txt.split(/\*\*(?:Column|List)|\n\s*(?:Column|List)\s*[-:]?\s*(?:I|1|A)/i);
+            if (splitMatch.length > 1) {
+                introText = splitMatch[0].trim();
+            }
         }
     }
+
+    if (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) {
+        return { introText: introText || 'Match List I with List II:', pairs: q.matchPairs };
+    }
+    if (Array.isArray(q.column_a) && q.column_a.length > 0 && Array.isArray(q.column_b) && q.column_b.length > 0) {
+        const maxL = Math.max(q.column_a.length, q.column_b.length);
+        const pairs = [];
+        for (let i = 0; i < maxL; i++) {
+            pairs.push({
+                left: q.column_a[i] || '',
+                right: q.column_b[i] || ''
+            });
+        }
+        return { introText: introText || 'Match List I with List II:', pairs };
+    }
+    if (!txt) return { introText: '', pairs: [] };
 
     let rawCol1 = '';
     let rawCol2 = '';
 
     const col1HeaderRegex = /^(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[:\-\s]*/i;
-    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:Choose\s+the\s+correct|Select\s+the\s+correct|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
 
     if (col1HeaderRegex.test(remainder)) {
         const withoutCol1 = remainder.replace(col1HeaderRegex, '').trim();
@@ -320,7 +326,7 @@ function parseMatchFromText(q) {
             rawCol2 = splitMatch[1].trim();
         } else {
             // Fallback: search in full txt if intro was not stripped
-            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:Choose\s+the\s+correct|Select\s+the\s+correct|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
+            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$))/i;
             const fbMatch = txt.match(fallbackRegex);
             if (fbMatch) {
                 introText = txt.substring(0, fbMatch.index).trim();

@@ -47,6 +47,61 @@ async function getBrowser() {
 }
 
 /**
+ * Renders complete question body HTML, including structured MTF tables.
+ */
+function renderQuestionBodyHtml(q) {
+    const isMTF = q.type === 'MATCH_FOLLOWING' || (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) || (Array.isArray(q.column_a) && q.column_a.length > 0);
+    const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0)
+        ? q.matchPairs
+        : (Array.isArray(q.column_a) && q.column_a.length > 0 && Array.isArray(q.column_b) && q.column_b.length > 0)
+            ? q.column_a.map((left, idx) => ({ left, right: q.column_b[idx] || '' }))
+            : null;
+
+    if (isMTF && pairs && pairs.length > 0) {
+        const rawTxt = q.questionText || q.question || '';
+        const introSentenceRegex = /^([\s\S]*?Match\s+[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$))/i;
+        const introMatch = rawTxt.match(introSentenceRegex);
+        let introText = introMatch ? introMatch[1].trim() : 'Match List I with List II:';
+        if (!introText.endsWith(':') && !introText.endsWith('.')) introText += ':';
+
+        const qOpts = q.options || [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean);
+        const hasLowerRoman = qOpts.some(o => /[\-\s\(](?:i{1,4}|iv|v|vi{0,3})\b/.test(String(o)));
+        const hasUpperRoman = qOpts.some(o => /[\-\s\(](?:I{1,4}|IV|V|VI{0,3})\b/.test(String(o)));
+        const romanLabels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'];
+        const isList = /List/i.test(rawTxt);
+        const col1Header = isList ? 'List I' : 'Column I';
+        const col2Header = isList ? 'List II' : 'Column II';
+
+        let tableRows = '';
+        pairs.forEach((pair, idx) => {
+            const leftLbl = `(${String.fromCharCode(97 + idx)})`;
+            const rightLbl = `(${hasLowerRoman ? (romanLabels[idx] || (idx + 1)) : hasUpperRoman ? (romanLabels[idx]?.toUpperCase() || (idx + 1)) : (idx + 1)})`;
+            tableRows += `
+                <tr>
+                    <td style="width: 50%; border: 0.5px solid #555; padding: 2px 4px;"><strong>${leftLbl}</strong> ${preRenderMath(pair.left || '')}</td>
+                    <td style="width: 50%; border: 0.5px solid #555; padding: 2px 4px;"><strong>${rightLbl}</strong> ${preRenderMath(pair.right || '')}</td>
+                </tr>
+            `;
+        });
+
+        return `
+            <div style="font-weight: bold; margin-bottom: 3px;">${preRenderMath(introText)}</div>
+            <table class="match-table" style="width: 100%; border-collapse: collapse; margin: 3px 0 5px 0; font-size: 9.5pt;">
+                <thead>
+                    <tr style="background: #f0f4f8;">
+                        <th style="border: 0.5px solid #555; padding: 2px 4px; text-align: left;">${col1Header}</th>
+                        <th style="border: 0.5px solid #555; padding: 2px 4px; text-align: left;">${col2Header}</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        `;
+    }
+
+    return preRenderMath(q.questionText || q.question || '');
+}
+
+/**
  * Generates an institutional A4 Question Paper PDF with pre-rendered KaTeX vector math.
  */
 async function generatePaperPdf(paper, options = {}) {
@@ -89,7 +144,7 @@ async function generatePaperPdf(paper, options = {}) {
 
             secQs.forEach((q) => {
                 const qNum = globalQIndex++;
-                const cleanQText = preRenderMath(q.questionText || q.question || '');
+                const cleanQText = renderQuestionBodyHtml(q);
                 const opts = q.options || [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean);
 
                 renderedSectionsHtml += `
@@ -133,7 +188,7 @@ async function generatePaperPdf(paper, options = {}) {
         renderedSectionsHtml += `<div class="questions-grid">`;
         questions.forEach((q, idx) => {
             const qNum = idx + (paper.startQNo || 1);
-            const cleanQText = preRenderMath(q.questionText || q.question || '');
+            const cleanQText = renderQuestionBodyHtml(q);
             const opts = q.options || [q.opt_a, q.opt_b, q.opt_c, q.opt_d].filter(Boolean);
 
             renderedSectionsHtml += `

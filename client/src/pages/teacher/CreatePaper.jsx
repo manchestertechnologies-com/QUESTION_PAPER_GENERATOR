@@ -17,6 +17,7 @@ import { AuthContext } from '../../context/AuthContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api';
 import MathRenderer from '../../components/MathRenderer';
+import MatchTable from '../../components/MatchTable';
 import PaperRenderer, { DEFAULT_SETTINGS } from '../../components/PaperRenderer';
 import ChapterBlueprintMatrix from '../../components/ChapterBlueprintMatrix';
 import PaperAnalysisModal from '../../components/PaperAnalysisModal';
@@ -65,6 +66,96 @@ const QuestionCardOptions = ({ q, options = [], answer = '', showAnswer = true }
                     </div>
                 );
             })}
+        </div>
+    );
+};
+
+// Helper component to render question text and structured MTF table
+const QuestionBodyRenderer = ({ q, textClassName = "text-sm font-medium text-slate-900 leading-relaxed" }) => {
+    const rawTxt = q.questionText || q.question || '';
+    const hasMatchOpts = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(opt => /^[a-dA-D1-4][\-–—]\(?[ivx0-9p-t]+\)?/i.test(String(typeof opt === 'object' ? (opt.text || '') : opt).trim()));
+    const isMTF = q.type === 'MATCH_FOLLOWING' ||
+                  (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ||
+                  (Array.isArray(q.column_a) && q.column_a.length > 0) ||
+                  (typeof q.solutionText === 'string' && q.solutionText.includes('[QBP_DATA:')) ||
+                  (typeof q.solution_text === 'string' && q.solution_text.includes('[QBP_DATA:')) ||
+                  hasMatchOpts ||
+                  /Match\s+(?:the\s+)?(?:List|Column|following)/i.test(rawTxt);
+
+    if (isMTF) {
+        let introText = rawTxt;
+        const introSentenceRegex = /^([\s\S]*?Match\s+[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$))/i;
+        const introMatch = rawTxt.match(introSentenceRegex);
+        if (introMatch) {
+            introText = introMatch[1].trim();
+        } else {
+            const genIntroMatch = rawTxt.match(/^([\s\S]*?Match\s+(?:the\s+following(?:\s+columns|\s+items)?)?[\.:\-]?)(\s+|$)/i);
+            if (genIntroMatch && genIntroMatch[1].length < 120) {
+                introText = genIntroMatch[1].trim();
+            } else {
+                const split = rawTxt.split(/\*\*(?:Column|List)|\n\s*(?:Column|List)\s*[-:]?\s*(?:I|1|A)/i);
+                if (split.length > 1) {
+                    introText = split[0].trim();
+                }
+            }
+        }
+        if (!introText.endsWith(':') && !introText.endsWith('.')) {
+            introText = introText + ':';
+        }
+
+        return (
+            <div>
+                <div className={textClassName}>
+                    <MathRenderer inline text={introText} />
+                </div>
+                <MatchTable question={q} />
+            </div>
+        );
+    }
+
+    // Assertion-Reason fallback if assertion & reason exist separately
+    const hasARFields = Boolean(q.assertion && q.reason);
+    if (hasARFields && !/Assertion/i.test(rawTxt)) {
+        return (
+            <div>
+                {rawTxt && (
+                    <div className={`${textClassName} mb-1.5`}>
+                        <MathRenderer inline text={rawTxt} />
+                    </div>
+                )}
+                <div className="my-2 space-y-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800">
+                    <div><strong className="text-navy font-bold mr-1.5">Assertion (A):</strong> <MathRenderer inline text={q.assertion} /></div>
+                    <div><strong className="text-navy font-bold mr-1.5">Reason (R):</strong> <MathRenderer inline text={q.reason} /></div>
+                </div>
+            </div>
+        );
+    }
+
+    // Statement-based fallback if statements array exists separately
+    const hasStmtFields = Array.isArray(q.statements) && q.statements.length >= 2;
+    if (hasStmtFields && !/Statement\s*(?:I|1|A)/i.test(rawTxt)) {
+        return (
+            <div>
+                {rawTxt && (
+                    <div className={`${textClassName} mb-1.5`}>
+                        <MathRenderer inline text={rawTxt} />
+                    </div>
+                )}
+                <div className="my-2 space-y-1 p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800">
+                    {q.statements.map((stmt, idx) => (
+                        <div key={idx}>
+                            <strong className="text-navy font-bold mr-1.5">{typeof stmt === 'object' && stmt.label ? stmt.label : `Statement ${idx + 1}:`}</strong>
+                            <MathRenderer inline text={typeof stmt === 'object' ? (stmt.text || '') : stmt} />
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className={textClassName}>
+            <MathRenderer inline text={rawTxt} />
         </div>
     );
 };
@@ -4168,9 +4259,7 @@ export default function CreatePaper() {
                                                     </div>
 
                                                     {/* Question Body */}
-                                                    <div className="text-sm font-medium text-slate-900 leading-relaxed">
-                                                        <MathRenderer inline text={q.questionText || q.question} />
-                                                    </div>
+                                                    <QuestionBodyRenderer q={q} textClassName="text-sm font-medium text-slate-900 leading-relaxed" />
 
                                                     {/* Diagram */}
                                                     {diagramImg && (
@@ -4325,9 +4414,7 @@ export default function CreatePaper() {
                                                         )}
                                                     </div>
 
-                                                    <div className="text-xs font-bold text-navy leading-relaxed">
-                                                        <MathRenderer inline text={q.questionText || q.question} />
-                                                    </div>
+                                                    <QuestionBodyRenderer q={q} textClassName="text-xs font-bold text-navy leading-relaxed" />
 
                                                     {diagramImg && (
                                                         <div className="mt-2.5 max-w-xs border border-gray-200 rounded-xl overflow-hidden bg-white p-1">

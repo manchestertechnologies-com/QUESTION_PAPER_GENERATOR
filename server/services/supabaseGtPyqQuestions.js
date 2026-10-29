@@ -7,18 +7,23 @@ const { cleanDifficultyTags, extractDifficulty } = require('./supabaseQuestions'
 function mapGtPyqToQuestion(row) {
     if (!row) return null;
 
-    let type = 'MCQ';
+    const rawQuestion = row.question || '';
+    const rawSolution = row.solution_text || '';
+    const rawAssertion = row.assertion || '';
+    const rawReason = row.reason || '';
     const qTypeLower = (row.q_type || '').toLowerCase();
-    if (qTypeLower.includes('numerical')) {
-        type = 'NUMERICAL';
-    } else if (qTypeLower.includes('assertion')) {
-        type = 'ASSERTION_REASON';
-    } else if (qTypeLower.includes('match')) {
-        type = 'MATCH_FOLLOWING';
-    } else if (qTypeLower.includes('statement')) {
-        type = 'STATEMENT_BASED';
-    } else if (qTypeLower.includes('true') || qTypeLower.includes('false')) {
-        type = 'TRUE_FALSE';
+
+    // 1. Extract any QBP metadata encoded in solution_text or question
+    let qbpType = null;
+    let qbpData = null;
+    const typeMatch = rawSolution.match(/\[QBP_TYPE:([^\]]+)\]/i) || rawQuestion.match(/\[QBP_TYPE:([^\]]+)\]/i);
+    if (typeMatch) qbpType = typeMatch[1].trim().toLowerCase();
+
+    const dataMatch = rawSolution.match(/\[QBP_DATA:([^\]]+)\]/i) || rawQuestion.match(/\[QBP_DATA:([^\]]+)\]/i);
+    if (dataMatch) {
+        try {
+            qbpData = JSON.parse(Buffer.from(dataMatch[1].trim(), 'base64').toString('utf-8'));
+        } catch (e) {}
     }
 
     const rawOptions = [];
@@ -27,9 +32,10 @@ function mapGtPyqToQuestion(row) {
     if (row.opt_c) rawOptions.push(row.opt_c);
     if (row.opt_d) rawOptions.push(row.opt_d);
 
-    if (rawOptions.length === 0 && row.match_options) {
+    const matchOptionsObj = row.match_options || (qbpData && (qbpData.matchOptions || qbpData.match_options)) || null;
+    if (rawOptions.length === 0 && matchOptionsObj) {
         try {
-            const mOpts = typeof row.match_options === 'string' ? JSON.parse(row.match_options) : row.match_options;
+            const mOpts = typeof matchOptionsObj === 'string' ? JSON.parse(matchOptionsObj) : matchOptionsObj;
             if (mOpts && typeof mOpts === 'object') {
                 ['A', 'B', 'C', 'D'].forEach(k => {
                     if (mOpts[k]) rawOptions.push(mOpts[k]);
@@ -43,16 +49,111 @@ function mapGtPyqToQuestion(row) {
 
     const options = rawOptions.map(cleanDifficultyTags).filter(Boolean);
 
+    // Match Columns Extraction
+    let colA = (Array.isArray(row.column_a) && row.column_a.length > 0)
+        ? row.column_a
+        : (qbpData && Array.isArray(qbpData.columnA) && qbpData.columnA.length > 0)
+            ? qbpData.columnA
+            : (qbpData && Array.isArray(qbpData.column_a) && qbpData.column_a.length > 0)
+                ? qbpData.column_a
+                : [];
+
+    let colB = (Array.isArray(row.column_b) && row.column_b.length > 0)
+        ? row.column_b
+        : (qbpData && Array.isArray(qbpData.columnB) && qbpData.columnB.length > 0)
+            ? qbpData.columnB
+            : (qbpData && Array.isArray(qbpData.column_b) && qbpData.column_b.length > 0)
+                ? qbpData.column_b
+                : [];
+
+    const isInstructionText = (s) => {
+        if (!s || typeof s !== 'string') return true;
+        const c = s.trim();
+        return c.length === 0 || /^(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option|statement|code)|\b(?:from\s+the\s+options|given\s+below|options?\s+given)\b/i.test(c);
+    };
+
+    colA = colA.map(cleanDifficultyTags).map(s => s.trim()).filter(s => s && !isInstructionText(s));
+    colB = colB.map(cleanDifficultyTags).map(s => s.trim()).filter(s => s && !isInstructionText(s));
+
     const matchPairs = [];
-    if (Array.isArray(row.column_a) && row.column_a.length > 0) {
-        const colB = Array.isArray(row.column_b) ? row.column_b : [];
-        const maxLen = Math.max(row.column_a.length, colB.length);
+    if (colA.length > 0 || colB.length > 0) {
+        const maxLen = Math.max(colA.length, colB.length);
         for (let i = 0; i < maxLen; i++) {
             matchPairs.push({
-                left: row.column_a[i] || '',
+                left: colA[i] || '',
                 right: colB[i] || ''
             });
         }
+    }
+
+    // Statements Extraction
+    const statements = [];
+    if (Array.isArray(row.statements) && row.statements.length > 0) {
+        statements.push(...row.statements);
+    } else if (qbpData) {
+        if (Array.isArray(qbpData.statements) && qbpData.statements.length > 0) {
+            statements.push(...qbpData.statements);
+        } else {
+            ['statement1', 'statement2', 'statement3', 'statement4', 'statementI', 'statementII'].forEach((k, idx) => {
+                if (qbpData[k] && typeof qbpData[k] === 'string' && qbpData[k].trim()) {
+                    statements.push({
+                        label: `Statement ${idx + 1}:`,
+                        text: cleanDifficultyTags(qbpData[k].trim())
+                    });
+                }
+            });
+        }
+    }
+
+    let assertion = cleanDifficultyTags(row.assertion || (qbpData && qbpData.assertion) || '');
+    let reason = cleanDifficultyTags(row.reason || (qbpData && qbpData.reason) || '');
+
+    let type = 'MCQ';
+    const isAR = (
+        qbpType === 'assertion_reason' || 
+        qbpType === 'ar' || 
+        qTypeLower.includes('assertion') || 
+        Boolean(rawAssertion && rawReason) || 
+        Boolean(assertion && reason) ||
+        (/Assertion\s*(?:\(A\))?/i.test(rawQuestion) && /Reason\s*(?:\(R\))?/i.test(rawQuestion))
+    );
+    const isStatement = (
+        qbpType === 'statement' || 
+        qbpType === 'statement_based' || 
+        qTypeLower.includes('statement') || 
+        statements.length >= 2 ||
+        (/Statement\s*(?:I|1)\s*[:\-]/i.test(rawQuestion) && /Statement\s*(?:II|2)\s*[:\-]/i.test(rawQuestion))
+    );
+    const hasMatchOpts = options.length >= 2 && options.every(opt => /^[a-dA-D1-4][\-–—]\(?[ivx0-9p-t]+\)?/i.test(String(opt).trim()));
+    const isMatch = (
+        qbpType === 'match' ||
+        qbpType === 'match_following' ||
+        qTypeLower.includes('match') || 
+        colA.length > 0 || 
+        matchPairs.length > 0 ||
+        hasMatchOpts ||
+        /(?:Column|List)\s*[-–—\s]*(?:I|1|A)[\s\S]*(?:Column|List)\s*[-–—\s]*(?:II|2|B)/i.test(rawQuestion) ||
+        /(?:Match|Connect|Pair)\s+(?:the\s+)?(?:following|items\s+in\s+)?(?:List|Column|pairs?)/i.test(rawQuestion) ||
+        /Match\s+(?:the\s+)?List\s*[-–—\s]*(?:I|1|A)?\s+with\s+(?:the\s+)?List\s*[-–—\s]*(?:II|2|B)?/i.test(rawQuestion)
+    );
+    const isNumeric = (
+        qbpType === 'numerical' || 
+        qbpType === 'integer' || 
+        qTypeLower.includes('numerical') || 
+        qTypeLower.includes('integer') || 
+        (!options.length && Boolean(row.num_answer || row.correct_option))
+    );
+
+    if (isAR) {
+        type = 'ASSERTION_REASON';
+    } else if (isStatement) {
+        type = 'STATEMENT_BASED';
+    } else if (isMatch) {
+        type = 'MATCH_FOLLOWING';
+    } else if (isNumeric) {
+        type = 'NUMERICAL';
+    } else if (qTypeLower.includes('true') || qTypeLower.includes('false')) {
+        type = 'TRUE_FALSE';
     }
 
     let answer = row.correct_option || row.num_answer || '';
@@ -75,6 +176,38 @@ function mapGtPyqToQuestion(row) {
     const level = extractDifficulty(row.solution_text, row.question);
     const cleanSolution = cleanDifficultyTags(row.solution_text || '');
     let cleanQuestion = cleanDifficultyTags(row.question || '');
+
+    if (type === 'MATCH_FOLLOWING' && matchPairs.length > 0) {
+        const hasColsInStem = Boolean(
+            /(\*\*|\b)(?:Column|List)\s*[-–—\s]*(?:I|1|A)\b[^\n]*\n[\s\S]*?(?:\n|^)\s*(\*\*|\b)(?:Column|List)\s*[-–—\s]*(?:II|2|B)\b/i.test(cleanQuestion)
+        );
+        if (!hasColsInStem) {
+            const hasRoman = options.some(o => /[\-\s\(](?:i{1,4}|iv|v|vi{0,3})\b/i.test(String(o)));
+            const romanList = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii'];
+            const intro = (cleanQuestion && cleanQuestion.trim()) ? cleanQuestion.trim().replace(/[:\.\s]+$/, '') : 'Match List-I with List-II';
+            const col1Lines = matchPairs.map((p, idx) => `(${String.fromCharCode(97 + idx)}) ${p.left}`).join('\n');
+            const col2Lines = matchPairs.map((p, idx) => `(${hasRoman ? (romanList[idx] || (idx + 1)) : (idx + 1)}) ${p.right}`).join('\n');
+            cleanQuestion = `${intro}:\n\n**List-I**\n${col1Lines}\n\n**List-II**\n${col2Lines}`;
+        }
+    } else if (type === 'STATEMENT_BASED' && statements.length >= 2) {
+        const hasStmtsInStem = /Statement\s*[-–—\s]*(?:I|1|A)/i.test(cleanQuestion);
+        if (!hasStmtsInStem) {
+            const intro = (cleanQuestion && cleanQuestion.trim()) ? cleanQuestion.trim() + '\n\n' : '';
+            const stmtLines = statements.map((s, idx) => {
+                const lbl = (typeof s === 'object' && s.label) ? s.label : `Statement ${idx + 1}:`;
+                const txt = typeof s === 'object' ? (s.text || '') : s;
+                return `${lbl.endsWith(':') ? lbl : lbl + ':'} ${txt}`;
+            }).join('\n');
+            cleanQuestion = `${intro}${stmtLines}`;
+        }
+    } else if (type === 'ASSERTION_REASON' && assertion && reason) {
+        const hasARInStem = /Assertion/i.test(cleanQuestion) && /Reason/i.test(cleanQuestion);
+        if (!hasARInStem) {
+            const intro = (cleanQuestion && cleanQuestion.trim()) ? cleanQuestion.trim() + '\n\n' : '';
+            cleanQuestion = `${intro}Assertion (A): ${assertion}\nReason (R): ${reason}`;
+        }
+    }
+
     if (!cleanQuestion && type === 'MATCH_FOLLOWING') {
         cleanQuestion = 'Match the statements/terms in Column A with Column B:';
     }
