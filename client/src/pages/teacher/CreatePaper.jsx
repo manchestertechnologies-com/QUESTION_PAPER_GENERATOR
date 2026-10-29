@@ -4513,6 +4513,64 @@ export default function CreatePaper() {
                                 >
                                     <span>💡</span> Solutions Guide
                                 </button>
+
+                                {/* Option Style Selector: (A)-(D) vs (1)-(4) */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-300 shadow-xs">
+                                    <span className="text-[10px] font-black text-navy uppercase tracking-wider px-1">Options:</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings(s => ({ ...s, optionStyle: 'ABCD' }))}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                            (settings.optionStyle || 'ABCD') === 'ABCD'
+                                                ? 'bg-navy text-gold shadow-sm'
+                                                : 'bg-white text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                        title="Display options as (A), (B), (C), (D)"
+                                    >
+                                        (A)-(D)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSettings(s => ({ ...s, optionStyle: '1234' }))}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-black transition cursor-pointer ${
+                                            settings.optionStyle === '1234'
+                                                ? 'bg-navy text-gold shadow-sm'
+                                                : 'bg-white text-slate-700 hover:bg-slate-200'
+                                        }`}
+                                        title="Display options as (1), (2), (3), (4)"
+                                    >
+                                        (1)-(4)
+                                    </button>
+                                </div>
+
+                                {/* Dynamic Font Size Controller */}
+                                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-300 shadow-xs">
+                                    <span className="text-[10px] font-black text-navy uppercase tracking-wider px-1">Font:</span>
+                                    <select
+                                        value={settings.fontSize || '14px'}
+                                        onChange={e => setSettings(s => ({ ...s, fontSize: e.target.value }))}
+                                        className="bg-white text-slate-800 text-xs font-bold rounded-lg px-2 py-1 border border-slate-200 outline-none cursor-pointer"
+                                        title="Paper font size"
+                                    >
+                                        <option value="12px">12px</option>
+                                        <option value="13px">13px</option>
+                                        <option value="14px">14px</option>
+                                        <option value="15px">15px</option>
+                                        <option value="16px">16px</option>
+                                        <option value="18px">18px</option>
+                                    </select>
+                                </div>
+
+                                {/* Shuffle Trigger */}
+                                <button
+                                    type="button"
+                                    onClick={handleShuffleQuestions}
+                                    className="bg-slate-100 hover:bg-slate-200 text-navy px-3.5 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition border border-gray-300 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    title="Shuffle questions within sections (Fisher-Yates)"
+                                >
+                                    <span>🔀</span> Shuffle Qs
+                                </button>
+
                                 <button
                                     type="button"
                                     onClick={() => setCurrentStep(5)}

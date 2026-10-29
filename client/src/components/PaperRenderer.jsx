@@ -643,18 +643,18 @@ export default function PaperRenderer({
                         type="button"
                         onClick={handleDownloadWord}
                         disabled={downloadingWord}
-                        className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        className="bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                         title="Download 100% editable Microsoft Word document (.docx)"
                     >
-                        <span>📝</span> Word
+                        <span>📝</span> {downloadingWord ? 'Exporting Word...' : 'DOWNLOAD WORD (.DOCX)'}
                     </button>
                     <button
                         type="button"
                         onClick={handlePrint}
-                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-3 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
+                        className="bg-gold text-navy hover:bg-navy hover:text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider transition shadow cursor-pointer flex items-center gap-1.5"
                         title="Print or Save as vector PDF"
                     >
-                        <span>📄</span> PDF
+                        <span>📄</span> DOWNLOAD PDF / PRINT
                     </button>
                 </div>
 
@@ -665,7 +665,7 @@ export default function PaperRenderer({
                             onClick={onProceedToAlignment}
                             className="bg-navy text-gold px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:scale-105 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>⚙️</span> Alignment →
+                            <span>⚙️</span> ALIGNMENT CONTROLS →
                         </button>
                     )}
                     {onProceedToFinalize && (
@@ -673,7 +673,7 @@ export default function PaperRenderer({
                             onClick={onProceedToFinalize}
                             className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition shadow cursor-pointer flex items-center gap-1.5"
                         >
-                            <span>✓</span> Save →
+                            <span>✓</span> FINALIZE & SAVE →
                         </button>
                     )}
                 </div>
