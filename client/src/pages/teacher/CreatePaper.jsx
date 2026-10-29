@@ -1496,18 +1496,18 @@ export default function CreatePaper() {
                 if (!pool || pool.length === 0) {
                     pool = await fetchQuestionsPoolForSubject(sub);
                 }
-                const subSel = subjectSelections[sub] || { chapters: [], concepts: [] };
+                const subSel = subjectSelections[sub] || {};
                 const quota = defaultQuotaForSubject;
                 const pickedForSub = generateBalancedSetForSubject(
                     sub,
                     pool,
                     quota,
                     autoDist,
-                    subSel.chapters,
-                    subSel.concepts,
+                    Array.isArray(subSel?.chapters) ? subSel.chapters : [],
+                    Array.isArray(subSel?.concepts) ? subSel.concepts : [],
                     selectedQuestionType,
                     subjectTypeAllocations[sub] || currentTypeAllocation,
-                    subSel.quotas || {}
+                    subSel?.quotas || {}
                 );
                 allPicked.push(...pickedForSub);
             }
@@ -2489,9 +2489,11 @@ export default function CreatePaper() {
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {examSubjects.map((sub, sIdx) => {
                                         const isTabActive = activeSubjectTab === sub;
-                                        const subSel = subjectSelections[sub] || { chapters: [], concepts: [] };
-                                        const chCount = subSel.chapters.length;
-                                        const cptCount = subSel.concepts.length;
+                                        const subSel = subjectSelections[sub] || {};
+                                        const chArr = Array.isArray(subSel?.chapters) ? subSel.chapters : [];
+                                        const cptArr = Array.isArray(subSel?.concepts) ? subSel.concepts : [];
+                                        const chCount = chArr.length;
+                                        const cptCount = cptArr.length;
                                         const isSubMissing = attemptedStep1Proceed && (chCount === 0 || cptCount === 0);
 
                                         return (
@@ -2770,7 +2772,7 @@ export default function CreatePaper() {
                                 <span className="text-[10px] font-black text-red-800 uppercase tracking-widest block">
                                     Missing Configurations:
                                 </span>
-                                {incompleteSelectionModal.missingSubjects.map((m, idx) => (
+                                {(incompleteSelectionModal?.missingSubjects || []).map((m, idx) => (
                                     <div key={idx} className="flex items-center justify-between text-xs text-red-900 bg-white p-2.5 rounded-xl border border-red-200 shadow-2xs">
                                         <span className="font-black text-navy">{m.subject}</span>
                                         <span className="font-bold text-red-600">
@@ -2788,8 +2790,9 @@ export default function CreatePaper() {
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (incompleteSelectionModal.missingSubjects.length > 0) {
-                                            setActiveSubjectTab(incompleteSelectionModal.missingSubjects[0].subject);
+                                        const missingList = incompleteSelectionModal?.missingSubjects || [];
+                                        if (missingList.length > 0) {
+                                            setActiveSubjectTab(missingList[0].subject);
                                         }
                                         setIncompleteSelectionModal({ open: false, missingSubjects: [] });
                                     }}

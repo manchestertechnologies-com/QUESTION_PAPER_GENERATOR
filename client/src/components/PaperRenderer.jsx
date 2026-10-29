@@ -311,7 +311,11 @@ export function PaperHeader({
 
     const displayDuration = headerConfig?.timeAllowed || duration || '3 Hours 15 Minutes';
     const displayMarks = headerConfig?.maxMarks || totalMarks || '70';
-    const instructions = headerConfig?.generalInstructions || [];
+    const instructions = Array.isArray(headerConfig?.generalInstructions)
+        ? headerConfig.generalInstructions
+        : (typeof headerConfig?.generalInstructions === 'string' && headerConfig.generalInstructions.trim()
+            ? [headerConfig.generalInstructions]
+            : []);
 
     return (
         <div style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
