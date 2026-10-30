@@ -132,6 +132,78 @@ export default function AdminResults() {
         window.open(downloadUrl, '_blank');
     };
 
+    const handleDeleteIndividualAttempt = async (student) => {
+        const studentLabel = student.studentName || student.rollNumber || 'this student';
+        const roll = student.rollNumber || '';
+        if (!window.confirm(`Delete trial attempt for ${studentLabel} (Roll: ${roll || 'N/A'})?\n\nThis will reset their record so they can attend the test fresh tomorrow.`)) {
+            return;
+        }
+
+        try {
+            // 1. Backend delete call
+            if (selectedExam) {
+                const sid = student._id || student.id || student.sessionId || 'none';
+                await api.delete(`/api/exams/${selectedExam}/results/${sid}?rollNumber=${encodeURIComponent(roll)}`).catch(() => {});
+            }
+
+            // 2. LocalStorage purge
+            try {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k) continue;
+                    if (k.startsWith('cbt_scorecard_') || k.startsWith('exam_answers_') || k.startsWith('exam_score_')) {
+                        const raw = localStorage.getItem(k);
+                        if (
+                            (roll && raw && raw.includes(roll)) ||
+                            (student._id && k.includes(String(student._id))) ||
+                            (student.id && k.includes(String(student.id))) ||
+                            (student.sessionId && k.includes(String(student.sessionId)))
+                        ) {
+                            keysToRemove.push(k);
+                        }
+                    }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+            } catch (_) {}
+
+            // 3. Update React state immediately
+            setResults(prev => prev.filter(r => (r._id || r.id) !== (student._id || student.id) && r.rollNumber !== student.rollNumber));
+            setMsg(`✅ Trial attempt for ${studentLabel} deleted. They are now unlocked to attend tomorrow!`);
+        } catch (err) {
+            setMsg('❌ Failed to delete attempt: ' + err.message);
+        }
+    };
+
+    const handleClearAllExamAttempts = async () => {
+        if (!window.confirm(`Are you sure you want to delete ALL trial attempts for this exam?\n\nThis will completely reset and unlock all students so everyone can attend the test fresh tomorrow.`)) {
+            return;
+        }
+
+        try {
+            if (selectedExam) {
+                await api.delete(`/api/exams/${selectedExam}/results`).catch(() => {});
+            }
+
+            // Purge all related local scorecards
+            try {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && (k.startsWith('cbt_scorecard_') || k.startsWith('exam_answers_') || k.startsWith('exam_score_'))) {
+                        keysToRemove.push(k);
+                    }
+                }
+                keysToRemove.forEach(k => localStorage.removeItem(k));
+            } catch (_) {}
+
+            setResults([]);
+            setMsg('✅ All trial attempts have been cleared. All students are now unlocked and ready for tomorrow!');
+        } catch (err) {
+            setMsg('❌ Failed to clear attempts: ' + err.message);
+        }
+    };
+
     const getScoreColor = (score) => {
         if (score >= 300) return '#10b981';
         if (score >= 150) return '#f59e0b';
@@ -248,6 +320,7 @@ export default function AdminResults() {
                             <button style={{...styles.keyBtn, background: '#10b981'}} onClick={exportExcel}>📊 Excel</button>
                             <button style={{...styles.keyBtn, background: '#ef4444'}} onClick={exportPDF}>📄 PDF</button>
                             <button style={{...styles.keyBtn, background: '#7c3aed'}} onClick={downloadAllScorecardsZip}>⬇️ Download All (ZIP)</button>
+                            <button style={{...styles.keyBtn, background: '#dc2626'}} onClick={handleClearAllExamAttempts} title="Delete all trial test attempts for this exam">🗑️ Clear All Attempts</button>
                         </>
                     )}
                 </div>
@@ -488,6 +561,24 @@ export default function AdminResults() {
                                                     }}
                                                 >
                                                     Download PDF
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteIndividualAttempt(r)}
+                                                    style={{
+                                                        display: 'inline-block',
+                                                        padding: '4px 8px',
+                                                        backgroundColor: '#fee2e2',
+                                                        color: '#dc2626',
+                                                        border: '1px solid #fca5a5',
+                                                        borderRadius: '4px',
+                                                        fontSize: '12px',
+                                                        fontWeight: '700',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                    title="Delete this trial attempt so the student can attend fresh tomorrow"
+                                                >
+                                                    🗑️ Delete Attempt
                                                 </button>
                                             </div>
                                         </td>

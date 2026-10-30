@@ -1821,6 +1821,35 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Delete single student exam session / attempt
+// DELETE /api/exams/:id/results/:sessionId
+// ─────────────────────────────────────────────────────────────────
+router.delete('/:id/results/:sessionId', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const { rollNumber } = req.query;
+        await storage.deleteSessionById(req.params.sessionId, rollNumber, req.params.id);
+        res.json({ msg: 'Session deleted successfully and student unlocked for re-attempt.' });
+    } catch (err) {
+        console.error('Error deleting session:', err);
+        res.status(500).json({ msg: 'Server Error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Delete all sessions / attempts for this exam
+// DELETE /api/exams/:id/results
+// ─────────────────────────────────────────────────────────────────
+router.delete('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        await storage.deleteSessionsByExam(req.params.id);
+        res.json({ msg: 'All exam sessions deleted successfully.' });
+    } catch (err) {
+        console.error('Error clearing sessions:', err);
+        res.status(500).json({ msg: 'Server Error: ' + err.message });
+    }
+});
+
 // ADMIN: Get Question Analytics
 // GET /api/exams/:id/analytics
 // ─────────────────────────────────────────────────────────────────

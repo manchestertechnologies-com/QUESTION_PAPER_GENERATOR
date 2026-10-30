@@ -992,6 +992,50 @@ async function getBridgeKey(key) {
     return res.rows[0] || null;
 }
 
+async function deleteSessionById(sessionId, rollNumber = null, examId = null) {
+    if (!sessionId && !rollNumber) return false;
+    let clauses = [];
+    let params = [];
+    if (sessionId) {
+        params.push(String(sessionId));
+        clauses.push(`id::text = $${params.length} OR student_id = $${params.length}`);
+    }
+    if (rollNumber) {
+        params.push(String(rollNumber));
+        if (examId) {
+            params.push(String(examId));
+            clauses.push(`(roll_number = $${params.length - 1} AND exam_id::text = $${params.length})`);
+        } else {
+            clauses.push(`roll_number = $${params.length}`);
+        }
+    }
+    if (clauses.length > 0) {
+        await pool.query(`DELETE FROM public.exam_sessions WHERE ${clauses.join(' OR ')}`, params);
+    }
+
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+        try {
+            const orConditions = [];
+            if (sessionId) {
+                orConditions.push({ _id: sessionId });
+                orConditions.push({ studentId: sessionId });
+                try {
+                    const { ObjectId } = require('mongodb');
+                    if (ObjectId.isValid(sessionId)) orConditions.push({ _id: new ObjectId(sessionId) });
+                } catch (_) {}
+            }
+            if (rollNumber) {
+                if (examId) orConditions.push({ rollNumber, examId: String(examId) });
+                else orConditions.push({ rollNumber });
+            }
+            if (orConditions.length > 0) {
+                await mongoose.connection.db.collection('exam_sessions').deleteMany({ $or: orConditions });
+            }
+        } catch (_) {}
+    }
+    return true;
+}
+
 module.exports = {
     // Exams
     createExam,
@@ -1016,6 +1060,7 @@ module.exports = {
     updateSession,
     getSessionsByExam,
     deleteSessionsByExam,
+    deleteSessionById,
     createBridgeKey,
     getBridgeKey,
 
