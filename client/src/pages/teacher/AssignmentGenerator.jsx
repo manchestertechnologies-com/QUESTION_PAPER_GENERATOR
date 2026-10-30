@@ -9,7 +9,7 @@
  * - Direct Save Assignment to Department Archives (MongoDB + Supabase)
  * - True A4 Print/PDF output with embedded Analysis, Answer Key, and Solutions
  */
-import React, { useState, useEffect, useContext, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useMemo, useCallback, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
@@ -216,6 +216,54 @@ const QuestionCard = React.memo(({
         </div>
     );
 });
+
+// Safe error boundary specifically protecting assignment preview
+class SafePaperPreviewBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    componentDidCatch(error, errorInfo) {
+        console.error('[Assignment Preview Error Caught Safely]', error, errorInfo);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="bg-white p-8 rounded-3xl border-2 border-amber-400 shadow-xl max-w-2xl mx-auto my-8 text-center space-y-4">
+                    <div className="text-4xl">🛡️</div>
+                    <h3 className="text-lg font-black text-navy uppercase">Preview Display Safe Guard</h3>
+                    <p className="text-xs text-slate-600 font-medium">
+                        A display formatting issue occurred in the preview renderer ({this.state.error?.message || 'Formatting'}).
+                        <br />
+                        <strong className="text-emerald-700">All your selected questions remain completely safe in state and auto-saved draft.</strong>
+                    </p>
+                    <div className="flex justify-center gap-3 pt-2">
+                        {this.props.onProceedToFinalize && (
+                            <button
+                                type="button"
+                                onClick={() => this.props.onProceedToFinalize()}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs uppercase cursor-pointer shadow"
+                            >
+                                ✓ Save Assignment Anyway
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => this.setState({ hasError: false })}
+                            className="bg-gray-100 text-gray-700 px-4 py-2.5 rounded-xl font-bold text-xs cursor-pointer hover:bg-gray-200"
+                        >
+                            Retry Preview
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 const AssignmentGenerator = () => {
     const { user } = useContext(AuthContext);
@@ -608,16 +656,18 @@ const AssignmentGenerator = () => {
                         </div>
                     </div>
 
-                    {/* Paper Renderer */}
+                    {/* Paper Renderer with Safe Preview Boundary */}
                     <div className="w-full flex justify-center">
-                        <PaperRenderer
-                            paper={assignmentPaper}
-                            activeTemplate={null}
-                            isAssignment={true}
-                            settings={{ ...settings, startQNo, endQNo }}
-                            setSettings={setSettings}
-                            showSettingsPanel={showSettings}
-                        />
+                        <SafePaperPreviewBoundary onProceedToFinalize={handleSaveAssignment}>
+                            <PaperRenderer
+                                paper={assignmentPaper}
+                                activeTemplate={null}
+                                isAssignment={true}
+                                settings={{ ...settings, startQNo, endQNo }}
+                                setSettings={setSettings}
+                                showSettingsPanel={showSettings}
+                            />
+                        </SafePaperPreviewBoundary>
                     </div>
                 </div>
             ) : (
@@ -654,6 +704,42 @@ const AssignmentGenerator = () => {
                             </button>
                         </div>
                     </div>
+
+                    {/* Persistent Auto-Save Safety Ribbon */}
+                    {selectedQuestions.length > 0 && (
+                        <div className="bg-gradient-to-r from-navy via-slate-900 to-navy text-white px-5 py-3 rounded-2xl border-2 border-gold/40 flex flex-wrap items-center justify-between gap-3 text-xs shadow-md">
+                            <div className="flex items-center gap-2.5">
+                                <span className="flex h-2.5 w-2.5 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </span>
+                                <span className="font-bold text-slate-100">
+                                    🛡️ Auto-Save Active: <strong className="text-gold">{selectedQuestions.length} Questions</strong> safely preserved in this session. Even if you refresh or leave, everything stays intact.
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowReviewModal(true)}
+                                    className="bg-gold/20 hover:bg-gold/30 text-gold px-3 py-1.5 rounded-xl font-black text-xs transition cursor-pointer border border-gold/30"
+                                >
+                                    👁 Review Basket ({selectedQuestions.length})
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (window.confirm('Discard current assignment questions draft and start fresh?')) {
+                                            setSelectedQuestions([]);
+                                            localStorage.removeItem(ASSIGNMENT_DRAFT_KEY);
+                                        }
+                                    }}
+                                    className="bg-red-500/20 hover:bg-red-500/40 text-red-300 px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer"
+                                >
+                                    Clear Draft
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Swap Active Banner */}
                     {swappingIndex !== null && (
