@@ -378,62 +378,162 @@ export default function CreatePaper() {
         setSirMvConfig(config);
         try {
             const subjectsToFetch = config.subjects && config.subjects.length > 0 ? config.subjects : [config.subject];
-            const poolResults = await Promise.all(
-                subjectsToFetch.map(sub => {
+            const typeCounts = config.typeCounts || { mcq: 20, ar: 4, statement: 3, match: 2, diagram: 1, numerical: config.examOption === 'JEE' ? 5 : 0 };
+            const isJEE = (config.examOption === 'JEE');
+            const isNEET = (config.examOption === 'NEET');
+            const isCET = (config.examOption === 'CET');
+
+            const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
+            // Fetch and assemble questions for each subject in parallel adhering strictly to format and type counts
+            const subjectResults = await Promise.all(
+                subjectsToFetch.map(async (sub, sIdx) => {
+                    const chs = (config.subjectChaptersMap && config.subjectChaptersMap[sub]) || config.chapters;
                     const params = {
                         subject: sub,
-                        chapter: config.chapters.join(','),
+                        chapter: chs.join(','),
                         limit: 2000,
                     };
                     if (config.concepts && config.concepts.length > 0) {
                         params.concept = config.concepts.join(',');
                     }
-                    return api.get('/api/questions', { params })
-                        .then(res => Array.isArray(res.data) ? res.data : (res.data.questions || []))
-                        .catch(() => []);
+
+                    let res = await api.get('/api/questions', { params }).catch(() => ({ data: [] }));
+                    let pool = Array.isArray(res.data) ? res.data : (res.data?.questions || []);
+                    if (pool.length === 0) {
+                        const fallbackRes = await api.get('/api/questions', { params: { subject: sub, limit: 1000 } }).catch(() => ({ data: [] }));
+                        pool = Array.isArray(fallbackRes.data) ? fallbackRes.data : (fallbackRes.data?.questions || []);
+                    }
+
+                    // Partition questions by type using matchesQuestionType
+                    const buckets = {
+                        numerical: pool.filter(q => matchesQuestionType(q, 'NUMERICAL')),
+                        ar: pool.filter(q => matchesQuestionType(q, 'ASSERTION_REASON')),
+                        statement: pool.filter(q => matchesQuestionType(q, 'STATEMENT_BASED')),
+                        match: pool.filter(q => matchesQuestionType(q, 'MATCH_FOLLOWING')),
+                        diagram: pool.filter(q => matchesQuestionType(q, 'DIAGRAM_BASED')),
+                        mcq: pool.filter(q => matchesQuestionType(q, 'MCQ')),
+                    };
+
+                    const pickedIds = new Set();
+                    const subPicked = [];
+
+                    // Pick questions according to typeCounts
+                    const typeKeys = ['mcq', 'ar', 'statement', 'match', 'diagram', 'numerical'];
+                    for (const tKey of typeKeys) {
+                        const needed = parseInt(typeCounts[tKey], 10) || 0;
+                        if (needed <= 0) continue;
+
+                        let candidates = (buckets[tKey] || []).filter(q => !pickedIds.has(String(q._id || q.id)));
+                        if (config.selectionMode === 'auto') {
+                            candidates = shuffle(candidates);
+                        }
+                        const chosen = candidates.slice(0, needed);
+                        chosen.forEach(q => {
+                            pickedIds.add(String(q._id || q.id));
+                            subPicked.push({
+                                ...q,
+                                subject: sub,
+                                sectionSubject: sub,
+                                questionTypeAllocated: tKey,
+                            });
+                        });
+                    }
+
+                    // Target per-subject total:
+                    // JEE: 25 (20 Objective + 5 Numerical)
+                    // NEET: 45 (No Numerical)
+                    // CET: 60 (No Numerical)
+                    const targetSubTotal = config.perSubjectCount || (isJEE ? 25 : isNEET ? 45 : isCET ? 60 : 30);
+
+                    // Backfill if not enough questions in specific type buckets
+                    if (subPicked.length < targetSubTotal) {
+                        const unused = pool.filter(q => !pickedIds.has(String(q._id || q.id)));
+                        const filteredUnused = (isNEET || isCET)
+                            ? unused.filter(q => !matchesQuestionType(q, 'NUMERICAL'))
+                            : unused;
+                        const backfillCandidates = filteredUnused.length > 0 ? filteredUnused : unused;
+                        const backfills = shuffle(backfillCandidates).slice(0, targetSubTotal - subPicked.length);
+                        backfills.forEach(q => {
+                            pickedIds.add(String(q._id || q.id));
+                            subPicked.push({
+                                ...q,
+                                subject: sub,
+                                sectionSubject: sub,
+                            });
+                        });
+                    }
+
+                    // Format Section A / Section B for JEE or standard subject sections
+                    let formattedSubQs = [];
+                    if (isJEE) {
+                        const nonNums = subPicked.filter(q => !isNumericalQuestion(q));
+                        let nums = subPicked.filter(q => isNumericalQuestion(q));
+
+                        if (nums.length < 5) {
+                            const extraNums = pool.filter(q => isNumericalQuestion(q) && !pickedIds.has(String(q._id || q.id))).slice(0, 5 - nums.length);
+                            nums.push(...extraNums);
+                        }
+
+                        const secA = nonNums.slice(0, 20).map(q => ({
+                            ...q,
+                            sectionName: `Section ${sIdx + 1}: ${sub.toUpperCase()}`,
+                            sectionIndex: sIdx + 1,
+                            subject: sub,
+                            sectionSubject: sub,
+                            part: 'SECTION A - MULTIPLE CHOICE QUESTIONS',
+                            partDirective: 'This section contains 20 Multiple Choice Questions. Each question has four choices (A), (B), (C), (D). Only one choice is correct.',
+                            isNumerical: false,
+                        }));
+
+                        const secB = nums.slice(0, 5).map(q => ({
+                            ...q,
+                            sectionName: `Section ${sIdx + 1}: ${sub.toUpperCase()}`,
+                            sectionIndex: sIdx + 1,
+                            subject: sub,
+                            sectionSubject: sub,
+                            part: 'SECTION B - NUMERICAL VALUE QUESTIONS',
+                            partDirective: 'This section contains 5 Numerical Value Questions. The answer to each question is a NUMERICAL VALUE. No options are provided.',
+                            isNumerical: true,
+                            type: 'NUMERICAL',
+                            options: [],
+                        }));
+
+                        formattedSubQs = [...secA, ...secB];
+                    } else {
+                        formattedSubQs = subPicked.slice(0, targetSubTotal).map(q => ({
+                            ...q,
+                            sectionName: `Section ${sIdx + 1}: ${sub.toUpperCase()}`,
+                            sectionIndex: sIdx + 1,
+                            subject: sub,
+                            sectionSubject: sub,
+                            isNumerical: Boolean(q.isNumerical || matchesQuestionType(q, 'NUMERICAL')),
+                        }));
+                    }
+
+                    return formattedSubQs;
                 })
             );
-            let pool = poolResults.flat();
 
-            if (pool.length === 0) {
-                alert('No questions found for the selected chapter(s) and concept(s). Please try selecting other chapters or concepts.');
+            const selected = subjectResults.flat();
+
+            if (selected.length === 0) {
+                alert('No questions found for the selected configuration. Please check your chapter selection.');
                 setSirMvLoading(false);
                 return;
             }
 
-            let selected = [];
-            const qty = Math.min(pool.length, config.targetCount || 30);
-            if (config.selectionMode === 'auto') {
-                const easyTarget = Math.round(qty * ((config.difficulty.easy || 40) / 100));
-                const medTarget = Math.round(qty * ((config.difficulty.medium || 40) / 100));
-                const hardTarget = Math.max(0, qty - easyTarget - medTarget);
-
-                const easyPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
-                const medPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
-                const hardPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
-
-                const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
-
-                const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
-                const pickedMed = shuffle(medPool).slice(0, medTarget);
-                const pickedHard = shuffle(hardPool).slice(0, hardTarget);
-
-                selected = [...pickedEasy, ...pickedMed, ...pickedHard];
-                const usedIds = new Set(selected.map(q => q._id || q.id));
-
-                if (selected.length < qty) {
-                    const remainder = pool.filter(q => !usedIds.has(q._id || q.id));
-                    selected.push(...shuffle(remainder).slice(0, qty - selected.length));
-                }
-            } else {
-                selected = pool.slice(0, qty);
-            }
-
             setSelectedQuestions(selected);
             setSirMvAllConcepts(config.allConcepts || []);
-            setSubject(config.subject);
-            setExamType(config.examCategory);
-            setTitle(`${config.subject} ${config.examCategory} Exam Paper`);
+            setExamSubjects(subjectsToFetch);
+            setSubject(subjectsToFetch.length === 1 ? subjectsToFetch[0] : subjectsToFetch.join(', '));
+            setExamType(config.examOption);
+            setTitle(
+                config.examOption === 'JEE' ? 'JEE (Main) Examination Paper' :
+                config.examOption === 'NEET' ? 'NEET Examination Paper' :
+                config.examOption === 'CET' ? 'CET Examination Paper' :
+                `${config.subject} Examination Paper`
+            );
             setSirMvStep(2);
         } catch (err) {
             console.error('Failed to load questions:', err);

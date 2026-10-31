@@ -59,11 +59,27 @@ export default function QuestionCardWithSolution({
     return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6 font-sans transition hover:shadow-md relative">
             {/* Top Toolbar: Level Badge on Left, Delete and Edit on Right */}
-            <div className="flex items-center justify-between pb-4 mb-3 border-b border-slate-100">
-                <span className="bg-[#0d6efd] text-white text-[11px] font-bold px-3 py-1 rounded-md shadow-2xs uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-white/80"></span>
-                    Level: {levelLabel}
-                </span>
+            <div className="flex items-center justify-between pb-4 mb-3 border-b border-slate-100 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-[#0d6efd] text-white text-[11px] font-bold px-3 py-1 rounded-md shadow-2xs uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-white/80"></span>
+                        Level: {levelLabel}
+                    </span>
+                    {q.subject && (
+                        <span className="bg-slate-100 text-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-md border border-slate-200">
+                            {q.subject}
+                        </span>
+                    )}
+                    {q.isNumerical ? (
+                        <span className="bg-amber-100 text-amber-900 text-[11px] font-bold px-2.5 py-1 rounded-md border border-amber-300">
+                            Section B: Numerical
+                        </span>
+                    ) : q.type && q.type !== 'MCQ' ? (
+                        <span className="bg-purple-50 text-purple-800 text-[11px] font-bold px-2.5 py-1 rounded-md border border-purple-200">
+                            {q.type.replace('_', ' ')}
+                        </span>
+                    ) : null}
+                </div>
 
                 <div className="flex items-center gap-2">
                     <button
@@ -125,49 +141,63 @@ export default function QuestionCardWithSolution({
                 </div>
             )}
 
-            {/* Options List */}
-            <div className="space-y-2 mb-4">
-                {options.map((opt, oIdx) => {
-                    const optText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '');
-                    const label = String.fromCharCode(65 + oIdx); // A, B, C, D
-                    const isCorrect = isOptionCorrect(q, oIdx);
+            {/* Options List OR Numerical Value Box */}
+            {options.length > 0 && !q.isNumerical ? (
+                <div className="space-y-2 mb-4">
+                    {options.map((opt, oIdx) => {
+                        const optText = typeof opt === 'object' ? (opt.text || opt.optionText || '') : String(opt || '');
+                        const label = String.fromCharCode(65 + oIdx); // A, B, C, D
+                        const isCorrect = isOptionCorrect(q, oIdx);
 
-                    return (
-                        <div
-                            key={oIdx}
-                            className={`flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl transition border ${
-                                isCorrect
-                                    ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-medium'
-                                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                            }`}
-                        >
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <span
-                                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                                        isCorrect
-                                            ? 'bg-[#198754] text-white shadow-xs'
-                                            : 'bg-slate-200 text-slate-700'
-                                    }`}
-                                >
-                                    {label}
-                                </span>
-                                <div className="text-xs leading-relaxed flex-1 min-w-0">
-                                    <MathRenderer inline text={optText} />
-                                </div>
-                            </div>
-
-                            <button
-                                type="button"
-                                onClick={() => setIsEditing(true)}
-                                className="text-slate-400 hover:text-blue-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer flex-shrink-0"
-                                title="Edit option"
+                        return (
+                            <div
+                                key={oIdx}
+                                className={`flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl transition border ${
+                                    isCorrect
+                                        ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950 font-medium'
+                                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                }`}
                             >
-                                <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <span
+                                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                                            isCorrect
+                                                ? 'bg-[#198754] text-white shadow-xs'
+                                                : 'bg-slate-200 text-slate-700'
+                                        }`}
+                                    >
+                                        {label}
+                                    </span>
+                                    <div className="text-xs leading-relaxed flex-1 min-w-0">
+                                        <MathRenderer inline text={optText} />
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditing(true)}
+                                    className="text-slate-400 hover:text-blue-600 p-1 rounded hover:bg-slate-100 transition cursor-pointer flex-shrink-0"
+                                    title="Edit option"
+                                >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="mb-4 p-3.5 bg-amber-50/70 border border-amber-300 rounded-xl flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-amber-900 uppercase tracking-wide">Numerical Answer:</span>
+                        <span className="px-3 py-1 bg-white font-mono font-bold text-amber-950 rounded-lg border border-amber-300 shadow-2xs text-sm">
+                            {q.answer || q.num_answer || q.correct_option || 'N/A'}
+                        </span>
+                    </div>
+                    <span className="text-[11px] text-amber-800 font-bold bg-amber-100 px-2.5 py-1 rounded-md border border-amber-300">
+                        Section B (Numerical Value Question)
+                    </span>
+                </div>
+            )}
 
             {/* Solution Box (Light green background with LaTeX formulas) */}
             {solutionText && (
