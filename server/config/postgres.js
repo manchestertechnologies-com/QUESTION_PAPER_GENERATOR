@@ -4,18 +4,21 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Primary Active Supabase Pooler URL (Physics 11 Database with support tables)
-const PRIMARY_ACTIVE_URL = 'postgresql://postgres.pfnlbyjsjxttdachegne:SubClass11Physics@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres';
+const PRIMARY_ACTIVE_URL = 'postgresql://postgres.pfnlbyjsjxttdachegne:SubClass11Physics@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres';
 
 let DATABASE_URL = process.env.DATABASE_URL;
 
 if (!DATABASE_URL || DATABASE_URL.includes('vukxgqkrersxcasdklda')) {
     DATABASE_URL = PRIMARY_ACTIVE_URL;
 }
+if (DATABASE_URL && DATABASE_URL.includes('pooler.supabase.com:5432')) {
+    DATABASE_URL = DATABASE_URL.replace(':5432', ':6543');
+}
 
 const pool = new Pool({
     connectionString: DATABASE_URL,
     ssl: { rejectUnauthorized: false },
-    max: 35,
+    max: 25,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 15000,
 });

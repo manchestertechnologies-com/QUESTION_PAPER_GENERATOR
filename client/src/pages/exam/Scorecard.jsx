@@ -257,22 +257,31 @@ export default function Scorecard() {
             .then(async r => {
                 const s = r.data || {};
 
-                // Merge breakdown: ALWAYS preserve the student's selected options from cached answers!
-                const baseBreakdown = (cached?.breakdown && cached.breakdown.length > 0)
-                    ? cached.breakdown
-                    : (s.breakdown || []);
+                // Merge breakdown: Always use the most comprehensive question list (never truncate 75 to 60!)
+                const serverBreakdown = Array.isArray(s.breakdown) ? s.breakdown : [];
+                const localBreakdown = Array.isArray(cached?.breakdown) ? cached.breakdown : [];
+                const primaryBreakdown = serverBreakdown.length >= localBreakdown.length ? serverBreakdown : localBreakdown;
+                const secondaryBreakdown = serverBreakdown.length >= localBreakdown.length ? localBreakdown : serverBreakdown;
 
-                const mergedBreakdown = baseBreakdown.map((cb, idx) => {
-                    const sb = (s.breakdown || []).find(b => String(b.questionId || b._id) === String(cb.questionId || cb._id)) || (s.breakdown || [])[idx] || {};
-                    const selected = cb.selectedOption || sb.selectedOption || null;
+                const secondaryMap = new Map();
+                secondaryBreakdown.forEach((b, idx) => {
+                    const sid = String(b.questionId || b._id || idx);
+                    secondaryMap.set(sid, b);
+                    secondaryMap.set(String(idx), b);
+                });
+
+                const mergedBreakdown = primaryBreakdown.map((pb, idx) => {
+                    const sid = String(pb.questionId || pb._id || idx);
+                    const sb = secondaryMap.get(sid) || secondaryBreakdown[idx] || {};
+                    const selected = pb.selectedOption || sb.selectedOption || null;
                     const isAttempted = Boolean(selected !== null && selected !== undefined && String(selected).trim() !== '');
                     return {
                         ...sb,
-                        ...cb,
+                        ...pb,
                         selectedOption: selected,
                         isAttempted: isAttempted,
-                        correctAnswer: cb.correctAnswer || cb.answer || sb.correctAnswer || sb.answer || sb.correct_option,
-                        solutionText: cb.solutionText || sb.solutionText || sb.solution || ''
+                        correctAnswer: pb.correctAnswer || pb.answer || pb.correct_option || sb.correctAnswer || sb.answer || sb.correct_option,
+                        solutionText: pb.solutionText || pb.solution || sb.solutionText || sb.solution || ''
                     };
                 });
 
@@ -281,6 +290,7 @@ export default function Scorecard() {
                 const merged = {
                     ...s,
                     ...cached,
+                    totalQuestions: mergedBreakdown.length > 0 ? mergedBreakdown.length : (s.totalQuestions || cached?.totalQuestions || 75),
                     studentName: cached?.studentName || s.studentName || 'Student',
                     rollNumber: cached?.rollNumber || s.rollNumber || '',
                     examTitle: cached?.examTitle || s.examTitle || 'Online Examination',

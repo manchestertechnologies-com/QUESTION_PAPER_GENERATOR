@@ -50,7 +50,8 @@ export default function AdminResults() {
                                     fromLabIp: false,
                                     weakAreas: item.weakAreas || [],
                                     endTime: item.submittedAt || new Date().toISOString(),
-                                    answers: item.breakdown || []
+                                    answers: item.breakdown || [],
+                                    submitted: true
                                 });
                             }
                         }
@@ -58,7 +59,37 @@ export default function AdminResults() {
                 }
             } catch (e) {}
         }
-        return list;
+
+        // Deduplicate so each student is displayed once, showing their submitted/best attempt
+        const studentMap = new Map();
+        list.forEach(item => {
+            const roll = String(item.rollNumber || '').trim().replace(/^—$/, '');
+            const email = String(item.studentEmail || '').trim().toLowerCase();
+            const name = String(item.studentName || '').trim().toLowerCase();
+            const key = roll || email || name || String(item._id || item.id);
+
+            if (!studentMap.has(key)) {
+                studentMap.set(key, item);
+            } else {
+                const existing = studentMap.get(key);
+                const itemHasTime = Boolean(item.endTime && item.endTime !== '—');
+                const existHasTime = Boolean(existing.endTime && existing.endTime !== '—');
+
+                if (itemHasTime && !existHasTime) {
+                    studentMap.set(key, item);
+                } else if (itemHasTime === existHasTime) {
+                    const itemScore = Number(item.score) || 0;
+                    const existScore = Number(existing.score) || 0;
+                    const itemAnsCount = Array.isArray(item.answers) ? item.answers.length : 0;
+                    const existAnsCount = Array.isArray(existing.answers) ? existing.answers.length : 0;
+                    if (itemScore > existScore || itemAnsCount > existAnsCount) {
+                        studentMap.set(key, item);
+                    }
+                }
+            }
+        });
+
+        return Array.from(studentMap.values()).sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
     }, [results, selectedExam]);
 
     // Auto-sync any local results to backend if backend returned empty

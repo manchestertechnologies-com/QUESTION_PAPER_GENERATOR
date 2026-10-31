@@ -957,10 +957,32 @@ async function getSessionsByExam(examId) {
     const res = await pool.query(
         `SELECT * FROM public.exam_sessions 
          WHERE exam_id::text = ANY($1::text[]) 
-         ORDER BY CAST(COALESCE(NULLIF(score::text, ''), '0') AS NUMERIC) DESC, created_at ASC`,
+         ORDER BY submitted DESC, CAST(COALESCE(NULLIF(score::text, ''), '0') AS NUMERIC) DESC, end_time DESC NULLS LAST, created_at DESC`,
         [possibleIds]
     );
-    return res.rows.map(r => ({ ...r, _id: String(r.id), answers: r.answers || [] }));
+
+    // Deduplicate so each student is listed once with their best/submitted attempt
+    const seen = new Map();
+    for (const r of res.rows) {
+        const key = (r.roll_number && r.roll_number.trim() !== '' && r.roll_number !== '—')
+            ? r.roll_number.trim().toUpperCase()
+            : (r.student_email && r.student_email.trim() !== '')
+                ? r.student_email.trim().toLowerCase()
+                : (r.student_name && r.student_name.trim() !== '' && r.student_name !== 'Student')
+                    ? r.student_name.trim().toLowerCase()
+                    : String(r.id);
+
+        if (!seen.has(key)) {
+            seen.set(key, r);
+        } else {
+            const existing = seen.get(key);
+            if (!existing.submitted && r.submitted) {
+                seen.set(key, r);
+            }
+        }
+    }
+
+    return Array.from(seen.values()).map(r => ({ ...r, _id: String(r.id), answers: r.answers || [] }));
 }
 
 async function deleteSessionsByExam(examId) {

@@ -42,7 +42,7 @@ function filterQuestionsForExamType(questions, examType) {
             return pcmQuestions;
         }
 
-        // 2. Strict 20 + 5 format per subject (Mathematics: 25, Physics: 25, Chemistry: 25) = Exactly 75
+        // 2. Strict 25 questions per subject (Mathematics: 25, Physics: 25, Chemistry: 25) = Exactly 75
         const subjects = ['Mathematics', 'Physics', 'Chemistry'];
         const organized = [];
 
@@ -52,22 +52,49 @@ function filterQuestionsForExamType(questions, examType) {
                 return s.includes(sub.toLowerCase());
             });
 
-            // Section A: strictly non-numerical questions (up to 20)
-            const secA = subQs.filter(q => !isNumQ(q) && Array.isArray(q.options) && q.options.length >= 2).slice(0, 20);
-            // Section B: strictly numerical questions (up to 5)
-            const secB = subQs.filter(q => isNumQ(q)).slice(0, 5);
+            if (subQs.length === 0) continue;
 
-            organized.push(...secA, ...secB);
+            const secB = subQs.filter(q => isNumQ(q));
+            const secA = subQs.filter(q => !isNumQ(q));
+
+            let selectedForSub = [];
+            if (secB.length > 0) {
+                const bCount = Math.min(5, secB.length);
+                const aCount = Math.min(25 - bCount, secA.length);
+                selectedForSub = [...secA.slice(0, aCount), ...secB.slice(0, bCount)];
+                if (selectedForSub.length < 25 && secA.length > aCount) {
+                    selectedForSub.push(...secA.slice(aCount, aCount + (25 - selectedForSub.length)));
+                }
+            } else {
+                selectedForSub = subQs.slice(0, 25);
+            }
+            organized.push(...selectedForSub);
         }
 
-        if (organized.length > 0) {
+        if (organized.length >= 75) {
             return organized.slice(0, 75);
         }
 
-        // Fallback if subjects were not partitioned by explicit names: cap at exactly 75
-        const nonNum = pcmQuestions.filter(q => !isNumQ(q));
-        const num = pcmQuestions.filter(q => isNumQ(q));
-        return [...nonNum.slice(0, 60), ...num.slice(0, 15)].slice(0, 75);
+        if (organized.length > 0 && organized.length === pcmQuestions.length) {
+            return organized;
+        }
+
+        // Backfill if fewer than 75 from subject partition
+        if (organized.length > 0 && organized.length < 75 && pcmQuestions.length > organized.length) {
+            const orgIds = new Set(organized.map((q, i) => String(q._id || q.id || q.questionId || i)));
+            for (const q of pcmQuestions) {
+                if (organized.length >= 75) break;
+                const qId = String(q._id || q.id || q.questionId || '');
+                if (!orgIds.has(qId)) {
+                    organized.push(q);
+                    orgIds.add(qId);
+                }
+            }
+            return organized.slice(0, 75);
+        }
+
+        // Fallback: take all pcmQuestions up to 75 without truncating to 60!
+        return pcmQuestions.slice(0, 75);
     }
     return questions;
 }
@@ -460,8 +487,43 @@ router.get('/', [auth, checkRole(['admin'])], async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/lab-active', async (req, res) => {
     try {
-        const exams = await storage.getExams();
+        let exams = await storage.getExams();
         const now = Date.now();
+
+        // Also merge papers that have questions and are published/live
+        try {
+            const allPapers = await storage.getPapers();
+            const existingTitles = new Set(exams.map(e => String(e.title || '').toLowerCase().trim()));
+            const existingIds = new Set(exams.map(e => String(e.id || e._id)));
+
+            for (const p of (allPapers || [])) {
+                const pTitle = String(p.title || '').toLowerCase().trim();
+                const pId = String(p.id || p._id || p.paper_id);
+                if (!existingTitles.has(pTitle) && !existingIds.has(pId) && p.status !== 'draft') {
+                    const qCount = (Array.isArray(p.questionObjects) && p.questionObjects.length > 0)
+                        ? p.questionObjects.length
+                        : (Array.isArray(p.questions) ? p.questions.length : 0);
+                    if (qCount > 0) {
+                        exams.push({
+                            _id: String(p._id || p.id || p.paper_id),
+                            id: p.id,
+                            title: p.title,
+                            examType: p.examType || p.exam_type || 'JEE',
+                            classes: p.classes || [p.class_level || '12'],
+                            duration_minutes: Number(p.duration_minutes) || parseInt(p.duration, 10) || 180,
+                            start_time: null,
+                            end_time: null,
+                            totalQuestions: qCount,
+                            status: 'live',
+                            isOnlineVisible: true,
+                            instructions: p.instructions || ''
+                        });
+                    }
+                }
+            }
+        } catch (pErr) {
+            console.warn('Notice loading papers into lab-active:', pErr.message);
+        }
 
         // Filter to online exams: only exams where isOnlineVisible is true and not draft/archived
         const onlineExams = exams.filter(e => {
@@ -475,16 +537,32 @@ router.get('/lab-active', async (req, res) => {
             const duration = e.duration_minutes || 180;
             const end = e.end_time ? new Date(e.end_time).getTime() : (start ? start + duration * 60000 : null);
 
+            let totalQs = Array.isArray(e.questions) && e.questions.length > 0 ? e.questions.length : (e.totalQuestions || 0);
+            if (!totalQs && Array.isArray(e.subjectAssignments) && e.subjectAssignments.length > 0) {
+                totalQs = e.subjectAssignments.reduce((acc, sa) => acc + (sa.targetQuestions || (String(e.examType).includes('JEE') ? 25 : String(e.examType).includes('NEET') ? 45 : 60)), 0);
+            }
+            if (!totalQs) {
+                const uType = String(e.examType || '').toUpperCase();
+                totalQs = uType.includes('JEE') ? 75 : uType.includes('NEET') ? 180 : 60;
+            }
+
+            // Clean classes: if PACE is in title or classes, format cleanly as PACE
+            let examClasses = Array.isArray(e.classes) ? [...e.classes] : (e.classes ? [String(e.classes)] : ['12']);
+            const isPace = examClasses.some(c => String(c).toUpperCase().includes('PACE')) || String(e.title || '').toUpperCase().includes('PACE');
+            if (isPace) {
+                examClasses = ['PACE'];
+            }
+
             return {
                 _id: String(e._id || e.id),
                 id: String(e.id || e._id),
                 title: e.title,
                 examType: e.examType || 'CET',
-                classes: e.classes || ['12'],
+                classes: examClasses,
                 duration_minutes: duration,
                 start_time: e.start_time || null,
                 end_time: e.end_time || null,
-                totalQuestions: Array.isArray(e.questions) ? e.questions.length : (e.totalQuestions || 60),
+                totalQuestions: totalQs,
                 status: e.status || 'live',
                 isOnlineVisible: e.isOnlineVisible !== false,
                 instructions: e.instructions || ''
@@ -1175,8 +1253,9 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.post('/:id/start', detectLabIp, async (req, res) => {
     try {
-        const exam = await getExamOrPaperAsExam(req.params.id);
-        if (!exam) return res.status(404).json({ msg: 'Exam not found' });
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
 
         let { studentName, studentEmail, rollNumber } = req.body;
         let verifiedName = studentName;

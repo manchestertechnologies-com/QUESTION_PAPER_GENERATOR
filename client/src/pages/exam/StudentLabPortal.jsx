@@ -503,11 +503,17 @@ export default function StudentLabPortal() {
                                                     </span>
                                                     <span className="flex items-center gap-1.5">
                                                         <span>📝</span>
-                                                        <span>{exam.totalQuestions || 60} Questions</span>
+                                                        <span>{exam.totalQuestions || (String(exam.examType || '').toUpperCase().includes('JEE') ? 75 : String(exam.examType || '').toUpperCase().includes('NEET') ? 180 : 60)} Questions</span>
                                                     </span>
                                                     <span className="flex items-center gap-1.5">
                                                         <span>🎯</span>
-                                                        <span>Class {Array.isArray(exam.classes) ? exam.classes.join(', ') : exam.classes || '12'}</span>
+                                                        <span>{(() => {
+                                                            const rawClasses = Array.isArray(exam.classes) ? exam.classes : [exam.classes || '12'];
+                                                            const isPace = rawClasses.some(c => String(c).toUpperCase().includes('PACE')) || String(exam.title || '').toUpperCase().includes('PACE');
+                                                            if (isPace) return 'PACE PU College';
+                                                            const filtered = rawClasses.filter(c => c && !['11', '12', 'I-PUC', 'II-PUC'].includes(String(c).trim()));
+                                                            return filtered.length > 0 ? filtered.join(', ') : `Class ${rawClasses.join(', ')}`;
+                                                        })()}</span>
                                                     </span>
                                                 </div>
 
