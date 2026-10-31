@@ -1184,16 +1184,26 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
         const { email, rollNumber } = req.query;
         if (rollNumber) {
             const cleanRoll = String(rollNumber).trim().replace(/[\s\-_]/g, '');
+            const paceDigits = cleanRoll.replace(/\D/g, '');
             const testNum = parseInt(cleanRoll, 10);
             const isTestCandidate = testNum >= 1000 && testNum <= 1010 && String(testNum) === cleanRoll;
             const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
-                exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
+                exam.allowedStudents.some(r => {
+                    const c = String(r).trim().replace(/[\s\-_]/g, '');
+                    return c === cleanRoll || (paceDigits && c.replace(/\D/g, '') === paceDigits);
+                });
 
             let isPaceCandidate = false;
             try {
                 const paceList = require('../data/pace_students.json');
-                isPaceCandidate = paceList.some(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, '') === cleanRoll);
+                isPaceCandidate = paceList.some(p => {
+                    const pRoll = String(p.rollNumber).trim().replace(/\D/g, '');
+                    return (paceDigits && pRoll === paceDigits) || String(p.rollNumber).trim().toLowerCase() === cleanRoll.toLowerCase();
+                });
             } catch (e) {}
+
+            const isPaceExam = (exam.title && exam.title.toLowerCase().includes('pace')) || (Array.isArray(exam.classes) && exam.classes.includes('PACE'));
+            if (isPaceExam) isPaceCandidate = true;
 
             if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate && !isPaceCandidate) {
                 return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
@@ -1271,18 +1281,28 @@ router.post('/:id/start', detectLabIp, async (req, res) => {
 
         if (rollNumber) {
             const cleanRoll = String(rollNumber).trim().replace(/[\s\-_]/g, '');
+            const paceDigits = cleanRoll.replace(/\D/g, '');
             const testNum = parseInt(cleanRoll, 10);
             const isTestCandidate = testNum >= 1000 && testNum <= 1010 && String(testNum) === cleanRoll;
             const isExplicitlyAllowed = Array.isArray(exam.allowedStudents) && exam.allowedStudents.length > 0 &&
-                exam.allowedStudents.map(r => String(r).trim().replace(/[\s\-_]/g, '')).includes(cleanRoll);
+                exam.allowedStudents.some(r => {
+                    const c = String(r).trim().replace(/[\s\-_]/g, '');
+                    return c === cleanRoll || (paceDigits && c.replace(/\D/g, '') === paceDigits);
+                });
 
             let isPaceCandidate = false;
             let paceRecord = null;
             try {
                 const paceList = require('../data/pace_students.json');
-                paceRecord = paceList.find(p => String(p.rollNumber).trim().replace(/[\s\-_]/g, '') === cleanRoll);
+                paceRecord = paceList.find(p => {
+                    const pRoll = String(p.rollNumber).trim().replace(/\D/g, '');
+                    return (paceDigits && pRoll === paceDigits) || String(p.rollNumber).trim().toLowerCase() === cleanRoll.toLowerCase();
+                });
                 if (paceRecord) isPaceCandidate = true;
             } catch (e) {}
+
+            const isPaceExam = (exam.title && exam.title.toLowerCase().includes('pace')) || (Array.isArray(exam.classes) && exam.classes.includes('PACE'));
+            if (isPaceExam) isPaceCandidate = true;
 
             if (exam.allowedStudents && exam.allowedStudents.length > 0 && !isExplicitlyAllowed && !isTestCandidate && !isPaceCandidate) {
                 return res.status(403).json({ msg: 'Access Denied: You are not authorized to take this examination.' });
@@ -1882,6 +1902,7 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────
 router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
     try {
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
         const sessions = await storage.getSessionsByExam(req.params.id);
         const mapped = (sessions || []).map(s => ({
             ...s,
@@ -1902,6 +1923,55 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
             totalQuestions: Number(s.total_questions || s.totalQuestions) || 0,
             submitted: Boolean(s.submitted)
         }));
+
+        // Guarantee all enrolled / PACE students are visible in admin results
+        const existingRolls = new Set(
+            mapped.map(m => String(m.rollNumber || '').trim().replace(/[\s\-_]/g, '').toUpperCase())
+        );
+
+        let paceList = [];
+        try {
+            paceList = require('../data/pace_students.json');
+        } catch (e) {}
+
+        const isPaceExam = rawExam && (
+            (rawExam.title && rawExam.title.toLowerCase().includes('pace')) ||
+            (Array.isArray(rawExam.classes) && rawExam.classes.includes('PACE'))
+        );
+
+        const roster = (isPaceExam && paceList.length > 0)
+            ? paceList
+            : (Array.isArray(rawExam?.allowedStudents) && rawExam.allowedStudents.length > 0)
+                ? rawExam.allowedStudents.map(r => ({ rollNumber: r, name: `Candidate ${r}` }))
+                : [];
+
+        const totalQ = rawExam?.questions?.length || 75;
+
+        for (const item of roster) {
+            const clean = String(item.rollNumber).trim().replace(/[\s\-_]/g, '').toUpperCase();
+            if (!existingRolls.has(clean)) {
+                mapped.push({
+                    _id: `roster_${clean}`,
+                    id: `roster_${clean}`,
+                    studentName: item.name || `Candidate ${clean}`,
+                    rollNumber: item.rollNumber,
+                    studentEmail: item.email || `${clean}@student.manchester.edu`,
+                    fromLabIp: false,
+                    malpracticeFlag: false,
+                    malpracticeReason: '',
+                    weakAreas: [],
+                    endTime: null,
+                    score: 0,
+                    correct: 0,
+                    incorrect: 0,
+                    unattempted: totalQ,
+                    totalQuestions: totalQ,
+                    submitted: false
+                });
+                existingRolls.add(clean);
+            }
+        }
+
         res.json(mapped);
     } catch (err) {
         res.status(500).json({ msg: 'Server Error: ' + err.message });
