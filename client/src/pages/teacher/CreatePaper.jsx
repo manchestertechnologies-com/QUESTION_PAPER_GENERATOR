@@ -525,7 +525,7 @@ export default function CreatePaper() {
 
             setSelectedQuestions(selected);
             setSirMvAllConcepts(config.allConcepts || []);
-            setExamSubjects(subjectsToFetch);
+            setCustomSubjects(subjectsToFetch);
             setSubject(subjectsToFetch.length === 1 ? subjectsToFetch[0] : subjectsToFetch.join(', '));
             setExamType(config.examOption);
             setTitle(

@@ -147,6 +147,45 @@ export default function SirMvQuestionFilter({
         hard: 20,
     });
 
+    // Auto-balancing difficulty ratio handler (always strictly sums to 100%)
+    const handleDifficultyChange = (key, rawVal) => {
+        const newVal = Math.max(0, Math.min(100, parseInt(rawVal, 10) || 0));
+        setDifficulty(prev => {
+            const remaining = 100 - newVal;
+            if (key === 'easy') {
+                const otherSum = (prev.medium || 0) + (prev.hard || 0);
+                if (otherSum === 0) {
+                    const half = Math.floor(remaining / 2);
+                    return { easy: newVal, medium: half, hard: remaining - half };
+                }
+                const medRatio = prev.medium / otherSum;
+                const newMed = Math.round(remaining * medRatio);
+                const newHard = remaining - newMed;
+                return { easy: newVal, medium: newMed, hard: newHard };
+            } else if (key === 'medium') {
+                const otherSum = (prev.easy || 0) + (prev.hard || 0);
+                if (otherSum === 0) {
+                    const half = Math.floor(remaining / 2);
+                    return { easy: half, medium: newVal, hard: remaining - half };
+                }
+                const easyRatio = prev.easy / otherSum;
+                const newEasy = Math.round(remaining * easyRatio);
+                const newHard = remaining - newEasy;
+                return { easy: newEasy, medium: newVal, hard: newHard };
+            } else {
+                const otherSum = (prev.easy || 0) + (prev.medium || 0);
+                if (otherSum === 0) {
+                    const half = Math.floor(remaining / 2);
+                    return { easy: half, medium: remaining - half, hard: newVal };
+                }
+                const easyRatio = prev.easy / otherSum;
+                const newEasy = Math.round(remaining * easyRatio);
+                const newMed = remaining - newEasy;
+                return { easy: newEasy, medium: newMed, hard: newVal };
+            }
+        });
+    };
+
     // Close dropdowns on click outside
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -910,44 +949,187 @@ export default function SirMvQuestionFilter({
 
                     {/* Auto mode difficulty sliders */}
                     {selectionMode === 'auto' && (
-                        <div className="pt-3 border-t border-slate-200/80">
-                            <label className="block text-xs font-semibold text-slate-600 mb-2">
-                                Difficulty Ratio Target (Easy % / Medium % / Hard %):
-                            </label>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="bg-white p-2 rounded-lg border border-slate-200 text-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Easy (%)</span>
+                        <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <label className="block text-xs font-semibold text-slate-700">
+                                    Difficulty Ratio Target (Must sum to 100%):
+                                </label>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    {[
+                                        { label: 'Standard', easy: 40, medium: 40, hard: 20 },
+                                        { label: 'Balanced', easy: 34, medium: 33, hard: 33 },
+                                        { label: 'Challenging', easy: 20, medium: 40, hard: 40 },
+                                        { label: 'Foundational', easy: 60, medium: 30, hard: 10 },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.label}
+                                            type="button"
+                                            onClick={() => setDifficulty({ easy: preset.easy, medium: preset.medium, hard: preset.hard })}
+                                            className={`text-[10px] font-bold px-2 py-0.5 rounded border transition cursor-pointer ${
+                                                difficulty.easy === preset.easy && difficulty.medium === preset.medium && difficulty.hard === preset.hard
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            {preset.label} ({preset.easy}/{preset.medium}/{preset.hard})
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 3-Color Dynamic Progress Bar */}
+                            <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden flex shadow-inner">
+                                <div
+                                    style={{ width: `${difficulty.easy}%` }}
+                                    className="bg-emerald-500 transition-all duration-200"
+                                    title={`Easy: ${difficulty.easy}%`}
+                                />
+                                <div
+                                    style={{ width: `${difficulty.medium}%` }}
+                                    className="bg-amber-500 transition-all duration-200"
+                                    title={`Medium: ${difficulty.medium}%`}
+                                />
+                                <div
+                                    style={{ width: `${difficulty.hard}%` }}
+                                    className="bg-rose-500 transition-all duration-200"
+                                    title={`Hard: ${difficulty.hard}%`}
+                                />
+                            </div>
+
+                            {/* Grid of Inputs & Range Sliders */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {/* Easy */}
+                                <div className="bg-white p-3 rounded-xl border border-emerald-200 shadow-2xs space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-emerald-800 uppercase flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                            Easy (%)
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('easy', difficulty.easy - 5)}
+                                                className="w-5 h-5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={difficulty.easy}
+                                                onChange={(e) => handleDifficultyChange('easy', e.target.value)}
+                                                className="w-12 text-xs text-center border border-emerald-300 rounded py-0.5 bg-white font-bold text-emerald-950"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('easy', difficulty.easy + 5)}
+                                                className="w-5 h-5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
                                     <input
-                                        type="number"
+                                        type="range"
                                         min="0"
                                         max="100"
                                         value={difficulty.easy}
-                                        onChange={(e) => setDifficulty({ ...difficulty, easy: parseInt(e.target.value, 10) || 0 })}
-                                        className="w-full text-xs text-center border border-slate-300 rounded-lg py-1 bg-white font-semibold"
+                                        onChange={(e) => handleDifficultyChange('easy', e.target.value)}
+                                        className="w-full accent-emerald-600 cursor-pointer h-1.5 bg-emerald-100 rounded-lg"
                                     />
                                 </div>
-                                <div className="bg-white p-2 rounded-lg border border-slate-200 text-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Medium (%)</span>
+
+                                {/* Medium */}
+                                <div className="bg-white p-3 rounded-xl border border-amber-200 shadow-2xs space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-amber-800 uppercase flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                                            Medium (%)
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('medium', difficulty.medium - 5)}
+                                                className="w-5 h-5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={difficulty.medium}
+                                                onChange={(e) => handleDifficultyChange('medium', e.target.value)}
+                                                className="w-12 text-xs text-center border border-amber-300 rounded py-0.5 bg-white font-bold text-amber-950"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('medium', difficulty.medium + 5)}
+                                                className="w-5 h-5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
                                     <input
-                                        type="number"
+                                        type="range"
                                         min="0"
                                         max="100"
                                         value={difficulty.medium}
-                                        onChange={(e) => setDifficulty({ ...difficulty, medium: parseInt(e.target.value, 10) || 0 })}
-                                        className="w-full text-xs text-center border border-slate-300 rounded-lg py-1 bg-white font-semibold"
+                                        onChange={(e) => handleDifficultyChange('medium', e.target.value)}
+                                        className="w-full accent-amber-600 cursor-pointer h-1.5 bg-amber-100 rounded-lg"
                                     />
                                 </div>
-                                <div className="bg-white p-2 rounded-lg border border-slate-200 text-center">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Hard (%)</span>
+
+                                {/* Hard */}
+                                <div className="bg-white p-3 rounded-xl border border-rose-200 shadow-2xs space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-bold text-rose-800 uppercase flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                            Hard (%)
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('hard', difficulty.hard - 5)}
+                                                className="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                -
+                                            </button>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={difficulty.hard}
+                                                onChange={(e) => handleDifficultyChange('hard', e.target.value)}
+                                                className="w-12 text-xs text-center border border-rose-300 rounded py-0.5 bg-white font-bold text-rose-950"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDifficultyChange('hard', difficulty.hard + 5)}
+                                                className="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs flex items-center justify-center cursor-pointer"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
                                     <input
-                                        type="number"
+                                        type="range"
                                         min="0"
                                         max="100"
                                         value={difficulty.hard}
-                                        onChange={(e) => setDifficulty({ ...difficulty, hard: parseInt(e.target.value, 10) || 0 })}
-                                        className="w-full text-xs text-center border border-slate-300 rounded-lg py-1 bg-white font-semibold"
+                                        onChange={(e) => handleDifficultyChange('hard', e.target.value)}
+                                        className="w-full accent-rose-600 cursor-pointer h-1.5 bg-rose-100 rounded-lg"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                                <span>Adjusting any percentage dynamically rebalances the others.</span>
+                                <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                    Total: {difficulty.easy + difficulty.medium + difficulty.hard}%
+                                </span>
                             </div>
                         </div>
                     )}
