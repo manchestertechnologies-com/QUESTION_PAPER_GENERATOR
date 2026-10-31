@@ -538,12 +538,11 @@ export default function AdminResults() {
                                             <th style={styles.th}>Student</th>
                                             <th style={styles.th}>Roll No</th>
                                             {orderedSubjects.map(sub => (
-                                                <th key={sub} style={{ ...styles.th, textAlign: 'center', minWidth: 105 }}>
-                                                    <div>{sub}</div>
-                                                    <div style={{ fontSize: 10, fontWeight: 500, color: '#94a3b8' }}>(Corr / Inc / Marks)</div>
+                                                <th key={sub} style={{ ...styles.th, textAlign: 'center', minWidth: 80 }}>
+                                                    {sub.toUpperCase()}
                                                 </th>
                                             ))}
-                                            <th style={{ ...styles.th, textAlign: 'center', minWidth: 90 }}>Total Marks</th>
+                                            <th style={{ ...styles.th, textAlign: 'center', minWidth: 80 }}>Total Marks</th>
                                             <th style={styles.th}>Correct</th>
                                             <th style={styles.th}>Incorrect</th>
                                             <th style={styles.th}>Unattempted</th>
@@ -577,15 +576,10 @@ export default function AdminResults() {
                                                     </td>
                                                     <td style={styles.td}>{r.rollNumber || '—'}</td>
                                                     {orderedSubjects.map(sub => {
-                                                        const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
+                                                        const s = subStats[sub] || { score: 0 };
                                                         return (
-                                                            <td key={sub} style={{ ...styles.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                                <span style={{ color: '#10b981', fontWeight: 700 }}>{s.correct} C</span>
-                                                                <span style={{ color: '#94a3b8' }}> / </span>
-                                                                <span style={{ color: '#ef4444', fontWeight: 700 }}>{s.wrong} W</span>
-                                                                <div style={{ fontSize: 11, fontWeight: 800, color: s.score >= 0 ? '#1e293b' : '#ef4444', marginTop: 2 }}>
-                                                                    {s.score > 0 ? `+${s.score}` : s.score} Marks
-                                                                </div>
+                                                            <td key={sub} style={{ ...styles.td, textAlign: 'center', fontWeight: 700, fontSize: 13, color: s.score >= 0 ? '#1e293b' : '#ef4444' }}>
+                                                                {s.score ?? 0}
                                                             </td>
                                                         );
                                                     })}

@@ -264,7 +264,7 @@ export function computeSubjectScores(student = {}, exam = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 1. CLASS CONSOLIDATED RESULT SHEET & MERIT LIST PDF (LANDSCAPE)
+// 1. CLASS CONSOLIDATED RESULT SHEET & MERIT LIST PDF (PORTRAIT)
 // ─────────────────────────────────────────────────────────────────────────────
 export function downloadClassResultSheetPdf({
     title = 'Examination Results',
@@ -279,155 +279,200 @@ export function downloadClassResultSheetPdf({
         return;
     }
 
-    const doc = createPdfDoc('landscape');
+    const doc = createPdfDoc('portrait');
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
-    // ── Header Banner ──
-    doc.setFillColor(15, 23, 42); // Navy (#0f172a)
-    doc.rect(0, 0, pageWidth, 68, 'F');
-
-    // Gold accent bar
-    doc.setFillColor(212, 175, 55); // Gold (#d4af37)
-    doc.rect(0, 68, pageWidth, 4, 'F');
-
-    // Title Text
-    doc.setTextColor(212, 175, 55);
-    doc.setFont('times', 'bold');
-    doc.setFontSize(16);
-    doc.text(institutionName.toUpperCase(), 30, 28);
-
-    doc.setTextColor(255, 255, 255);
+    // ── Header Text & Branding (Portrait Layout) ──
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(`CONSOLIDATED CLASS RESULT SHEET & MERIT LIST — ${title.toUpperCase()}`, 30, 48);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42); // Dark Navy #0f172a
+    doc.text(institutionName.toUpperCase(), 32, 28);
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(203, 213, 225);
-    const dateStr = `Generated: ${getFormattedDate()}`;
-    doc.text(dateStr, pageWidth - 30 - doc.getTextWidth(dateStr), 28);
-    const examMeta = `Type: ${examType} | Total Candidates: ${results.length}`;
-    doc.text(examMeta, pageWidth - 30 - doc.getTextWidth(examMeta), 48);
+    doc.setFontSize(9.5);
+    doc.setTextColor(2, 132, 199); // Blue #0284c7
+    doc.text(`CONSOLIDATED CLASS RESULT SHEET & MERIT LIST — ${title.toUpperCase()}`, 32, 40);
 
-    // ── Summary Metrics Bar ──
+    // ── Summary Metrics ──
     const totalStudents = results.length;
     const scores = results.map(r => Number(r.score ?? r.scoreData?.totalScore ?? 0)).filter(n => !isNaN(n));
-    const avgScore = aggregate?.avgScore ?? (scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0);
+    const avgScore = aggregate?.avgScore ?? (scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : 0);
     const topScore = aggregate?.topScore ?? (scores.length ? Math.max(...scores) : 0);
     const totalCorrect = aggregate?.totalCorrect ?? results.reduce((a, r) => a + (Number(r.correct ?? r.scoreData?.correctCount ?? 0) || 0), 0);
     const totalWrong = aggregate?.totalWrong ?? results.reduce((a, r) => a + (Number(r.incorrect ?? r.scoreData?.wrongCount ?? 0) || 0), 0);
     const totalBlank = aggregate?.totalBlank ?? results.reduce((a, r) => a + (Number(r.unattempted ?? r.scoreData?.blankCount ?? 0) || 0), 0);
 
-    doc.setFillColor(248, 250, 252); // Slate-50
-    doc.roundedRect(30, 82, pageWidth - 60, 42, 6, 6, 'FD');
-    doc.setDrawColor(226, 232, 240);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
 
-    const statColWidth = (pageWidth - 60) / 4;
-    const stats = [
-        { label: 'TOTAL CANDIDATES', val: `${totalStudents}`, color: [15, 23, 42] },
-        { label: 'CLASS AVERAGE SCORE', val: `${avgScore}`, color: [59, 130, 246] },
-        { label: 'HIGHEST SCORE', val: `${topScore}`, color: [16, 185, 129] },
-        { label: 'ACCURACY METRICS', val: `${totalCorrect} C  |  ${totalWrong} W  |  ${totalBlank} NA`, color: [71, 85, 105] }
+    // Line 1: Test Format, Candidates, Generated Date
+    doc.text('Test Format: ', 32, 51);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(`${examType}`, 76, 51);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Total Candidates: ', 170, 51);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(`${totalStudents}`, 235, 51);
+
+    const genDateStr = `Generated: ${getFormattedDate()}`;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(genDateStr, pageWidth - 32 - doc.getTextWidth(genDateStr), 51);
+
+    // Line 2: Class Highest, Average, Accuracy
+    doc.text('Class Highest: ', 32, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(`${topScore} Marks`, 84, 60);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Class Average: ', 170, 60);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(51, 65, 85);
+    doc.text(`${Number(avgScore).toFixed(1)} Marks`, 222, 60);
+
+    const accMetricsStr = `Accuracy Metrics: ${Number(totalCorrect).toLocaleString()} C | ${Number(totalWrong).toLocaleString()} W | ${Number(totalBlank).toLocaleString()} NA`;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(accMetricsStr, pageWidth - 32 - doc.getTextWidth(accMetricsStr), 60);
+
+    // Subtle horizontal divider line
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.line(32, 65, pageWidth - 32, 65);
+
+    // ── Scoring Guide Box ──
+    const sampleExam = exam || { examType, title };
+    const { orderedSubjects, isCET, marksPerQ, negMark } = computeSubjectScores(results[0] || {}, sampleExam);
+
+    doc.setFillColor(248, 250, 252); // Slate-50
+    doc.setDrawColor(186, 230, 253); // Sky-200
+    doc.roundedRect(32, 70, pageWidth - 64, 40, 4, 4, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('SCORING GUIDE & SUBJECT MARKS BREAKDOWN', 40, 80);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(71, 85, 105);
+    const typeUpper = (String(examType) + ' ' + String(title)).toUpperCase();
+    const guideText = isCET
+        ? `In standard CET marking, each correct question awards +1 mark, with 0 negative marks for incorrect answers. Subject Marks = Net Score.`
+        : `In standard ${typeUpper.includes('NEET') ? 'NEET' : 'JEE'} marking, each correct question awards +4 marks, each incorrect question deducts -1 mark, and unattempted questions yield 0 marks. The formula used is: Marks = (Correct × 4) − Wrong.`;
+    doc.text(guideText, 40, 89);
+
+    // Pill Badges inside guide
+    const pills = isCET ? [
+        'C: Correct (+1)',
+        'W: Incorrect (0)',
+        'Subject Marks: Net Score',
+        `Total: ${orderedSubjects.join(' + ')}`
+    ] : [
+        'C: Correct Answers (+4)',
+        'W: Incorrect Answers (-1)',
+        'Subject Marks: Net Score',
+        `Total: ${orderedSubjects.join(' + ')}`
     ];
 
-    stats.forEach((st, idx) => {
-        const xPos = 30 + (idx * statColWidth) + (statColWidth / 2);
+    let pillX = 40;
+    pills.forEach(p => {
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 116, 139);
-        doc.text(st.label, xPos, 98, { align: 'center' });
-
-        doc.setFontSize(12);
-        doc.setTextColor(...st.color);
-        doc.text(st.val, xPos, 114, { align: 'center' });
+        doc.setFontSize(6);
+        const pWidth = doc.getTextWidth(p) + 8;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(203, 213, 225);
+        doc.roundedRect(pillX, 93, pWidth, 11, 2, 2, 'FD');
+        doc.setTextColor(71, 85, 105);
+        doc.text(p, pillX + 4, 100.5);
+        pillX += pWidth + 5;
     });
-
-    // ── Dynamic Subject Calculation & Table Formatting ──
-    const sampleExam = exam || { examType, title };
-    const { orderedSubjects, isCET, marksPerQ } = computeSubjectScores(results[0] || {}, sampleExam);
 
     const tableHead = [
         [
-            'Rank',
-            'Roll No',
-            'Student Name',
-            'Set',
-            ...orderedSubjects.map(sub => `${sub}\n(Corr / Inc / Marks)`),
-            'Total Marks',
-            'Status'
+            'RANK',
+            'ROLL NO',
+            'STUDENT NAME',
+            ...orderedSubjects.map(sub => sub.toUpperCase()),
+            'TOTAL'
         ]
     ];
 
     const tableRows = results.map((r, i) => {
         const rank = r.rank ?? (i + 1);
         const roll = r.rollNumber ?? r.roll_number ?? '—';
-        const name = r.studentName ?? r.student_name ?? 'Candidate';
-        const series = r.series || 'P';
+        const name = (r.studentName ?? r.student_name ?? 'Candidate').toUpperCase();
 
         const { subStats, totalScore } = computeSubjectScores(r, sampleExam);
 
-        let statusText = 'Completed';
-        if (r.malpracticeFlag) statusText = 'Malpractice';
-
-        const subjCols = orderedSubjects.map(sub => {
-            const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
-            return `${s.correct} C  /  ${s.wrong} W\n(${s.score > 0 ? '+' : ''}${s.score} M)`;
+        const subjMarks = orderedSubjects.map(sub => {
+            const s = subStats[sub];
+            return String(s?.score ?? 0);
         });
 
-        return [`#${rank}`, roll, name, series, ...subjCols, totalScore, statusText];
+        return [`#${rank}`, roll, name, ...subjMarks, `${totalScore}`];
     });
 
     // Class Average Footer Row
     const classAvgCols = orderedSubjects.map(sub => {
-        let sumC = 0, sumW = 0, sumM = 0;
+        let sumM = 0;
         results.forEach(resItem => {
             const { subStats } = computeSubjectScores(resItem, sampleExam);
-            const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
-            sumC += s.correct || 0;
-            sumW += s.wrong || 0;
-            sumM += s.score || 0;
+            const s = subStats[sub] || { score: 0 };
+            sumM += Number(s.score) || 0;
         });
-        const avgC = (sumC / (totalStudents || 1)).toFixed(1);
-        const avgW = (sumW / (totalStudents || 1)).toFixed(1);
         const avgM = (sumM / (totalStudents || 1)).toFixed(1);
-        return `${avgC} C / ${avgW} W\n(${avgM} M)`;
+        return `${avgM}`;
     });
 
-    tableRows.push(['CLASS AVERAGE', '—', 'All Candidates', '—', ...classAvgCols, `${avgScore}`, `${totalStudents} Total`]);
+    tableRows.push(['CLASS AVERAGE', '—', 'All Candidates', ...classAvgCols, `${Number(avgScore).toFixed(1)}`]);
+
+    // Build column styles dynamically for portrait layout
+    const colStyles = {
+        0: { halign: 'center', fontStyle: 'bold', cellWidth: 38 },
+        1: { halign: 'center', fontStyle: 'bold', cellWidth: 62 },
+        2: { halign: 'left', fontStyle: 'bold' }
+    };
+    const subColWidth = orderedSubjects.length <= 3 ? 68 : 55;
+    orderedSubjects.forEach((_, idx) => {
+        colStyles[3 + idx] = { halign: 'center', fontStyle: 'bold', cellWidth: subColWidth };
+    });
+    const totalColIdx = 3 + orderedSubjects.length;
+    colStyles[totalColIdx] = { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 50 };
 
     // ── Render AutoTable ──
     runAutoTable(doc, {
         head: tableHead,
         body: tableRows,
-        startY: 134,
+        startY: 118,
         margin: { left: 30, right: 30, bottom: 35 },
         styles: {
             font: 'helvetica',
-            fontSize: 8,
+            fontSize: 8.5,
             cellPadding: 4.5,
             valign: 'middle',
             halign: 'center'
         },
         headStyles: {
             fillColor: [15, 23, 42],
-            textColor: [212, 175, 55],
+            textColor: [255, 255, 255],
             fontStyle: 'bold',
             halign: 'center',
+            fontSize: 8.5,
             lineWidth: 0.5,
-            lineColor: [212, 175, 55]
+            lineColor: [51, 65, 85]
         },
         alternateRowStyles: {
             fillColor: [248, 250, 252]
         },
-        columnStyles: {
-            0: { halign: 'center', fontStyle: 'bold', cellWidth: 35 },
-            1: { halign: 'center', fontStyle: 'bold', cellWidth: 55 },
-            2: { halign: 'left', fontStyle: 'bold' },
-            3: { halign: 'center', cellWidth: 28 },
-            [tableHead[0].length - 2]: { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 65 },
-            [tableHead[0].length - 1]: { halign: 'center', fontStyle: 'bold', cellWidth: 55 }
-        },
+        columnStyles: colStyles,
         didParseCell: (data) => {
             if (data.row.index === tableRows.length - 1) {
                 data.cell.styles.fontStyle = 'bold';
