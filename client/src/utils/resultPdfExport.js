@@ -456,7 +456,7 @@ export function downloadIndividualScorecardPdf(student = {}, exam = {}) {
         doc.text('QUESTION-BY-QUESTION RESPONSE SHEET', 35, currentCursorY);
         currentCursorY += 6;
 
-        const qRows = responses.slice(0, 60).map((q, idx) => {
+        const qRows = responses.map((q, idx) => {
             const qNum = q.questionNumber || (idx + 1);
             const userAns = q.selectedOption ?? q.markedBubble ?? q.userAnswer ?? '—';
             const correctAns = q.correctAnswer ?? q.correctKey ?? q.answer ?? '—';
@@ -465,7 +465,7 @@ export function downloadIndividualScorecardPdf(student = {}, exam = {}) {
                 : (String(userAns).trim() !== '' && String(userAns) === String(correctAns));
             const status = (!userAns || userAns === '—' || userAns === '')
                 ? 'Skipped' 
-                : (isCorrect ? 'Correct (+4)' : 'Wrong (-1)');
+                : (isCorrect ? `Correct (+${marksPerQ})` : (isCET ? 'Wrong (0)' : 'Wrong (-1)'));
 
             return [
                 `Q${qNum}`,
