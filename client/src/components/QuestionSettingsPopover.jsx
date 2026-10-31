@@ -55,17 +55,31 @@ export default function QuestionSettingsPopover({
     return (
         <div
             ref={popoverRef}
-            className="no-print absolute z-50 right-0 top-8 w-72 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden text-slate-800 text-xs font-sans animate-fade-in select-none"
-            style={{ boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' }}
+            className="no-print absolute z-50 right-0 top-8 rounded-xl shadow-2xl border overflow-hidden text-slate-800 text-xs font-sans select-none"
+            style={{
+                backgroundColor: '#ffffff',
+                background: '#ffffff',
+                opacity: 1,
+                zIndex: 999999,
+                width: '320px',
+                border: '1.5px solid #cbd5e1',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1)',
+            }}
             onClick={(e) => e.stopPropagation()}
         >
             {/* Header / IMAGE ALIGNMENT */}
-            <div className="bg-[#e9ecef] px-3 py-1.5 border-b border-slate-200">
+            <div
+                className="px-3 py-1.5 border-b border-slate-200"
+                style={{ backgroundColor: '#e9ecef', background: '#e9ecef', opacity: 1 }}
+            >
                 <span className="font-bold text-[11px] text-slate-700 tracking-wider uppercase">
                     Image Alignment
                 </span>
             </div>
-            <div className="p-2.5 flex items-center justify-between gap-1 bg-white">
+            <div
+                className="p-2.5 flex items-center justify-between gap-1"
+                style={{ backgroundColor: '#ffffff', background: '#ffffff', opacity: 1 }}
+            >
                 {alignments.map((align) => {
                     const isActive = String(currentAlignment).toLowerCase() === align.toLowerCase();
                     return (
@@ -86,12 +100,18 @@ export default function QuestionSettingsPopover({
             </div>
 
             {/* OPTIONS PER LINE */}
-            <div className="bg-[#e9ecef] px-3 py-1.5 border-t border-b border-slate-200">
+            <div
+                className="px-3 py-1.5 border-t border-b border-slate-200"
+                style={{ backgroundColor: '#e9ecef', background: '#e9ecef', opacity: 1 }}
+            >
                 <span className="font-bold text-[11px] text-slate-700 tracking-wider uppercase">
                     Options Per Line
                 </span>
             </div>
-            <div className="p-2.5 flex items-center gap-2 bg-white">
+            <div
+                className="p-2.5 flex items-center gap-2"
+                style={{ backgroundColor: '#ffffff', background: '#ffffff', opacity: 1 }}
+            >
                 {optionsPerLineChoices.map((num) => {
                     const isActive = Number(currentOptionsPerLine) === num;
                     return (
@@ -112,12 +132,18 @@ export default function QuestionSettingsPopover({
             </div>
 
             {/* IMAGE SIZE */}
-            <div className="bg-[#e9ecef] px-3 py-1.5 border-t border-b border-slate-200">
+            <div
+                className="px-3 py-1.5 border-t border-b border-slate-200"
+                style={{ backgroundColor: '#e9ecef', background: '#e9ecef', opacity: 1 }}
+            >
                 <span className="font-bold text-[11px] text-slate-700 tracking-wider uppercase">
                     Image Size
                 </span>
             </div>
-            <div className="p-2.5 space-y-2 bg-white">
+            <div
+                className="p-2.5 space-y-2"
+                style={{ backgroundColor: '#ffffff', background: '#ffffff', opacity: 1 }}
+            >
                 {/* Positive resize buttons (Green) */}
                 <div className="grid grid-cols-5 gap-1.5">
                     {plusSizes.map((delta) => (

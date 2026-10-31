@@ -18,6 +18,15 @@ import ResizableDiagram from './ResizableDiagram';
 import QuestionSettingsPopover from './QuestionSettingsPopover';
 import { optionLabel, getQuestionOptionLabels, stripOptionPrefix, cleanItalicsPreservingBinomial, isOptionCorrect } from '../utils/sanitize';
 
+function parsePx(val, fallback = 180) {
+    if (typeof val === 'number' && !isNaN(val) && val > 0) return val;
+    if (typeof val === 'string') {
+        const num = parseInt(val, 10);
+        if (!isNaN(num) && num > 0) return num;
+    }
+    return fallback;
+}
+
 /**
  * Dynamic option grid calculator based on length and complexity:
  * - Complex formulas / long equations (e.g. Q33 vector equations): 1 column (vertical stack)
@@ -1463,71 +1472,127 @@ function BodyNumerical({
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
     const showAnswer = (settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions') && (q.num_answer !== undefined || q.answer || q.correctAnswer);
 
-    return (
-        <div style={{ width: '100%' }}>
-            {/* Question Text */}
-            <div style={{ lineHeight: '1.45', marginBottom: '6px' }}>
-                <MathRenderer
-                    inline
-                    text={qText}
-                    questionId={qId}
-                    customDiagramSizes={q.customDiagramSizes}
-                    onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key) : undefined}
-                />
-            </div>
+    const align = String(q.diagramAlignment || '').trim().toLowerCase();
+    const isLeftAlign = align === 'left';
+    const isRightAlign = align === 'right';
+    const isTopAlign = align === 'top';
+    const isBelowAlign = align === 'below';
 
-            {/* Optional Diagram */}
-            {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '4px auto 6px' }}>
-                    <ResizableDiagram
-                        src={imageUrl}
-                        alt={`Question ${displayNum} diagram`}
-                        initialHeight={currentDiagramHeight}
-                        isManual={isMainManual}
-                        onSizeChange={onDiagramResize ? (newH, key) => onDiagramResize(qId, newH, key || 'main') : undefined}
-                    />
-                </div>
-            )}
+    const textNode = (
+        <div style={{ lineHeight: '1.45', marginBottom: '6px' }}>
+            <MathRenderer
+                inline
+                text={qText}
+                questionId={qId}
+                customDiagramSizes={q.customDiagramSizes}
+                onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key) : undefined}
+            />
+        </div>
+    );
 
-            {/* Numerical Answer Entry Box (JEE Standard) */}
-            <div
+    const diagramNode = imageUrl ? (
+        <div style={{ textAlign: 'center', margin: '4px auto 6px' }}>
+            <ResizableDiagram
+                src={imageUrl}
+                alt={`Question ${displayNum} diagram`}
+                initialHeight={currentDiagramHeight}
+                isManual={isMainManual}
+                onSizeChange={onDiagramResize ? (newH, key) => onDiagramResize(qId, newH, key || 'main') : undefined}
+            />
+        </div>
+    ) : null;
+
+    const answerBox = (
+        <div
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginTop: '6px',
+                padding: '3px 8px',
+                border: '1px dashed #94a3b8',
+                borderRadius: '4px',
+                width: 'fit-content',
+                backgroundColor: '#f8fafc',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#1e293b'
+            }}
+        >
+            <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em', color: '#001f6d' }}>
+                Answer:
+            </span>
+            <span
                 style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    marginTop: '6px',
-                    padding: '3px 8px',
-                    border: '1px dashed #94a3b8',
-                    borderRadius: '4px',
-                    width: 'fit-content',
-                    backgroundColor: '#f8fafc',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#1e293b'
+                    justifyContent: 'center',
+                    minWidth: '70px',
+                    height: '18px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '2px',
+                    border: '1px solid #cbd5e1',
+                    borderBottom: '1.5px solid #001f6d',
+                    padding: '0 6px',
+                    color: '#15803d',
+                    fontWeight: 800,
                 }}
             >
-                <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em', color: '#001f6d' }}>
-                    Answer:
-                </span>
-                <span
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: '70px',
-                        height: '18px',
-                        backgroundColor: '#ffffff',
-                        borderRadius: '2px',
-                        border: '1px solid #cbd5e1',
-                        borderBottom: '1.5px solid #001f6d',
-                        padding: '0 6px',
-                        color: '#15803d',
-                        fontWeight: 800,
-                    }}
-                >
-                    {showAnswer ? String(q.num_answer ?? q.answer ?? q.correctAnswer) : ''}
-                </span>
+                {showAnswer ? String(q.num_answer ?? q.answer ?? q.correctAnswer) : ''}
+            </span>
+        </div>
+    );
+
+    if (imageUrl && isLeftAlign) {
+        return (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+                <div style={{ flex: '0 0 auto', maxWidth: '45%' }}>{diagramNode}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    {textNode}
+                    {answerBox}
+                </div>
             </div>
+        );
+    }
+
+    if (imageUrl && isRightAlign) {
+        return (
+            <div style={{ width: '100%', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    {textNode}
+                    {answerBox}
+                </div>
+                <div style={{ flex: '0 0 auto', maxWidth: '45%' }}>{diagramNode}</div>
+            </div>
+        );
+    }
+
+    if (imageUrl && isTopAlign) {
+        return (
+            <div style={{ width: '100%' }}>
+                {diagramNode}
+                {textNode}
+                {answerBox}
+            </div>
+        );
+    }
+
+    if (imageUrl && isBelowAlign) {
+        return (
+            <div style={{ width: '100%' }}>
+                {textNode}
+                {answerBox}
+                {diagramNode}
+            </div>
+        );
+    }
+
+    // Default: Center
+    return (
+        <div style={{ width: '100%' }}>
+            {textNode}
+            {diagramNode}
+            {answerBox}
         </div>
     );
 }
@@ -1554,7 +1619,10 @@ export default function QuestionBlock({
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const qId = q._id || q.id || displayNum;
 
-    const activeFontSize = fontSize || 'inherit';
+    const rawFontSize = fontSize || settings?.fontSize || '14px';
+    const activeFontSize = typeof rawFontSize === 'number'
+        ? `${rawFontSize}px`
+        : (/^\d+$/.test(String(rawFontSize).trim()) ? `${String(rawFontSize).trim()}px` : rawFontSize);
     const qType = (q.type || q.q_type || 'MCQ').toUpperCase();
     const qTextRaw = q.questionText || q.question || '';
     const effectiveIsTwoCol = Boolean(isTwoCol);

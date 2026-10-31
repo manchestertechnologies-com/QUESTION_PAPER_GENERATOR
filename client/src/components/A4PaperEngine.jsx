@@ -74,6 +74,15 @@ export default function A4PaperEngine({
     const zoomScale = (zoom || 100) / 100;
     const isTwoCol = settings.columns === 2 || Boolean(settings.paper2Column);
 
+    const resolvedFontSize = useMemo(() => {
+        const raw = settings?.fontSize;
+        if (!raw) return '14px';
+        if (typeof raw === 'number') return `${raw}px`;
+        const clean = String(raw).trim();
+        if (/^\d+$/.test(clean)) return `${clean}px`;
+        return clean;
+    }, [settings?.fontSize]);
+
     const gapQMap = {
         'No Spacing': '2px',
         'Default': isTwoCol ? '8px' : '10px',
@@ -101,10 +110,10 @@ export default function A4PaperEngine({
                 <div
                     className="a4-print-document"
                     style={{
-                        '--paper-font-size': settings.fontSize || '14px',
+                        '--paper-font-size': resolvedFontSize,
                         '--paper-font-family': settings.fontFamily || '"Times New Roman", Times, serif',
                         fontFamily: settings.fontFamily || '"Times New Roman", Times, serif',
-                        fontSize: settings.fontSize || '14px',
+                        fontSize: resolvedFontSize,
                         transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
                         transformOrigin: 'top center',
                         marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
@@ -181,10 +190,10 @@ export default function A4PaperEngine({
                 <div
                     className="a4-print-document"
                     style={{
-                        '--paper-font-size': settings.fontSize || '14px',
+                        '--paper-font-size': resolvedFontSize,
                         '--paper-font-family': settings.fontFamily || '"Times New Roman", Times, serif',
                         fontFamily: settings.fontFamily || '"Times New Roman", Times, serif',
-                        fontSize: settings.fontSize || '14px',
+                        fontSize: resolvedFontSize,
                         transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
                         transformOrigin: 'top center',
                         marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
@@ -380,7 +389,7 @@ export default function A4PaperEngine({
                                                 showMarks={settings.showMarks}
                                                 singleColMode={!isTwoCol}
                                                 isTwoCol={isTwoCol}
-                                                fontSize={settings.fontSize}
+                                                fontSize={resolvedFontSize}
                                                 lineHeight={settings.lineHeight}
                                                 formatMarks={formatMarks}
                                                 extraStyle={{ marginBottom: '0px' }}

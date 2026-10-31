@@ -149,21 +149,20 @@ export default function ResizableDiagram({
                 alt={alt}
                 onLoad={handleImageLoad}
                 style={{
+                    height: `${height}px`,
                     maxHeight: `${height}px`,
                     maxWidth: isOption ? '140px' : (maxWidth || '100%'),
-                    width: isOption ? 'auto' : '100%',
-                    minWidth: isOption ? 'auto' : 'min(100%, 180px)',
-                    height: 'auto',
+                    width: 'auto',
                     objectFit: 'contain',
                     display: 'block',
-                    margin: '0 auto',
+                    margin: isOption ? '0' : '0 auto',
                     borderRadius: '4px',
                     backgroundColor: 'transparent',
                     mixBlendMode: 'multiply',
                     position: 'relative',
                     zIndex: 2,
                     boxSizing: 'border-box',
-                    transition: 'max-height 0.15s ease',
+                    transition: 'height 0.15s ease, max-height 0.15s ease',
                 }}
                 className="rounded"
                 loading="eager"

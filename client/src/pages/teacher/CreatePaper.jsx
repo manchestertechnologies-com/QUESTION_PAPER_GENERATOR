@@ -3069,9 +3069,19 @@ export default function CreatePaper() {
                                                 zoom={100}
                                                 onDiagramResize={handleDiagramResize}
                                                 onQuestionSettingChange={(qId, key, val) => {
-                                                    setSelectedQuestions(prev => prev.map(q => {
-                                                        if (String(q._id || q.id) === String(qId)) {
-                                                            return { ...q, [key]: val };
+                                                    setSelectedQuestions(prev => prev.map((q, idx) => {
+                                                        const isMatch = (q._id && String(q._id) === String(qId)) ||
+                                                                        (q.id && String(q.id) === String(qId)) ||
+                                                                        (idx + startQNo === Number(qId)) ||
+                                                                        (String(idx) === String(qId));
+                                                        if (isMatch) {
+                                                            return {
+                                                                ...q,
+                                                                [key]: val,
+                                                                ...(key === 'customDiagramHeight' ? {
+                                                                    customDiagramSizes: { ...(q.customDiagramSizes || {}), main: val }
+                                                                } : {})
+                                                            };
                                                         }
                                                         return q;
                                                     }));
