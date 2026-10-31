@@ -5,31 +5,62 @@ import api from '../api';
 /**
  * SirMvQuestionFilter.jsx
  *
- * Implements the Question Generation Filter Card matching Image 1:
- *  - Title: "(Q) SIR MV PU College Questions"
- *  - Target Exam & Subjects: CET, NEET, JEE, and individual PCMB subjects (Physics, Chemistry, Mathematics, Biology)
- *  - Multi-Chapter selector (Allows selecting multiple chapters)
- *  - Multi-Concept selector (Topic changed to Concept, allows selecting multiple concepts)
- *  - Auto or Manual question selection mode before loading questions
- *  - Auto selection: question count & difficulty sliders (Easy, Medium, Hard)
- *  - Blue "Load Questions" primary button
+ * Question Generation Filter Card:
+ *  - One single unified option row:
+ *      * JEE (PCM)
+ *      * NEET (PCBZ)
+ *      * CET (PCMB)
+ *      * Single Subject (reveals Physics, Chemistry, Mathematics, Biology)
+ *      * Multi-Subject (custom selection)
+ *  - No redundant subject row below when exam (JEE/NEET/CET) is picked!
+ *  - Multi-chapter selection across exam subjects
+ *  - Multi-concept selection (dynamically loaded from selected chapters)
+ *  - Auto or Manual question selection
+ *  - Clean unbranded header: "Question Paper Generator"
  */
 export default function SirMvQuestionFilter({
     onLoadQuestions,
     loading = false,
 }) {
-    // 1. Target Exam & Subject Selection
-    const [examCategory, setExamCategory] = useState('CET'); // CET | NEET | JEE | PCMB
-    const [selectedSubject, setSelectedSubject] = useState('Physics');
+    // 1. One Unified Exam Option: 'JEE' | 'NEET' | 'CET' | 'Single' | 'Multi'
+    const [examOption, setExamOption] = useState('JEE');
+
+    // For Single Subject mode
+    const [singleSubject, setSingleSubject] = useState('Physics');
+
+    // For Multi-Subject custom mode
+    const [customSubjects, setCustomSubjects] = useState(['Physics', 'Chemistry']);
+
+    // Active subjects determined by examOption
+    const activeSubjects = useMemo(() => {
+        switch (examOption) {
+            case 'JEE':
+                return ['Physics', 'Chemistry', 'Mathematics'];
+            case 'NEET':
+                return ['Physics', 'Chemistry', 'Biology'];
+            case 'CET':
+                return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+            case 'Single':
+                return [singleSubject];
+            case 'Multi':
+                return customSubjects.length > 0 ? customSubjects : ['Physics'];
+            default:
+                return ['Physics', 'Chemistry', 'Mathematics'];
+        }
+    }, [examOption, singleSubject, customSubjects]);
+
+    // Active subject tab inside Chapter dropdown for convenient browsing
+    const [activeChapterTab, setActiveChapterTab] = useState('All');
 
     // 2. Multi-Chapter selection
+    // Structure: [{ name: '...', subject: '...' }, ...]
     const [availableChapters, setAvailableChapters] = useState([]);
-    const [selectedChapters, setSelectedChapters] = useState([]);
+    const [selectedChapters, setSelectedChapters] = useState([]); // array of chapter names
     const [chapterSearch, setChapterSearch] = useState('');
     const [isChapterDropdownOpen, setIsChapterDropdownOpen] = useState(false);
     const chapterDropdownRef = useRef(null);
 
-    // 3. Multi-Concept selection (renamed from topic!)
+    // 3. Multi-Concept selection
     const [availableConcepts, setAvailableConcepts] = useState([]);
     const [selectedConcepts, setSelectedConcepts] = useState([]);
     const [conceptSearch, setConceptSearch] = useState('');
@@ -37,7 +68,7 @@ export default function SirMvQuestionFilter({
     const conceptDropdownRef = useRef(null);
 
     // 4. Selection Mode: Auto vs Manual
-    const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'manual'
+    const [selectionMode, setSelectionMode] = useState('auto');
     const [targetQuestionCount, setTargetQuestionCount] = useState(30);
     const [difficulty, setDifficulty] = useState({
         easy: 40,
@@ -59,50 +90,51 @@ export default function SirMvQuestionFilter({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Exam subjects mapping
-    const examSubjects = useMemo(() => {
-        switch (examCategory) {
-            case 'CET':
-                return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-            case 'NEET':
-                return ['Physics', 'Chemistry', 'Biology'];
-            case 'JEE':
-                return ['Physics', 'Chemistry', 'Mathematics'];
-            case 'PCMB':
-            default:
-                return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
-        }
-    }, [examCategory]);
-
-    // Ensure selectedSubject is valid for current exam
-    useEffect(() => {
-        if (!examSubjects.includes(selectedSubject)) {
-            setSelectedSubject(examSubjects[0] || 'Physics');
-        }
-    }, [examCategory, examSubjects, selectedSubject]);
-
-    // Fetch chapters when subject changes
+    // Fetch chapters for all activeSubjects whenever activeSubjects changes
     useEffect(() => {
         let isMounted = true;
-        const fetchMeta = async () => {
+        const fetchChapters = async () => {
             try {
-                const res = await api.get('/api/questions/meta', {
-                    params: { subject: selectedSubject, class: 'Both' }
-                });
-                if (isMounted && res.data) {
-                    const chs = Array.isArray(res.data.chapters) ? res.data.chapters : [];
-                    setAvailableChapters(chs);
-                    // Default select first chapter if none selected
-                    setSelectedChapters(chs.slice(0, 1));
+                const results = await Promise.all(
+                    activeSubjects.map(sub =>
+                        api.get('/api/questions/meta', {
+                            params: { subject: sub, class: 'Both' }
+                        }).then(res => {
+                            const chs = Array.isArray(res.data?.chapters) ? res.data.chapters : [];
+                            return chs.map(ch => ({ name: ch, subject: sub }));
+                        }).catch(() => [])
+                    )
+                );
+
+                if (isMounted) {
+                    const combined = results.flat();
+                    const seen = new Set();
+                    const distinct = [];
+                    for (const item of combined) {
+                        const key = `${item.subject}::${item.name}`;
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            distinct.push(item);
+                        }
+                    }
+                    setAvailableChapters(distinct);
+
+                    setSelectedChapters(prev => {
+                        const validNames = new Set(distinct.map(d => d.name));
+                        const stillValid = prev.filter(p => validNames.has(p));
+                        if (stillValid.length > 0) return stillValid;
+                        return distinct.slice(0, 1).map(d => d.name);
+                    });
                     setSelectedConcepts([]);
                 }
             } catch (err) {
-                console.error('Error fetching subject chapters:', err);
+                console.error('Error fetching chapters for subjects:', err);
             }
         };
-        fetchMeta();
+
+        fetchChapters();
         return () => { isMounted = false; };
-    }, [selectedSubject]);
+    }, [activeSubjects]);
 
     // Fetch concepts dynamically for selected chapters
     useEffect(() => {
@@ -115,72 +147,94 @@ export default function SirMvQuestionFilter({
 
         const fetchConcepts = async () => {
             try {
-                const res = await api.get('/api/questions', {
-                    params: {
-                        subject: selectedSubject,
-                        chapter: selectedChapters.join(','),
-                        limit: 500,
-                    }
-                });
-                if (isMounted && res.data) {
-                    const qs = Array.isArray(res.data) ? res.data : (res.data.questions || []);
-                    const distinctConcepts = Array.from(
-                        new Set(
-                            qs
-                                .map(q => q.concept || q.topic)
-                                .filter(Boolean)
-                                .map(c => c.trim())
-                        )
-                    ).sort();
-                    setAvailableConcepts(distinctConcepts);
+                const relevantSubjects = Array.from(
+                    new Set(
+                        availableChapters
+                            .filter(c => selectedChapters.includes(c.name))
+                            .map(c => c.subject)
+                    )
+                );
+                const subjectsToQuery = relevantSubjects.length > 0 ? relevantSubjects : activeSubjects;
+
+                const results = await Promise.all(
+                    subjectsToQuery.map(sub => {
+                        const chsForSub = availableChapters
+                            .filter(c => c.subject === sub && selectedChapters.includes(c.name))
+                            .map(c => c.name);
+                        if (chsForSub.length === 0) return Promise.resolve([]);
+                        return api.get('/api/questions', {
+                            params: {
+                                subject: sub,
+                                chapter: chsForSub.join(','),
+                                limit: 500,
+                            }
+                        }).then(res => {
+                            const qs = Array.isArray(res.data) ? res.data : (res.data.questions || []);
+                            return qs.map(q => q.concept || q.topic).filter(Boolean);
+                        }).catch(() => []);
+                    })
+                );
+
+                if (isMounted) {
+                    const allFound = Array.from(new Set(results.flat().map(c => String(c).trim()))).sort();
+                    setAvailableConcepts(allFound);
                 }
             } catch (err) {
                 console.error('Error fetching concepts:', err);
             }
         };
+
         fetchConcepts();
         return () => { isMounted = false; };
-    }, [selectedSubject, selectedChapters]);
+    }, [selectedChapters, availableChapters, activeSubjects]);
 
-    // Chapter filter helper
+    // Filter chapters by search and subject tab
     const filteredChapters = useMemo(() => {
-        if (!chapterSearch.trim()) return availableChapters;
-        const s = chapterSearch.toLowerCase();
-        return availableChapters.filter(ch => ch.toLowerCase().includes(s));
-    }, [availableChapters, chapterSearch]);
+        let list = availableChapters;
+        if (activeChapterTab !== 'All') {
+            list = list.filter(c => c.subject.toLowerCase() === activeChapterTab.toLowerCase());
+        }
+        if (chapterSearch.trim()) {
+            const s = chapterSearch.toLowerCase();
+            list = list.filter(c => c.name.toLowerCase().includes(s) || c.subject.toLowerCase().includes(s));
+        }
+        return list;
+    }, [availableChapters, activeChapterTab, chapterSearch]);
 
-    // Concept filter helper
+    // Filter concepts
     const filteredConcepts = useMemo(() => {
         if (!conceptSearch.trim()) return availableConcepts;
         const s = conceptSearch.toLowerCase();
         return availableConcepts.filter(c => c.toLowerCase().includes(s));
     }, [availableConcepts, conceptSearch]);
 
-    const toggleChapter = (chapter) => {
+    const toggleChapter = (chapterName) => {
         setSelectedChapters(prev => {
-            if (prev.includes(chapter)) {
-                return prev.filter(c => c !== chapter);
+            if (prev.includes(chapterName)) {
+                return prev.filter(c => c !== chapterName);
             } else {
-                return [...prev, chapter];
+                return [...prev, chapterName];
             }
         });
     };
 
-    const toggleConcept = (concept) => {
+    const toggleConcept = (conceptName) => {
         setSelectedConcepts(prev => {
-            if (prev.includes(concept)) {
-                return prev.filter(c => c !== concept);
+            if (prev.includes(conceptName)) {
+                return prev.filter(c => c !== conceptName);
             } else {
-                return [...prev, concept];
+                return [...prev, conceptName];
             }
         });
     };
 
     const handleSelectAllChapters = () => {
-        if (selectedChapters.length === availableChapters.length) {
-            setSelectedChapters([]);
+        const currentTabNames = filteredChapters.map(c => c.name);
+        const allTabSelected = currentTabNames.every(name => selectedChapters.includes(name));
+        if (allTabSelected) {
+            setSelectedChapters(prev => prev.filter(name => !currentTabNames.includes(name)));
         } else {
-            setSelectedChapters([...availableChapters]);
+            setSelectedChapters(prev => Array.from(new Set([...prev, ...currentTabNames])));
         }
     };
 
@@ -199,8 +253,10 @@ export default function SirMvQuestionFilter({
         }
 
         onLoadQuestions({
-            examCategory,
-            subject: selectedSubject,
+            examCategory: examOption === 'JEE' ? 'JEE' : (examOption === 'NEET' ? 'NEET' : (examOption === 'CET' ? 'CET' : 'Assessment')),
+            examOption,
+            subjects: activeSubjects,
+            subject: activeSubjects.length === 1 ? activeSubjects[0] : activeSubjects.join(' & '),
             chapters: selectedChapters,
             concepts: selectedConcepts,
             selectionMode,
@@ -210,9 +266,17 @@ export default function SirMvQuestionFilter({
         });
     };
 
+    const examOptionsList = [
+        { id: 'JEE', label: 'JEE (PCM)', desc: 'Physics, Chemistry, Mathematics' },
+        { id: 'NEET', label: 'NEET (PCBZ)', desc: 'Physics, Chemistry, Botany, Zoology' },
+        { id: 'CET', label: 'CET (PCMB)', desc: 'Physics, Chemistry, Mathematics, Biology' },
+        { id: 'Single', label: 'Single Subject', desc: 'Pick any individual subject' },
+        { id: 'Multi', label: 'Multi-Subject', desc: 'Custom subject combinations' },
+    ];
+
     return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-4xl mx-auto p-8 font-sans select-none animate-fade-in">
-            {/* Header with Title and icon badge */}
+            {/* Header: Clean unbranded title */}
             <div className="flex items-center gap-3 pb-6 mb-6 border-b border-slate-100">
                 <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
                     Q
@@ -228,53 +292,98 @@ export default function SirMvQuestionFilter({
             </div>
 
             <div className="space-y-6">
-                {/* 1. Exam Category & Individual Subject Selector */}
+                {/* 1. Single Unified Option Selector (One row only!) */}
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                        Target Exam & Stream:
+                        Target Exam & Subject Stream <span className="text-rose-500">*</span>:
                     </label>
-                    <div className="grid grid-cols-4 gap-2 mb-3">
-                        {['CET', 'NEET', 'JEE', 'PCMB'].map((cat) => {
-                            const isSelected = examCategory === cat;
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                        {examOptionsList.map((item) => {
+                            const isSelected = examOption === item.id;
                             return (
                                 <button
-                                    key={cat}
+                                    key={item.id}
                                     type="button"
-                                    onClick={() => setExamCategory(cat)}
-                                    className={`py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center border ${
+                                    onClick={() => setExamOption(item.id)}
+                                    className={`py-3 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center border flex flex-col items-center justify-center gap-1 ${
                                         isSelected
-                                            ? 'bg-[#0d6efd] text-white border-blue-600 shadow-xs'
+                                            ? 'bg-[#0d6efd] text-white border-blue-600 shadow-md ring-2 ring-blue-400/30'
                                             : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                                     }`}
                                 >
-                                    {cat}
+                                    <span className="text-xs font-black tracking-tight">{item.label}</span>
+                                    <span className={`text-[10px] line-clamp-1 ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                                        {item.desc}
+                                    </span>
                                 </button>
                             );
                         })}
                     </div>
 
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                        Select Subject <span className="text-rose-500">*</span>:
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {examSubjects.map((sub) => {
-                            const isSelected = selectedSubject === sub;
-                            return (
-                                <button
-                                    key={sub}
-                                    type="button"
-                                    onClick={() => setSelectedSubject(sub)}
-                                    className={`py-2 px-3 rounded-xl text-xs font-bold transition cursor-pointer text-center border ${
-                                        isSelected
-                                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                                            : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                                    }`}
-                                >
-                                    {sub}
-                                </button>
-                            );
-                        })}
-                    </div>
+                    {/* Sub-selector shown ONLY when "Single Subject" is selected */}
+                    {examOption === 'Single' && (
+                        <div className="mt-3 p-3 bg-blue-50/60 border border-blue-200 rounded-xl animate-fade-in">
+                            <span className="block text-[11px] font-bold text-blue-900 mb-2 uppercase tracking-wider">
+                                Choose Individual Subject:
+                            </span>
+                            <div className="grid grid-cols-4 gap-2">
+                                {['Physics', 'Chemistry', 'Mathematics', 'Biology'].map((sub) => {
+                                    const isSel = singleSubject === sub;
+                                    return (
+                                        <button
+                                            key={sub}
+                                            type="button"
+                                            onClick={() => setSingleSubject(sub)}
+                                            className={`py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer text-center border ${
+                                                isSel
+                                                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            {sub}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Sub-selector shown ONLY when "Multi-Subject" custom mode is selected */}
+                    {examOption === 'Multi' && (
+                        <div className="mt-3 p-3 bg-blue-50/60 border border-blue-200 rounded-xl animate-fade-in">
+                            <span className="block text-[11px] font-bold text-blue-900 mb-2 uppercase tracking-wider">
+                                Select Custom Subjects to Include:
+                            </span>
+                            <div className="grid grid-cols-4 gap-2">
+                                {['Physics', 'Chemistry', 'Mathematics', 'Biology'].map((sub) => {
+                                    const isSel = customSubjects.includes(sub);
+                                    return (
+                                        <button
+                                            key={sub}
+                                            type="button"
+                                            onClick={() => {
+                                                if (isSel) {
+                                                    if (customSubjects.length > 1) {
+                                                        setCustomSubjects(customSubjects.filter(s => s !== sub));
+                                                    }
+                                                } else {
+                                                    setCustomSubjects([...customSubjects, sub]);
+                                                }
+                                            }}
+                                            className={`py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer text-center border flex items-center justify-center gap-1.5 ${
+                                                isSel
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            {isSel ? <Check className="w-3.5 h-3.5" /> : null}
+                                            <span>{sub}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* 2. Multi-Chapter Selector & Multi-Concept Selector */}
@@ -291,7 +400,7 @@ export default function SirMvQuestionFilter({
                                     onClick={handleSelectAllChapters}
                                     className="text-[11px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer"
                                 >
-                                    {selectedChapters.length === availableChapters.length ? 'Deselect All' : 'Select All'}
+                                    Select / Deselect
                                 </button>
                             )}
                         </div>
@@ -334,7 +443,27 @@ export default function SirMvQuestionFilter({
 
                         {/* Dropdown Menu */}
                         {isChapterDropdownOpen && (
-                            <div className="absolute z-30 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl p-3 max-h-64 overflow-y-auto">
+                            <div className="absolute z-30 left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl p-3 max-h-72 overflow-y-auto">
+                                {/* Subject filter tabs if multiple subjects */}
+                                {activeSubjects.length > 1 && (
+                                    <div className="flex items-center gap-1 mb-2 pb-2 border-b border-slate-100 overflow-x-auto">
+                                        {['All', ...activeSubjects].map((tab) => (
+                                            <button
+                                                key={tab}
+                                                type="button"
+                                                onClick={() => setActiveChapterTab(tab)}
+                                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold cursor-pointer whitespace-nowrap ${
+                                                    activeChapterTab === tab
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {tab}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
                                 <div className="relative mb-2">
                                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
                                     <input
@@ -345,23 +474,31 @@ export default function SirMvQuestionFilter({
                                         className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                                     />
                                 </div>
+
                                 <div className="space-y-1">
-                                    {filteredChapters.map((ch) => {
-                                        const isSelected = selectedChapters.includes(ch);
+                                    {filteredChapters.map((item) => {
+                                        const isSelected = selectedChapters.includes(item.name);
                                         return (
                                             <div
-                                                key={ch}
-                                                onClick={() => toggleChapter(ch)}
-                                                className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition ${
+                                                key={`${item.subject}-${item.name}`}
+                                                onClick={() => toggleChapter(item.name)}
+                                                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition ${
                                                     isSelected ? 'bg-blue-50 text-blue-900 font-semibold' : 'hover:bg-slate-50 text-slate-700'
                                                 }`}
                                             >
-                                                {isSelected ? (
-                                                    <CheckSquare className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                                ) : (
-                                                    <Square className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                                                <div className="flex items-center gap-2 truncate">
+                                                    {isSelected ? (
+                                                        <CheckSquare className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                                    ) : (
+                                                        <Square className="w-4 h-4 text-slate-300 flex-shrink-0" />
+                                                    )}
+                                                    <span className="truncate">{item.name}</span>
+                                                </div>
+                                                {activeSubjects.length > 1 && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 flex-shrink-0">
+                                                        {item.subject.slice(0, 3)}
+                                                    </span>
                                                 )}
-                                                <span className="truncate">{ch}</span>
                                             </div>
                                         );
                                     })}
@@ -506,7 +643,7 @@ export default function SirMvQuestionFilter({
                                     Number of Questions:
                                 </label>
                                 <div className="flex items-center gap-2">
-                                    {[15, 30, 45, 60].map((cnt) => (
+                                    {[15, 30, 45, 60, 75, 90].map((cnt) => (
                                         <button
                                             key={cnt}
                                             type="button"
@@ -523,7 +660,7 @@ export default function SirMvQuestionFilter({
                                     <input
                                         type="number"
                                         min="1"
-                                        max="100"
+                                        max="180"
                                         value={targetQuestionCount}
                                         onChange={(e) => setTargetQuestionCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
                                         className="w-16 text-xs text-center font-bold border border-slate-300 rounded-lg py-1 bg-white"
@@ -570,7 +707,7 @@ export default function SirMvQuestionFilter({
                     )}
                 </div>
 
-                {/* Primary Button: Load Questions (Large vibrant blue rounded button matching Image 1) */}
+                {/* Primary Button: Load Questions */}
                 <div className="pt-2">
                     <button
                         type="button"
