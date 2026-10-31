@@ -11,9 +11,11 @@
  * - Interactive Diagram Resizing via ResizableDiagram (+ / - controls right on the diagram)
  * - Zero overlap, no clipping, proper line spacing, KaTeX math/chem preservation.
  */
-import React from 'react';
+import React, { useState } from 'react';
+import { Settings } from 'lucide-react';
 import MathRenderer from './MathRenderer';
 import ResizableDiagram from './ResizableDiagram';
+import QuestionSettingsPopover from './QuestionSettingsPopover';
 import { optionLabel, getQuestionOptionLabels, stripOptionPrefix, cleanItalicsPreservingBinomial } from '../utils/sanitize';
 
 /**
@@ -539,7 +541,7 @@ function extractDiagramFromText(rawText, existingImageUrl) {
 /**
  * MCQ Body with Intelligent Diagram Placement & Resizing
  */
-function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
+function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null, settings = {} }) {
     const rawQText = cleanQuestionText(q.questionText || q.question || '');
     const { cleanText: qText, diagramUrl: imageUrl } = extractDiagramFromText(rawQText, q.imageUrl || q.image_url);
     const options = Array.isArray(q.options) ? q.options : [];
@@ -554,22 +556,50 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
         return /\{\{IMG::|!\[|\[DIAGRAM:|<img|https?:\/\/.*?\.(png|jpg|jpeg|webp|svg|gif)|data:image\//i.test(str);
     });
 
+    const effectivePerLine = q.optionsPerLine || settings?.optionsPerLine;
+    const gapOptMap = {
+        'No Spacing': '1px 4px',
+        'Default': '2px 8px',
+        '5': '5px 10px',
+        '10': '10px 14px',
+        '15': '15px 18px',
+    };
+    const currentGap = gapOptMap[settings?.gapBetweenOptions] || '2px 8px';
+
+    const getOptionsGrid = (forceSingle = false) => {
+        if (forceSingle || effectivePerLine === 1) {
+            return { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: currentGap, marginTop: '2px' };
+        }
+        if (effectivePerLine === 2) {
+            return { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: currentGap, marginTop: '2px' };
+        }
+        if (effectivePerLine === 4) {
+            return { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: currentGap, marginTop: '2px' };
+        }
+        return getDynamicOptGrid(options, isTwoCol);
+    };
+
+    const formatOptionLabel = (i) => {
+        const style = String(optionStyle || settings?.optionStyle || 'ABCD').trim();
+        if (style.includes('1234') || style.includes('(1)')) {
+            return `${i + 1}`;
+        }
+        if (style.includes('abcd') || style.includes('(a)')) {
+            return `${String.fromCharCode(97 + i)}`;
+        }
+        return `${String.fromCharCode(65 + i)}`;
+    };
+
     // Render Options List
     const renderOptions = (forceSingle = false) => {
-        if (options.length === 0) return null;
+        if (options.length === 0 || settings?.displayMode === '5. Only Questions with No Options') return null;
         return (
-            <div
-                style={
-                    forceSingle
-                        ? { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '2px 6px', marginTop: '2px' }
-                        : getDynamicOptGrid(options, isTwoCol)
-                }
-            >
+            <div style={getOptionsGrid(forceSingle)}>
                 {options.map((opt, i) => {
                     const rawOpt = typeof opt === 'object' ? (opt.text || opt.optionText || opt.value || opt.option || '') : String(opt || '');
                     const optText = cleanOptionText(rawOpt);
                     const optHeight = q.customDiagramSizes?.[`opt_${i}`] || q.customOptionDiagramHeight || '60px';
-                    const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                    const labelText = formatOptionLabel(i);
 
                     return (
                         <div
@@ -1393,8 +1423,13 @@ export default function QuestionBlock({
     diagramMaxHeight = '180px',
     onDiagramResize,
     optionStyle = null,
+    settings = {},
+    onQuestionSettingChange,
 }) {
     if (!q) return null;
+
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const qId = q._id || q.id || displayNum;
 
     const activeFontSize = fontSize || 'inherit';
     const qType = (q.type || q.q_type || 'MCQ').toUpperCase();
@@ -1403,7 +1438,7 @@ export default function QuestionBlock({
     const resolvedOptionStyle = optionStyle || q.optionStyle || null;
 
     const matchData = parseMatchFromText(q);
-    const hasMatchOpts = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(opt => /^[a-dA-D1-4][\-–—]\(?[ivx0-9p-t]+\)?/i.test(String(typeof opt === 'object' ? (opt.text || '') : opt).trim()));
+    const hasMatchOpts = Array.isArray(q.options) && q.options.length >= 2 && q.options.every(opt => /^[a-dA-D1-4][\-\–\—]\(?[ivx0-9p-t]+\)?/i.test(String(typeof opt === 'object' ? (opt.text || '') : opt).trim()));
     const hasMatchPairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) || (matchData.pairs && matchData.pairs.length > 0);
     const isMatch = qType.includes('MATCH') || hasMatchPairs || hasMatchOpts;
 
@@ -1484,15 +1519,67 @@ export default function QuestionBlock({
                 onDiagramResize={onDiagramResize}
                 displayNum={displayNum}
                 optionStyle={resolvedOptionStyle}
+                settings={settings}
             />
         );
     };
 
     return (
-        <div style={{ ...Q.wrap, fontSize: activeFontSize, lineHeight, ...extraStyle }} className="question-block">
+        <div style={{ ...Q.wrap, fontSize: activeFontSize, lineHeight, ...extraStyle }} className="question-block group relative">
             <div style={Q.row}>
                 <span style={Q.num}>{displayNum}.</span>
-                <div style={Q.body}>{renderBody()}</div>
+                {settings?.showQuestionLevel && (
+                    <span className="no-print" style={{ fontSize: '9px', fontWeight: 'bold', backgroundColor: '#e2e8f0', color: '#1e293b', padding: '1px 5px', borderRadius: '4px', marginRight: '6px', alignSelf: 'flex-start', textTransform: 'uppercase' }}>
+                        Level: {q.level || 'medium'}
+                    </span>
+                )}
+                <div style={Q.body}>
+                    {renderBody()}
+                    {q.solutionText && (settings?.displayMode === '3. Questions with Answers & Solutions' || settings?.displayMode === '6. Only Answers & Solutions') && (
+                        <div style={{ marginTop: '6px', padding: '6px 10px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '0.9em', color: '#166534' }}>
+                            <div style={{ fontWeight: 700, fontSize: '0.85em', textTransform: 'uppercase', marginBottom: '2px', color: '#15803d' }}>
+                                Solution:
+                            </div>
+                            <MathRenderer text={q.solutionText} />
+                        </div>
+                    )}
+                </div>
+
+                {/* In-Question Alignment & Settings Popover trigger button (Gear matching Image 11) */}
+                <div className="no-print relative ml-2 flex-shrink-0" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsSettingsOpen(!isSettingsOpen);
+                        }}
+                        className="p-1 rounded-md bg-[#e2e8f0] hover:bg-[#cbd5e1] text-slate-700 hover:text-slate-900 transition cursor-pointer shadow-2xs border border-slate-300"
+                        title="Question alignment & image settings"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                    </button>
+
+                    <QuestionSettingsPopover
+                        isOpen={isSettingsOpen}
+                        onClose={() => setIsSettingsOpen(false)}
+                        questionId={qId}
+                        currentAlignment={q.diagramAlignment || 'Center'}
+                        currentOptionsPerLine={q.optionsPerLine || settings?.optionsPerLine || 4}
+                        onAlignmentChange={(id, align) => {
+                            if (onQuestionSettingChange) onQuestionSettingChange(id, 'diagramAlignment', align);
+                        }}
+                        onOptionsPerLineChange={(id, num) => {
+                            if (onQuestionSettingChange) onQuestionSettingChange(id, 'optionsPerLine', num);
+                        }}
+                        onImageSizeDelta={(id, delta) => {
+                            if (onDiagramResize) {
+                                const currentH = parsePx(q.customDiagramSizes?.main || q.diagramHeight || diagramMaxHeight || 180);
+                                onDiagramResize(id, Math.max(40, currentH + delta), 'main');
+                            }
+                        }}
+                    />
+                </div>
+
                 {showMarks && formatMarks && (
                     <span style={Q.marks}>[{formatMarks(q.type, classes)}]</span>
                 )}

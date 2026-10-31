@@ -15,6 +15,7 @@ import api from '../api';
 import A4PaperEngine from './A4PaperEngine';
 import QuestionBlock from './QuestionBlock';
 import A4SolutionKey from './A4SolutionKey';
+import PaperPrintSettingsSidebar from './PaperPrintSettingsSidebar';
 import { optionLabel, stripOptionPrefix } from '../utils/sanitize';
 import { generatePaperSet, shuffleQuestionsWithinSections } from '../utils/pqrsGenerator';
 
@@ -75,9 +76,19 @@ export function calcTotal(questions = [], classes = [], examType = '') {
 
 // ─── Default settings ─────────────────────────────────────────────────────────
 export const DEFAULT_SETTINGS = {
-    fontFamily: '"Times New Roman", Times, serif',
-    fontSize: '14px',
-    optionStyle: 'ABCD',
+    displayMode: '1. Questions', // Strict default: clean question paper, no answers, no solutions
+    optionsPerLine: 4,
+    optionStyle: '(1) (2) (3) (4)',
+    fontFamily: 'Times New Roman',
+    fontSize: '16',
+    customStartQNo: 1,
+    startQNo: 1,
+    gapBetweenOptions: 'Default',
+    gapBetweenQuestions: 'Default',
+    showQuestionLevel: false,
+    imageBelowQuestion: false,
+    paper2Column: false,
+    paper2ColumnQuestionBreak: false,
     lineHeight: '1.42',
     columns: 1,
     columnGap: '18px',
@@ -87,7 +98,6 @@ export const DEFAULT_SETTINGS = {
     showCoverPage: false,
     includeSchemeOnLastPage: false,
     numberingMode: 'continuous',
-    startQNo: 1,
     endQNo: null,
     pageSize: 'A4',
     orientation: 'portrait',
@@ -319,44 +329,19 @@ export function PaperHeader({
 
     return (
         <div style={{ marginBottom: '14px', borderBottom: '2px solid #000', paddingBottom: '6px' }}>
-            {templateUrl && templateUrl.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                <div style={{ textAlign: 'center', marginBottom: '6px', borderBottom: '1.5px solid #000', paddingBottom: '4px' }}>
-                    <img
-                        src={templateUrl}
-                        alt="Header"
-                        onError={(e) => { e.currentTarget.parentElement.style.display = 'none'; }}
-                        style={{ maxWidth: '100%', maxHeight: '80px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
-                    />
-                </div>
-            ) : (
-                /* Official Manchester Technologies Davanagere Header Crest */
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '8px' }}>
-                    <div style={{ width: '68px', height: '68px', flexShrink: 0 }}>
-                        <img 
-                            src="/ManchesterLogo.jpeg" 
-                            alt="Manchester Technologies" 
-                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: '8px' }}>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#000' }}>
+                        {displayTitle}
                     </div>
-                    <div style={{ flex: 1, textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#000', lineHeight: 1.1 }}>
-                            {collegeName}
-                        </div>
-                        <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: '#333', marginTop: '2px' }}>
-                            {subTitle}
-                        </div>
-                        <div style={{ fontSize: '13px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#000', marginTop: '4px' }}>
-                            {displayTitle}
-                        </div>
-                    </div>
-                    {!isAssignment && (
-                        <div style={{ width: '68px', height: '68px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #000', borderRadius: '4px', padding: '2px' }}>
-                            <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SET</span>
-                            <span style={{ fontSize: '22px', fontWeight: 900, lineHeight: 1 }}>{currentSet}</span>
-                        </div>
-                    )}
                 </div>
-            )}
+                {!isAssignment && currentSet && (
+                    <div style={{ width: '56px', height: '48px', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #000', borderRadius: '4px', padding: '2px' }}>
+                        <span style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>SET</span>
+                        <span style={{ fontSize: '18px', fontWeight: 900, lineHeight: 1 }}>{currentSet}</span>
+                    </div>
+                )}
+            </div>
 
             {!isAssignment && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px', color: '#111', fontWeight: 700, borderTop: '1px solid #777', paddingTop: '4px', marginTop: '4px' }}>
@@ -406,6 +391,7 @@ export default function PaperRenderer({
     onProceedToFinalize,
     onDiagramResize,
     onShuffleQuestions,
+    onQuestionSettingChange,
 }) {
     const [internalSettings, setInternalSettings] = useState(DEFAULT_SETTINGS);
     const settings = externalSettings || internalSettings;
@@ -683,22 +669,40 @@ export default function PaperRenderer({
                 </div>
             </div>
 
-            {/* Alignment / Settings Panel (Shown only in Alignment step) */}
+            {/* ════ SIDE-BY-SIDE PRINT SETTINGS SIDEBAR & TRUE A4 ENGINE RENDERING ════ */}
             {showSettingsPanel && (
-                <div className="w-full max-w-5xl no-print">
-                    <SettingsPanel settings={settings} setSettings={setSettings} totalQuestions={questions.length} />
+                <div className="w-full max-w-7xl flex flex-col lg:flex-row items-start justify-center gap-6">
+                    <PaperPrintSettingsSidebar
+                        settings={settings}
+                        setSettings={setSettings}
+                        onDownloadPdf={handlePrint}
+                    />
+                    <div className="flex-1 w-full flex justify-center overflow-x-auto">
+                        <A4PaperEngine
+                            paper={activePaper}
+                            activeTemplate={activeTemplate}
+                            isAssignment={isAssignment}
+                            settings={settings}
+                            zoom={zoom}
+                            onDiagramResize={onDiagramResize}
+                            onQuestionSettingChange={onQuestionSettingChange}
+                        />
+                    </div>
                 </div>
             )}
 
             {/* ── TRUE A4 ENGINE RENDERING ── */}
-            <A4PaperEngine
-                paper={activePaper}
-                activeTemplate={activeTemplate}
-                isAssignment={isAssignment}
-                settings={settings}
-                zoom={zoom}
-                onDiagramResize={onDiagramResize}
-            />
+            {!showSettingsPanel && (
+                <A4PaperEngine
+                    paper={activePaper}
+                    activeTemplate={activeTemplate}
+                    isAssignment={isAssignment}
+                    settings={settings}
+                    zoom={zoom}
+                    onDiagramResize={onDiagramResize}
+                    onQuestionSettingChange={onQuestionSettingChange}
+                />
+            )}
 
             {/* ── DETAILED SOLUTION MODAL VIEWER ── */}
             {showSolutionModal && (

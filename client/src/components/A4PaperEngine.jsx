@@ -19,13 +19,14 @@ export default function A4PaperEngine({
     paper,
     activeTemplate,
     isAssignment = false,
-    settings,
+    settings = {},
     currentPage = 1,
     onPageChange,
     zoom = 100,
     fitMode = 'actual',
     singlePageMode = false,
     onDiagramResize,
+    onQuestionSettingChange,
 }) {
     const questions = useMemo(() => paper?.questions || [], [paper]);
     const classes = useMemo(() => paper?.classes || [], [paper]);
@@ -37,13 +38,22 @@ export default function A4PaperEngine({
 
     const isAssignmentPaper = isAssignment || paper?.category === 'assignment' || (paper?.title && /assignment/i.test(paper.title));
     const showCover = !isAssignmentPaper && settings.showCoverPage === true;
-    const startQNo = settings.startQNo || 1;
+    const startQNo = settings.customStartQNo ?? settings.startQNo ?? 1;
     const endQNo = settings.endQNo ?? (startQNo + questions.length - 1);
     const visibleCount = Math.max(0, endQNo - startQNo + 1);
     const visibleQuestions = useMemo(() => questions.slice(0, visibleCount), [questions, visibleCount]);
 
     const zoomScale = (zoom || 100) / 100;
-    const isTwoCol = settings.columns === 2;
+    const isTwoCol = settings.columns === 2 || Boolean(settings.paper2Column);
+
+    const gapQMap = {
+        'No Spacing': '2px',
+        'Default': isTwoCol ? '8px' : '10px',
+        '5': '5px',
+        '10': '10px',
+        '15': '15px'
+    };
+    const marginBottomVal = gapQMap[settings?.gapBetweenQuestions] || settings.questionSpacing || (isTwoCol ? '8px' : '10px');
 
     return (
         <div className="a4-engine-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -68,38 +78,6 @@ export default function A4PaperEngine({
             >
                 {/* ── Single Unified Question Paper Sheet ── */}
                 <div className="a4-sheet-page a4-questions-page" style={{ position: 'relative' }}>
-                    {/* Official Manchester Technologies Circular Emblem Watermark - Fixed across all pages */}
-                    <div 
-                        className="a4-watermark-wrapper"
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            width: '100vw',
-                            height: '100vh',
-                            pointerEvents: 'none',
-                            zIndex: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                        }}
-                    >
-                        <img 
-                            src="/ManchesterLogo.jpeg" 
-                            alt="Manchester Technologies Crest Watermark" 
-                            className="a4-watermark-logo"
-                            style={{
-                                width: '380px',
-                                height: 'auto',
-                                maxHeight: '380px',
-                                objectFit: 'contain',
-                                opacity: 0.08,
-                                filter: 'grayscale(100%)',
-                                display: 'block',
-                                pointerEvents: 'none',
-                            }}
-                        />
-                    </div>
                     <div
                         className="a4-page-content"
                         style={{
@@ -209,7 +187,7 @@ export default function A4PaperEngine({
                                                 breakInside: 'avoid',
                                                 WebkitColumnBreakInside: 'avoid',
                                                 pageBreakInside: 'avoid',
-                                                marginBottom: settings.questionSpacing || (isTwoCol ? '8px' : '10px'),
+                                                marginBottom: marginBottomVal,
                                             }}
                                         >
                                             <QuestionBlock
@@ -226,6 +204,8 @@ export default function A4PaperEngine({
                                                 diagramMaxHeight={settings.diagramMaxHeight}
                                                 onDiagramResize={onDiagramResize}
                                                 optionStyle={settings.optionStyle || 'ABCD'}
+                                                settings={settings}
+                                                onQuestionSettingChange={onQuestionSettingChange}
                                             />
                                         </div>
                                     </React.Fragment>

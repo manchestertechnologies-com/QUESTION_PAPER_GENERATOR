@@ -26,6 +26,10 @@ import A4SolutionKey from '../../components/A4SolutionKey';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 import { optionLabel, getResolvedAnswerLabel, getQuestionOptionLabels } from '../../utils/sanitize';
 import { shuffleQuestionsWithinSections } from '../../utils/pqrsGenerator';
+import SirMvQuestionFilter from '../../components/SirMvQuestionFilter';
+import QuestionCardWithSolution from '../../components/QuestionCardWithSolution';
+import PaperPrintSettingsSidebar from '../../components/PaperPrintSettingsSidebar';
+import { Download, ArrowLeft, RefreshCw, Sparkles, Check, Settings } from 'lucide-react';
 
 // Reference UI QuestionCardOptions with crisp white contrast
 const QuestionCardOptions = ({ q, options = [], answer = '', showAnswer = true }) => {
@@ -360,6 +364,77 @@ export default function CreatePaper() {
 
     // Wizard Step: 1 (Configure) -> 2 (Method) -> 3 (Questions / Auto Engine) -> 4 (Preview) -> 5 (Alignment)
     const [currentStep, setCurrentStep] = useState(paperId ? 3 : 1);
+
+    // SIR MV PU College Workflow States
+    const [uiMode, setUiMode] = useState('sirmv');
+    const [sirMvStep, setSirMvStep] = useState(1);
+    const [sirMvAllConcepts, setSirMvAllConcepts] = useState([]);
+    const [sirMvLoading, setSirMvLoading] = useState(false);
+    const [sirMvConfig, setSirMvConfig] = useState(null);
+
+    const handleSirMvLoadQuestions = async (config) => {
+        setSirMvLoading(true);
+        setSirMvConfig(config);
+        try {
+            const params = {
+                subject: config.subject,
+                chapter: config.chapters.join(','),
+                limit: 2000,
+            };
+            if (config.concepts && config.concepts.length > 0) {
+                params.concept = config.concepts.join(',');
+            }
+
+            const res = await api.get('/api/questions', { params });
+            let pool = Array.isArray(res.data) ? res.data : (res.data.questions || []);
+
+            if (pool.length === 0) {
+                alert('No questions found for the selected chapter(s) and concept(s). Please try selecting other chapters or concepts.');
+                setSirMvLoading(false);
+                return;
+            }
+
+            let selected = [];
+            const qty = Math.min(pool.length, config.targetCount || 30);
+            if (config.selectionMode === 'auto') {
+                const easyTarget = Math.round(qty * ((config.difficulty.easy || 40) / 100));
+                const medTarget = Math.round(qty * ((config.difficulty.medium || 40) / 100));
+                const hardTarget = Math.max(0, qty - easyTarget - medTarget);
+
+                const easyPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'easy');
+                const medPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'medium');
+                const hardPool = pool.filter(q => (q.level || 'medium').toLowerCase() === 'hard');
+
+                const shuffle = arr => [...arr].sort(() => Math.random() - 0.5);
+
+                const pickedEasy = shuffle(easyPool).slice(0, easyTarget);
+                const pickedMed = shuffle(medPool).slice(0, medTarget);
+                const pickedHard = shuffle(hardPool).slice(0, hardTarget);
+
+                selected = [...pickedEasy, ...pickedMed, ...pickedHard];
+                const usedIds = new Set(selected.map(q => q._id || q.id));
+
+                if (selected.length < qty) {
+                    const remainder = pool.filter(q => !usedIds.has(q._id || q.id));
+                    selected.push(...shuffle(remainder).slice(0, qty - selected.length));
+                }
+            } else {
+                selected = pool.slice(0, qty);
+            }
+
+            setSelectedQuestions(selected);
+            setSirMvAllConcepts(config.allConcepts || []);
+            setSubject(config.subject);
+            setExamType(config.examCategory);
+            setTitle(`${config.subject} ${config.examCategory} Exam Paper`);
+            setSirMvStep(2);
+        } catch (err) {
+            console.error('Failed to load questions:', err);
+            alert('Failed to load questions: ' + (err.response?.data?.msg || err.message));
+        } finally {
+            setSirMvLoading(false);
+        }
+    };
 
     // All system-supported database subjects
     const ALL_AVAILABLE_SUBJECTS = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Botany', 'Zoology'];
@@ -2584,35 +2659,62 @@ export default function CreatePaper() {
                 {/* Right Header Area: Step Indicators + Bell Icon */}
                 <div className="flex items-center gap-3 mr-4">
                     {/* Step Indicators */}
-                    <div className="hidden md:flex items-center gap-2">
-                        {[
-                            { num: 1, label: 'Scope & Setup' },
-                            { num: 2, label: 'Method' },
-                            { num: 3, label: 'Questions & Engine' },
-                            { num: 4, label: 'Preview & Merge' },
-                            { num: 5, label: 'Alignment' },
-                        ].map((st) => (
-                            <button
-                                key={st.num}
-                                type="button"
-                                onClick={() => {
-                                    if (currentStep === 1 && st.num > 1) {
-                                        handleProceedFromStep1(st.num);
-                                    } else {
-                                        setCurrentStep(st.num);
-                                    }
-                                }}
-                                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
-                                    currentStep === st.num
-                                        ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
-                                        : 'bg-white/10 hover:bg-white/20 text-white/90'
-                                }`}
-                            >
-                                <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
-                                <span>{st.label}</span>
-                            </button>
-                        ))}
-                    </div>
+                    {uiMode === 'sirmv' ? (
+                        <div className="hidden md:flex items-center gap-2">
+                            {[
+                                { num: 1, label: '1. Select Filter' },
+                                { num: 2, label: '2. Review Questions' },
+                                { num: 3, label: '3. Print Settings & Preview' },
+                            ].map((st) => (
+                                <button
+                                    key={st.num}
+                                    type="button"
+                                    onClick={() => {
+                                        if (st.num === 1 || selectedQuestions.length > 0) {
+                                            setSirMvStep(st.num);
+                                        }
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                                        sirMvStep === st.num
+                                            ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
+                                            : 'bg-white/10 hover:bg-white/20 text-white/90'
+                                    }`}
+                                >
+                                    <span>{st.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="hidden md:flex items-center gap-2">
+                            {[
+                                { num: 1, label: 'Scope & Setup' },
+                                { num: 2, label: 'Method' },
+                                { num: 3, label: 'Questions & Engine' },
+                                { num: 4, label: 'Preview & Merge' },
+                                { num: 5, label: 'Alignment' },
+                            ].map((st) => (
+                                <button
+                                    key={st.num}
+                                    type="button"
+                                    onClick={() => {
+                                        if (currentStep === 1 && st.num > 1) {
+                                            handleProceedFromStep1(st.num);
+                                        } else {
+                                            setCurrentStep(st.num);
+                                        }
+                                    }}
+                                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition cursor-pointer ${
+                                        currentStep === st.num
+                                            ? 'bg-gold text-navy shadow-lg scale-105 ring-2 ring-gold/40'
+                                            : 'bg-white/10 hover:bg-white/20 text-white/90'
+                                    }`}
+                                >
+                                    <span>{currentStep > st.num ? '✓' : `${st.num}.`}</span>
+                                    <span>{st.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     {/* Auto-Save & Draft Bell */}
                     <div className="relative">
@@ -2743,6 +2845,181 @@ export default function CreatePaper() {
 
             {/* ── MAIN CONTENT CONTAINER ── */}
             <div className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-6">
+                {/* Mode Switcher Banner */}
+                <div className="flex items-center justify-between bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-xs no-print">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-xl bg-[#0d6efd] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                            Q
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-900">Question Paper Generator Suite</h2>
+                            <p className="text-[11px] text-slate-500 font-medium">CET, NEET & JEE Multi-Chapter Assessment Generator</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setUiMode('sirmv')}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                                uiMode === 'sirmv'
+                                    ? 'bg-[#0d6efd] text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                        >
+                            SIR MV Mode
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setUiMode('legacy')}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                                uiMode === 'legacy'
+                                    ? 'bg-[#0d6efd] text-white shadow-xs'
+                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                        >
+                            Custom Blueprint Matrix
+                        </button>
+                    </div>
+                </div>
+
+                {/* ════ SIR MV WORKFLOW (IMAGES 1, 2, 3-11) ════ */}
+                {uiMode === 'sirmv' ? (
+                    <div className="w-full space-y-6">
+                        {/* SCREEN 1: FILTER (IMAGE 1) */}
+                        {sirMvStep === 1 && (
+                            <SirMvQuestionFilter
+                                onLoadQuestions={handleSirMvLoadQuestions}
+                                loading={sirMvLoading}
+                            />
+                        )}
+
+                        {/* SCREEN 2: QUESTION DISPLAY WITH SOLUTIONS (IMAGE 2) */}
+                        {sirMvStep === 2 && (
+                            <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
+                                {/* Top Action Bar */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm gap-3 sticky top-4 z-20">
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSirMvStep(1)}
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <ArrowLeft className="w-3.5 h-3.5" />
+                                            <span>Back to Filter</span>
+                                        </button>
+                                        <span className="text-xs font-bold text-slate-700 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200">
+                                            {selectedQuestions.length} Questions Selected
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedQuestions(prev => [...prev].sort(() => Math.random() - 0.5));
+                                            }}
+                                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                            title="Shuffle questions order"
+                                        >
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            <span>Shuffle</span>
+                                        </button>
+
+                                        {/* Primary Download Button matching Image 2 */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setSirMvStep(3)}
+                                            className="bg-[#0d6efd] hover:bg-blue-700 active:scale-98 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-md transition flex items-center gap-2 cursor-pointer"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                            <span>Download</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Questions Cards List matching Image 2 */}
+                                <div className="space-y-4">
+                                    {selectedQuestions.map((q, idx) => (
+                                        <QuestionCardWithSolution
+                                            key={q._id || q.id || idx}
+                                            q={q}
+                                            displayNum={idx + 1}
+                                            allConcepts={sirMvAllConcepts}
+                                            onDelete={(qId) => {
+                                                setSelectedQuestions(prev => prev.filter(item => (item._id || item.id || prev.indexOf(item) + 1) !== qId));
+                                            }}
+                                            onUpdate={(updatedQ) => {
+                                                setSelectedQuestions(prev => prev.map(item => ((item._id || item.id) === (updatedQ._id || updatedQ.id) ? updatedQ : item)));
+                                            }}
+                                            onSelectConcept={(qId, newConcept) => {
+                                                setSelectedQuestions(prev => prev.map(item => ((item._id || item.id) === qId ? { ...item, concept: newConcept } : item)));
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SCREEN 3: PRINT SETTINGS & PREVIEW (IMAGES 3-11) */}
+                        {sirMvStep === 3 && (
+                            <div className="space-y-4 animate-fade-in w-full">
+                                {/* Navigation Bar */}
+                                <div className="flex items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm no-print">
+                                    <button
+                                        type="button"
+                                        onClick={() => setSirMvStep(2)}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <ArrowLeft className="w-3.5 h-3.5" />
+                                        <span>Back to Questions (Edit)</span>
+                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleFinalizeAndSave}
+                                            disabled={saving}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5"
+                                        >
+                                            <Check className="w-4 h-4" />
+                                            <span>{saving ? 'Saving...' : 'Save to Database'}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Side-by-side Layout: PaperPrintSettingsSidebar on Left, A4 Paper Preview on Right */}
+                                <div className="w-full flex flex-col lg:flex-row items-start justify-center gap-6">
+                                    <PaperPrintSettingsSidebar
+                                        settings={settings}
+                                        setSettings={setSettings}
+                                        onDownloadPdf={() => window.print()}
+                                    />
+                                    <div className="flex-1 w-full flex justify-center overflow-x-auto">
+                                        <A4PaperEngine
+                                            paper={{
+                                                ...currentPaperObject,
+                                                questions: selectedQuestions,
+                                            }}
+                                            activeTemplate={activeTemplate}
+                                            isAssignment={false}
+                                            settings={{ ...settings, startQNo, endQNo }}
+                                            zoom={100}
+                                            onDiagramResize={handleDiagramResize}
+                                            onQuestionSettingChange={(qId, key, val) => {
+                                                setSelectedQuestions(prev => prev.map(q => {
+                                                    if ((q._id || q.id) === qId) {
+                                                        return { ...q, [key]: val };
+                                                    }
+                                                    return q;
+                                                }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <>
 
                 {/* ══════════════════════════════════════════════════════════════
                     STEP 1: CONFIGURATION & CHAPTER/CONCEPT SELECTION
@@ -5129,6 +5406,8 @@ export default function CreatePaper() {
                             </SafePaperPreviewBoundary>
                         </div>
                     </div>
+                )}
+                    </>
                 )}
 
                 {/* ══════════════════════════════════════════════════════════════
