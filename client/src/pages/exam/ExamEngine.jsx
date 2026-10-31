@@ -4,7 +4,8 @@ import api from '../../api';
 import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import ResizableDiagram from '../../components/ResizableDiagram';
-import { checkAnswerCorrect } from '../../utils/answerEvaluation';
+import { checkAnswerCorrect, resolveOptionIndex } from '../../utils/answerEvaluation';
+import { parseMatchFromText } from '../../components/QuestionBlock';
 import safeStorage from '../../utils/safeStorage';
 
 function extractDiagramFromText(rawText, existingImageUrl) {
@@ -681,73 +682,92 @@ export default function ExamEngine() {
                         <span style={styles.qSubject}>{currentQ.subject} | {currentQ.chapter}</span>
                     </div>
 
-                    {/* Question Text */}
+                    {/* Question Text & Content Blocks */}
                     <div style={styles.qBody}>
-                        {currentQ.type === 'ASSERTION_REASON' && (
-                            <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6', color: '#1f2937' }}>
-                                <p style={{ marginBottom: '0.5rem' }}><strong>Assertion (A):</strong> {currentQ.assertion}</p>
-                                <p style={{ marginBottom: '0.5rem' }}><strong>Reason (R):</strong> {currentQ.reason}</p>
-                            </div>
-                        )}
-
-                        {currentQ.type === 'STATEMENT_BASED' && (
-                            <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6', color: '#1f2937' }}>
-                                <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={currentQ.questionText} />
-                                {currentQ.statements?.map((stmt, idx) => (
-                                    <p key={idx} style={{ marginLeft: '1rem', marginBottom: '0.5rem' }}><strong>Statement {idx + 1}:</strong> {stmt}</p>
-                                ))}
-                            </div>
-                        )}
-
-                        {currentQ.type === 'MATCH_FOLLOWING' && (
-                            <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', color: '#1f2937' }}>
-                                <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={currentQ.questionText} />
-                                <div style={{ border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1rem', background: '#f9fafb', maxWidth: '500px', marginBottom: '1rem' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                        <thead>
-                                            <tr>
-                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>{currentQ.leftHeader || 'List I'}</th>
-                                                <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.5rem', borderBottom: '1px solid #e5e7eb' }}>{currentQ.rightHeader || 'List II'}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {currentQ.matchPairs?.map((pair, idx) => {
-                                                const romanLabels = ['I', 'II', 'III', 'IV', 'V', 'VI'];
-                                                return (
-                                                    <tr key={idx}>
-                                                        <td style={{ padding: '0.5rem 0', verticalAlign: 'top' }}>
-                                                            <strong style={{ color: '#001f6d', marginRight: '6px' }}>({String.fromCharCode(65 + idx)})</strong>
-                                                            <MathRenderer inline text={pair.left || ''} />
-                                                        </td>
-                                                        <td style={{ padding: '0.5rem 0', verticalAlign: 'top' }}>
-                                                            <strong style={{ color: '#001f6d', marginRight: '6px' }}>({romanLabels[idx] || (idx + 1)})</strong>
-                                                            <MathRenderer inline text={pair.right || ''} />
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-
                         {(() => {
                             const { cleanText, diagramUrl } = extractDiagramFromText(
                                 currentQ.questionText || currentQ.question,
                                 currentQ.imageUrl || currentQ.image_url
                             );
+
+                            const isMTF = currentQ.type === 'MATCH_FOLLOWING' || /Match\s+(?:the\s+)?(?:List|Column)/i.test(cleanText);
+                            const matchData = isMTF ? parseMatchFromText(currentQ) : { pairs: [] };
+                            const pairs = (Array.isArray(currentQ.matchPairs) && currentQ.matchPairs.length > 0) ? currentQ.matchPairs : matchData.pairs;
+
                             return (
                                 <>
-                                    {currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && currentQ.type !== 'MATCH_FOLLOWING' && (
-                                        <MathRenderer style={styles.qText} text={cleanText} />
+                                    {currentQ.type === 'ASSERTION_REASON' && (
+                                        <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6', color: '#1f2937' }}>
+                                            {currentQ.assertion ? (
+                                                <>
+                                                    <p style={{ marginBottom: '0.5rem' }}><strong>Assertion (A):</strong> <MathRenderer inline text={currentQ.assertion} /></p>
+                                                    <p style={{ marginBottom: '0.5rem' }}><strong>Reason (R):</strong> <MathRenderer inline text={currentQ.reason} /></p>
+                                                </>
+                                            ) : (
+                                                <MathRenderer style={styles.qText} text={cleanText} />
+                                            )}
+                                        </div>
                                     )}
+
+                                    {currentQ.type === 'STATEMENT_BASED' && (
+                                        <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', lineHeight: '1.6', color: '#1f2937' }}>
+                                            <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={cleanText} />
+                                            {currentQ.statements && currentQ.statements.length > 0 && currentQ.statements.map((stmt, idx) => (
+                                                <p key={idx} style={{ marginLeft: '1rem', marginBottom: '0.5rem' }}>
+                                                    <strong>Statement {idx + 1}:</strong> <MathRenderer inline text={stmt} />
+                                                </p>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {isMTF && pairs && pairs.length > 0 ? (
+                                        <div style={{ marginBottom: '1.5rem', fontSize: '1.1rem', color: '#1f2937' }}>
+                                            <MathRenderer style={{ marginBottom: '0.75rem', fontWeight: 'bold' }} text={matchData.introText || 'Match List I with List II:'} />
+                                            <div style={{ border: '1px solid #cbd5e1', borderRadius: '12px', padding: '1rem', background: '#f8fafc', maxWidth: '640px', marginBottom: '1rem' }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.6rem', borderBottom: '2px solid #e2e8f0', color: '#001f6d', width: '50%' }}>
+                                                                {currentQ.leftHeader || matchData.leftHeader || 'List I'}
+                                                            </th>
+                                                            <th style={{ textAlign: 'left', fontWeight: 'bold', paddingBottom: '0.6rem', borderBottom: '2px solid #e2e8f0', color: '#001f6d', width: '50%' }}>
+                                                                {currentQ.rightHeader || matchData.rightHeader || 'List II'}
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pairs.map((pair, idx) => {
+                                                            const romanLabels = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+                                                            return (
+                                                                <tr key={idx} style={{ borderBottom: idx < pairs.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                                                                    <td style={{ padding: '0.6rem 0.5rem 0.6rem 0', verticalAlign: 'top', color: '#1e293b' }}>
+                                                                        <strong style={{ color: '#001f6d', marginRight: '6px' }}>({String.fromCharCode(65 + idx)})</strong>
+                                                                        <MathRenderer inline text={pair.left || ''} />
+                                                                    </td>
+                                                                    <td style={{ padding: '0.6rem 0 0.6rem 0.5rem', verticalAlign: 'top', color: '#1e293b' }}>
+                                                                        <strong style={{ color: '#001f6d', marginRight: '6px' }}>({romanLabels[idx] || (idx + 1)})</strong>
+                                                                        <MathRenderer inline text={pair.right || ''} />
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // Standard Question Text Display (if MTF pairs couldn't be extracted, or for standard MCQ/Numerical)
+                                        currentQ.type !== 'ASSERTION_REASON' && currentQ.type !== 'STATEMENT_BASED' && (
+                                            <MathRenderer style={styles.qText} text={cleanText} />
+                                        )
+                                    )}
+
                                     {diagramUrl && (
                                         <div style={{ margin: '12px auto', textAlign: 'center' }}>
                                             <ResizableDiagram
                                                 src={diagramUrl}
                                                 alt="Question Diagram"
-                                                questionId={currentQ._id || currentQ.id || currentIdx}
+                                                questionId={currentQ._id || currentQ.id || current}
                                                 maxWidth="450px"
                                             />
                                         </div>
@@ -860,12 +880,8 @@ export default function ExamEngine() {
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                     {currentQ.options?.map((opt, i) => {
                                         const label = String.fromCharCode(65 + i); // Standard A, B, C, D
-                                        const isSelected = 
-                                            currentA.selectedOption === label || 
-                                            currentA.selectedOption === opt ||
-                                            currentA.selectedOption === String(i) ||
-                                            currentA.selectedOption === String(i + 1) ||
-                                            String(currentA.selectedOption || '').trim().toUpperCase() === label;
+                                        const selectedIndex = resolveOptionIndex(currentA.selectedOption, currentQ.options);
+                                        const isSelected = selectedIndex === i;
 
                                         return (
                                             <div 
@@ -931,10 +947,8 @@ export default function ExamEngine() {
                                     <span style={{ fontSize: '13px', fontWeight: '600', color: '#64748b' }}>Select Option:</span>
                                     {currentQ.options?.map((opt, i) => {
                                         const label = String.fromCharCode(65 + i);
-                                        const isSelected = 
-                                            currentA.selectedOption === label || 
-                                            currentA.selectedOption === opt ||
-                                            String(currentA.selectedOption || '').trim().toUpperCase() === label;
+                                        const selectedIndex = resolveOptionIndex(currentA.selectedOption, currentQ.options);
+                                        const isSelected = selectedIndex === i;
 
                                         return (
                                             <label 

@@ -780,28 +780,28 @@ export function repairBrokenLatexFraction(str) {
 }
 
 /** Parse match the following from text when matchPairs array is empty */
-function parseMatchFromText(q) {
+export function parseMatchFromText(q) {
     let txt = cleanQuestionText(q.questionText || q.question || '');
 
-    // Clean up bold asterisks around headers e.g. **Column I** -> Column I
-    txt = txt.replace(/\*\*(Column|List)\s*[-:]?\s*(I|II|1|2|A|B)\*\*/gi, '$1 $2');
+    // Clean up bold asterisks everywhere so markdown bolding never breaks regex splits
+    let cleanTxt = txt.replace(/\*\*/g, '').trim();
 
     // 1. Strip and preserve introductory sentence like "Match Column-I with Column-II" or "Match the items in Column I with Column II:"
     const introSentenceRegex = /^([\s\S]*?Match\s+[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b[^\n.]*?\bwith\b[^\n.]*?\b(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b[^\n.]*?(?:[.:\-]|\n|$))/i;
     let introText = '';
-    let remainder = txt;
+    let remainder = cleanTxt;
 
-    const introMatch = txt.match(introSentenceRegex);
+    const introMatch = cleanTxt.match(introSentenceRegex);
     if (introMatch) {
         introText = introMatch[1].trim();
-        remainder = txt.substring(introMatch[0].length).trim();
+        remainder = cleanTxt.substring(introMatch[0].length).trim();
     } else {
-        const genIntroMatch = txt.match(/^([\s\S]*?Match\s+(?:the\s+following(?:\s+columns|\s+items)?)?[\.:\-]?)(\s+|$)/i);
+        const genIntroMatch = cleanTxt.match(/^([\s\S]*?Match\s+(?:the\s+following(?:\s+columns|\s+items)?)?[\.:\-]?)(\s+|$)/i);
         if (genIntroMatch && genIntroMatch[1].length < 120) {
             introText = genIntroMatch[1].trim();
-            remainder = txt.substring(genIntroMatch[0].length).trim();
+            remainder = cleanTxt.substring(genIntroMatch[0].length).trim();
         } else {
-            const splitMatch = txt.split(/\*\*(?:Column|List)|\n\s*(?:Column|List)\s*[-:]?\s*(?:I|1|A)/i);
+            const splitMatch = cleanTxt.split(/(?:\n|^|\s)*(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)/i);
             if (splitMatch.length > 1) {
                 introText = splitMatch[0].trim();
             }
@@ -846,22 +846,28 @@ function parseMatchFromText(q) {
     }
 
     if (pairs && pairs.length > 0) {
-        return { introText: introText || 'Match List I with List II:', pairs };
+        return { introText: introText || 'Match List I with List II:', pairs, leftHeader: q.leftHeader || 'List I', rightHeader: q.rightHeader || 'List II' };
     }
-    if (!txt) return { introText: '', pairs: [] };
+    if (!cleanTxt) return { introText: '', pairs: [], leftHeader: 'List I', rightHeader: 'List II' };
 
     let rawCol1 = '';
     let rawCol2 = '';
+    let leftHeader = q.leftHeader || 'List I';
+    let rightHeader = q.rightHeader || 'List II';
 
-    const col1HeaderRegex = /^(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b[:\-\s]*/i;
-    const col2SplitRegex = /(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
+    const col1HeaderRegex = /^(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b(?:\s*\([^)]*\))?[:\-\s]*/i;
+    const col2SplitRegex = /(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b(?:\s*\([^)]*\))?[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
 
-    if (col1HeaderRegex.test(remainder)) {
-        const withoutCol1 = remainder.replace(col1HeaderRegex, '').trim();
+    const h1Match = remainder.match(col1HeaderRegex);
+    if (h1Match) {
+        leftHeader = h1Match[0].replace(/[:\-]$/, '').trim() || 'List I';
+        const withoutCol1 = remainder.substring(h1Match[0].length).trim();
         const splitMatch = withoutCol1.match(col2SplitRegex);
         if (splitMatch) {
             rawCol1 = withoutCol1.substring(0, splitMatch.index).trim();
             rawCol2 = splitMatch[1].trim();
+            const h2Match = withoutCol1.substring(splitMatch.index).match(/^(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b(?:\s*\([^)]*\))?[:\-\s]*/i);
+            if (h2Match) rightHeader = h2Match[0].replace(/[:\-]$/, '').trim() || 'List II';
         }
     } else {
         const splitMatch = remainder.match(col2SplitRegex);
@@ -869,11 +875,11 @@ function parseMatchFromText(q) {
             rawCol1 = remainder.substring(0, splitMatch.index).trim();
             rawCol2 = splitMatch[1].trim();
         } else {
-            // Fallback: search in full txt if intro was not stripped
-            const fallbackRegex = /(?:Column|List)\s*[-:]?\s*(?:I|1|A)\b([\s\S]*?)(?:Column|List)\s*[-:]?\s*(?:II|2|B)\b([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
-            const fbMatch = txt.match(fallbackRegex);
+            // Fallback: search in full cleanTxt if intro was not stripped
+            const fallbackRegex = /(?:Column|List)\s*[-–—:]?\s*(?:I|1|A)\b(?:\s*\([^)]*\))?[:\-\s]*([\s\S]*?)(?:Column|List)\s*[-–—:]?\s*(?:II|2|B)\b(?:\s*\([^)]*\))?[:\-\s]*([\s\S]*?)(?=(?:(?:Choose|Select)\s+)?(?:the\s+)?correct\s+(?:answer|combination|option)|Options:?|\([a-d1-4]\)\s*[A-D]|\([A-D]\)\s*\(?[A-D0-9]|Codes\s*:?|$)/i;
+            const fbMatch = cleanTxt.match(fallbackRegex);
             if (fbMatch) {
-                introText = txt.substring(0, fbMatch.index).trim();
+                introText = cleanTxt.substring(0, fbMatch.index).trim();
                 rawCol1 = fbMatch[1].trim();
                 rawCol2 = fbMatch[2].trim();
             }
@@ -881,7 +887,7 @@ function parseMatchFromText(q) {
     }
 
     if (!rawCol1 || !rawCol2) {
-        return { introText: txt, pairs: [] };
+        return { introText: cleanTxt, pairs: [], leftHeader, rightHeader };
     }
 
     // Auto-repair any broken fraction syntax in both columns
@@ -891,7 +897,8 @@ function parseMatchFromText(q) {
     const cleanItem = (s) => {
         if (!s) return '';
         return cleanStatementText(s)
-            .replace(/^[\(\[]?(?:[A-Ea-e1-8]|i{1,4}|iv|v|vi{0,3}|ix|x|[p-tP-T])[\)\]\.:\-]\s*/, '')
+            .replace(/^[\(\[]?(?:[A-Ea-e1-8]|i{1,4}|iv|v|vi{0,3}|ix|x|[p-tP-T])[\)\]\.:\-]\s*/i, '')
+            .replace(/^[IVXivx]+[\.\:\-]\s*/, '')
             .replace(/^\*+\s*/, '')
             .replace(/\*+$/, '')
             .replace(/^(?:with|Column|List|I|II|A|B|1|2)\s*/i, '')
@@ -1109,7 +1116,7 @@ function parseStatementsFromText(q) {
  * Match the Following Body
  */
 function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
-    const { introText, pairs: parsedPairs } = parseMatchFromText(q);
+    const { introText, pairs: parsedPairs, leftHeader: pLeftHeader, rightHeader: pRightHeader } = parseMatchFromText(q);
     const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ? q.matchPairs : parsedPairs;
     const opts = q.options || [];
     const rawQText = cleanQuestionText(pairs.length > 0 ? (introText || '') : (q.questionText || q.question || ''));
@@ -1124,8 +1131,8 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
     const hasUpperRoman = opts.some(o => /[\-\s\(](?:I{1,4}|IV|V|VI{0,3})\b/.test(typeof o === 'object' ? (o.text || '') : String(o)));
     const hasLowerLetter = opts.some(o => /^[a-e][\-–—]/i.test(typeof o === 'object' ? (o.text || '') : String(o)));
     const isList = /List/i.test(q.questionText || q.question || '');
-    const col1Header = q.leftHeader || q.column_a_header || (isList ? 'List I' : 'Column I');
-    const col2Header = q.rightHeader || q.column_b_header || (isList ? 'List II' : 'Column II');
+    const col1Header = q.leftHeader || q.column_a_header || pLeftHeader || (isList ? 'List I' : 'Column I');
+    const col2Header = q.rightHeader || q.column_b_header || pRightHeader || (isList ? 'List II' : 'Column II');
 
     const avgLeftLen = pairs.reduce((acc, p) => acc + (p.left || '').length, 0) / (pairs.length || 1);
     const avgRightLen = pairs.reduce((acc, p) => acc + (p.right || '').length, 0) / (pairs.length || 1);

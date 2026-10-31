@@ -28,8 +28,8 @@ const KATEX_CONFIG = {
         'class', 'style', 'colspan', 'rowspan', 'src', 'alt', 'width', 'height',
         'aria-hidden', 'aria-label', 'role', 'tabindex', 'focusable',
         'mathvariant', 'display', 'xmlns',
-        // SVG attrs
-        'viewBox', 'x', 'y', 'd', 'fill', 'stroke', 'stroke-width',
+        // SVG attrs (essential for KaTeX square roots and radical symbols)
+        'viewBox', 'preserveAspectRatio', 'x', 'y', 'd', 'fill', 'stroke', 'stroke-width',
         'transform', 'clip-path', 'mask', 'id', 'href', 'xlink:href',
     ],
     FORBID_TAGS: ['script', 'object', 'embed', 'link', 'iframe', 'form', 'input'],

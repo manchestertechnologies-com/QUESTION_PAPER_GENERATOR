@@ -1238,7 +1238,15 @@ router.get('/:id/take', detectLabIp, async (req, res) => {
                 options: q.options,
                 imageUrl: q.imageUrl,
                 marks: q.marks,
-                type: q.type || 'MCQ'
+                type: q.type || 'MCQ',
+                matchPairs: q.matchPairs || [],
+                column_a: q.column_a || [],
+                column_b: q.column_b || [],
+                leftHeader: q.leftHeader || '',
+                rightHeader: q.rightHeader || '',
+                statements: q.statements || [],
+                assertion: q.assertion || '',
+                reason: q.reason || ''
             }))
         };
         res.json(safeExam);
