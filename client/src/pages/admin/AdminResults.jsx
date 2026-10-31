@@ -60,13 +60,21 @@ export default function AdminResults() {
             } catch (e) {}
         }
 
-        // Deduplicate so each student is displayed once, showing their submitted/best attempt
+        // Deduplicate true duplicate attempts by the same student on the same exam,
+        // but NEVER collapse distinct students sharing common names or empty roll numbers!
         const studentMap = new Map();
         list.forEach(item => {
-            const roll = String(item.rollNumber || '').trim().replace(/^—$/, '');
-            const email = String(item.studentEmail || '').trim().toLowerCase();
-            const name = String(item.studentName || '').trim().toLowerCase();
-            const key = roll || email || name || String(item._id || item.id);
+            const cleanRoll = String(item.rollNumber || '').trim().toUpperCase();
+            const isGenericRoll = !cleanRoll || ['—', '-', 'N/A', 'NA', 'STUDENT', 'CANDIDATE', 'PACE', '11', '12', '0'].includes(cleanRoll);
+            const cleanEmail = String(item.studentEmail || '').trim().toLowerCase();
+            const isGenericEmail = !cleanEmail || cleanEmail.startsWith('anonymous') || cleanEmail.startsWith('student@') || cleanEmail.includes('pace');
+
+            // Unique key: only genuine roll number or distinct email, otherwise individual session ID
+            const key = (!isGenericRoll && cleanRoll.length >= 2)
+                ? `roll:${cleanRoll}`
+                : (!isGenericEmail && cleanEmail.includes('@') && cleanEmail.length >= 6)
+                    ? `email:${cleanEmail}`
+                    : `session:${item._id || item.id || item.sessionId || Math.random()}`;
 
             if (!studentMap.has(key)) {
                 studentMap.set(key, item);
@@ -109,9 +117,9 @@ export default function AdminResults() {
         }
     }, [displayResults, results, selectedExam]);
 
-    const fetchResults = async (eid) => {
+    const fetchResults = async (eid, silent = false) => {
         if (!eid) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const [res, analyticsRes] = await Promise.all([
                 api.get(`/api/exams/${eid}/results`),
@@ -119,9 +127,20 @@ export default function AdminResults() {
             ]);
             setResults(res.data || []);
             if (analyticsRes.data) setAnalytics(analyticsRes.data);
-        } catch (e) { setMsg('Failed to load results'); }
-        setLoading(false);
+        } catch (e) {
+            if (!silent) setMsg('Failed to load results');
+        }
+        if (!silent) setLoading(false);
     };
+
+    // Auto-poll every 12 seconds to keep live student list fresh as candidates write and submit
+    useEffect(() => {
+        if (!selectedExam) return;
+        const timer = setInterval(() => {
+            fetchResults(selectedExam, true);
+        }, 12000);
+        return () => clearInterval(timer);
+    }, [selectedExam]);
 
     const handleExamSelect = (e) => {
         const val = e.target.value;
@@ -344,7 +363,12 @@ export default function AdminResults() {
                         return <option key={eId} value={eId}>{e.title} ({e.examType})</option>;
                     })}
                 </select>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {selectedExam && (
+                        <button style={{ ...styles.keyBtn, background: '#2563eb' }} onClick={() => fetchResults(selectedExam)} title="Refresh latest candidates and live scores">
+                            🔄 Refresh Live List
+                        </button>
+                    )}
                     <button style={styles.keyBtn} onClick={generateBridgeKey}>🔑 Generate Bridge Key</button>
                     {displayResults && displayResults.length > 0 && (
                         <>
@@ -555,7 +579,11 @@ export default function AdminResults() {
                                             </div>
                                         </td>
                                         <td style={{ ...styles.td, fontSize: 12, color: '#6b7280' }}>
-                                            {r.endTime ? new Date(r.endTime).toLocaleString() : '—'}
+                                            {r.endTime ? new Date(r.endTime).toLocaleString() : (
+                                                <span style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, display: 'inline-block' }}>
+                                                    ✍️ Writing Now
+                                                </span>
+                                            )}
                                         </td>
                                         <td style={styles.td}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

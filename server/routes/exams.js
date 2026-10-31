@@ -1899,7 +1899,8 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
             correct: Number(s.correct) || 0,
             incorrect: Number(s.incorrect) || 0,
             unattempted: Number(s.unattempted) || 0,
-            totalQuestions: Number(s.total_questions || s.totalQuestions) || 0
+            totalQuestions: Number(s.total_questions || s.totalQuestions) || 0,
+            submitted: Boolean(s.submitted)
         }));
         res.json(mapped);
     } catch (err) {

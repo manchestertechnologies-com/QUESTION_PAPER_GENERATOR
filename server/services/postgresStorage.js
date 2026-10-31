@@ -943,34 +943,41 @@ async function updateSession(id, updateData) {
 
 async function getSessionsByExam(examId) {
     if (!examId) return [];
-    let possibleIds = [String(examId)];
+    let possibleIds = [String(examId).trim()];
     try {
         const exam = await getExamById(examId);
         if (exam) {
-            if (exam.id) possibleIds.push(String(exam.id));
-            if (exam._id) possibleIds.push(String(exam._id));
-            if (exam.title) possibleIds.push(String(exam.title));
+            if (exam.id) possibleIds.push(String(exam.id).trim());
+            if (exam._id) possibleIds.push(String(exam._id).trim());
+            if (exam.paper_id) possibleIds.push(String(exam.paper_id).trim());
+            if (exam.paperId) possibleIds.push(String(exam.paperId).trim());
+            if (exam.title) possibleIds.push(String(exam.title).trim());
         }
     } catch (e) {}
-    possibleIds = Array.from(new Set(possibleIds));
+    possibleIds = Array.from(new Set(possibleIds.filter(Boolean)));
+    const lowerPossible = possibleIds.map(p => p.toLowerCase());
 
     const res = await pool.query(
         `SELECT * FROM public.exam_sessions 
-         WHERE exam_id::text = ANY($1::text[]) 
+         WHERE exam_id::text = ANY($1::text[]) OR LOWER(exam_id::text) = ANY($2::text[])
          ORDER BY submitted DESC, CAST(COALESCE(NULLIF(score::text, ''), '0') AS NUMERIC) DESC, end_time DESC NULLS LAST, created_at DESC`,
-        [possibleIds]
+        [possibleIds, lowerPossible]
     );
 
-    // Deduplicate so each student is listed once with their best/submitted attempt
+    // Deduplicate so each genuine candidate is listed once with their best/submitted attempt,
+    // but NEVER collapse distinct students sharing common names or empty roll numbers!
     const seen = new Map();
     for (const r of res.rows) {
-        const key = (r.roll_number && r.roll_number.trim() !== '' && r.roll_number !== '—')
-            ? r.roll_number.trim().toUpperCase()
-            : (r.student_email && r.student_email.trim() !== '')
-                ? r.student_email.trim().toLowerCase()
-                : (r.student_name && r.student_name.trim() !== '' && r.student_name !== 'Student')
-                    ? r.student_name.trim().toLowerCase()
-                    : String(r.id);
+        const cleanRoll = String(r.roll_number || '').trim().toUpperCase();
+        const isGenericRoll = !cleanRoll || ['—', '-', 'N/A', 'NA', 'STUDENT', 'CANDIDATE', 'PACE', '11', '12', '0'].includes(cleanRoll);
+        const cleanEmail = String(r.student_email || '').trim().toLowerCase();
+        const isGenericEmail = !cleanEmail || cleanEmail.startsWith('anonymous') || cleanEmail.startsWith('student@') || cleanEmail.includes('pace');
+
+        const key = (!isGenericRoll && cleanRoll.length >= 2)
+            ? `roll:${cleanRoll}`
+            : (!isGenericEmail && cleanEmail.includes('@') && cleanEmail.length >= 6)
+                ? `email:${cleanEmail}`
+                : `session:${r.id || r._id}`;
 
         if (!seen.has(key)) {
             seen.set(key, r);
@@ -978,8 +985,58 @@ async function getSessionsByExam(examId) {
             const existing = seen.get(key);
             if (!existing.submitted && r.submitted) {
                 seen.set(key, r);
+            } else if (existing.submitted === r.submitted) {
+                const rScore = Number(r.score) || 0;
+                const eScore = Number(existing.score) || 0;
+                const rAnsCount = Array.isArray(r.answers) ? r.answers.length : 0;
+                const eAnsCount = Array.isArray(existing.answers) ? existing.answers.length : 0;
+                if (rScore > eScore || rAnsCount > eAnsCount) {
+                    seen.set(key, r);
+                }
             }
         }
+    }
+
+    // Secondary sync: Also check MongoDB if connected to ensure no sessions are omitted
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+        try {
+            const mSessions = await mongoose.connection.db.collection('exam_sessions')
+                .find({ $or: [{ examId: { $in: possibleIds } }, { exam_id: { $in: possibleIds } }] })
+                .toArray();
+            if (mSessions && mSessions.length > 0) {
+                for (const ms of mSessions) {
+                    const cleanRoll = String(ms.rollNumber || ms.roll_number || '').trim().toUpperCase();
+                    const isGenericRoll = !cleanRoll || ['—', '-', 'N/A', 'NA', 'STUDENT', 'CANDIDATE', 'PACE', '11', '12', '0'].includes(cleanRoll);
+                    const cleanEmail = String(ms.studentEmail || ms.student_email || '').trim().toLowerCase();
+                    const isGenericEmail = !cleanEmail || cleanEmail.startsWith('anonymous') || cleanEmail.startsWith('student@') || cleanEmail.includes('pace');
+
+                    const key = (!isGenericRoll && cleanRoll.length >= 2)
+                        ? `roll:${cleanRoll}`
+                        : (!isGenericEmail && cleanEmail.includes('@') && cleanEmail.length >= 6)
+                            ? `email:${cleanEmail}`
+                            : `session:${ms._id || ms.id}`;
+
+                    if (!seen.has(key)) {
+                        seen.set(key, {
+                            id: ms._id,
+                            _id: String(ms._id),
+                            exam_id: ms.examId || ms.exam_id,
+                            student_name: ms.studentName || ms.student_name || 'Student',
+                            roll_number: ms.rollNumber || ms.roll_number || '—',
+                            student_email: ms.studentEmail || ms.student_email || '',
+                            score: Number(ms.score) || 0,
+                            correct: Number(ms.correct) || 0,
+                            incorrect: Number(ms.incorrect) || 0,
+                            unattempted: Number(ms.unattempted) || 0,
+                            total_questions: Number(ms.totalQuestions || ms.total_questions) || 0,
+                            submitted: Boolean(ms.submitted),
+                            end_time: ms.endTime || ms.end_time || ms.submittedAt,
+                            answers: ms.answers || []
+                        });
+                    }
+                }
+            }
+        } catch (_) {}
     }
 
     return Array.from(seen.values()).map(r => ({ ...r, _id: String(r.id), answers: r.answers || [] }));
