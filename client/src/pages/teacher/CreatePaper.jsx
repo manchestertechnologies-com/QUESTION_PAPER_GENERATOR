@@ -25,7 +25,7 @@ import A4AnswerKey from '../../components/A4AnswerKey';
 import A4SolutionKey from '../../components/A4SolutionKey';
 import { validatePaperQuestions } from '../../utils/questionValidator';
 import { optionLabel, getResolvedAnswerLabel, getQuestionOptionLabels } from '../../utils/sanitize';
-import { shuffleQuestionsWithinSections } from '../../utils/pqrsGenerator';
+import { shuffleQuestionsWithinSections, generatePaperSet } from '../../utils/pqrsGenerator';
 import SirMvQuestionFilter from '../../components/SirMvQuestionFilter';
 import QuestionCardWithSolution from '../../components/QuestionCardWithSolution';
 import PaperPrintSettingsSidebar from '../../components/PaperPrintSettingsSidebar';
@@ -749,6 +749,7 @@ export default function CreatePaper() {
     // Questions Pool & Selection (cached by subject)
     const [questionsPoolCache, setQuestionsPoolCache] = useState({});
     const [selectedQuestions, setSelectedQuestions] = useState([]);
+    const [activeSet, setActiveSet] = useState('P');
     const [loadingQuestions, setLoadingQuestions] = useState(false);
     const [activeTemplate, setActiveTemplate] = useState(null);
     const [autoFetchConfigOpen, setAutoFetchConfigOpen] = useState(false);
@@ -2953,10 +2954,10 @@ export default function CreatePaper() {
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                setSelectedQuestions(prev => [...prev].sort(() => Math.random() - 0.5));
+                                                setSelectedQuestions(prev => shuffleQuestionsWithinSections(prev));
                                             }}
                                             className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                                            title="Shuffle questions order"
+                                            title="Shuffle questions order (preserves sections & subjects)"
                                         >
                                             <RefreshCw className="w-3.5 h-3.5" />
                                             <span>Shuffle</span>
@@ -3010,7 +3011,26 @@ export default function CreatePaper() {
                                         <ArrowLeft className="w-3.5 h-3.5" />
                                         <span>Back to Questions (Edit)</span>
                                     </button>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3">
+                                        {/* PQRS SET Switcher */}
+                                        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                                            <span className="text-[11px] font-extrabold text-slate-500 px-2 uppercase tracking-wide">SET:</span>
+                                            {['P', 'Q', 'R', 'S'].map(setLetter => (
+                                                <button
+                                                    key={setLetter}
+                                                    type="button"
+                                                    onClick={() => setActiveSet(setLetter)}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
+                                                        activeSet === setLetter
+                                                            ? 'bg-[#001f6d] text-white shadow-xs'
+                                                            : 'text-slate-600 hover:bg-white hover:text-slate-900'
+                                                    }`}
+                                                >
+                                                    SET {setLetter}
+                                                </button>
+                                            ))}
+                                        </div>
+
                                         <button
                                             type="button"
                                             onClick={handleFinalizeAndSave}
@@ -3034,8 +3054,14 @@ export default function CreatePaper() {
                                         <SafePaperPreviewBoundary onProceedToFinalize={handleFinalizeAndSave}>
                                             <A4PaperEngine
                                                 paper={{
-                                                    ...currentPaperObject,
-                                                    questions: selectedQuestions,
+                                                    ...(generatePaperSet({
+                                                        ...currentPaperObject,
+                                                        questions: selectedQuestions,
+                                                    }, activeSet) || {
+                                                        ...currentPaperObject,
+                                                        questions: selectedQuestions,
+                                                    }),
+                                                    setName: activeSet,
                                                 }}
                                                 activeTemplate={activeTemplate}
                                                 isAssignment={false}
@@ -3044,7 +3070,7 @@ export default function CreatePaper() {
                                                 onDiagramResize={handleDiagramResize}
                                                 onQuestionSettingChange={(qId, key, val) => {
                                                     setSelectedQuestions(prev => prev.map(q => {
-                                                        if ((q._id || q.id) === qId) {
+                                                        if (String(q._id || q.id) === String(qId)) {
                                                             return { ...q, [key]: val };
                                                         }
                                                         return q;

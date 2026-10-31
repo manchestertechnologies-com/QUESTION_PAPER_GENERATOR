@@ -334,6 +334,13 @@ export function getResolvedAnswerLabel(q, optionStyle = null) {
 }
 
 /**
+ * Returns formatted answer label with settings fallback
+ */
+export function getQuestionCorrectAnswerLabel(q, settings = {}) {
+    return getResolvedAnswerLabel(q, settings?.optionStyle || null);
+}
+
+/**
  * Returns compact code for answer (e.g. "12" or "AB")
  */
 export function getResolvedAnswerCode(q, optionStyle = null) {

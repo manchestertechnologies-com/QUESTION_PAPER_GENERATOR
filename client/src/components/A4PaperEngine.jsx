@@ -14,6 +14,7 @@ import React, { useMemo } from 'react';
 import QuestionBlock from './QuestionBlock';
 import MathRenderer from './MathRenderer';
 import { InstructionCoverPage, PaperHeader, formatMarks, calcTotal } from './PaperRenderer';
+import { getResolvedAnswerLabel } from '../utils/sanitize';
 
 export default function A4PaperEngine({
     paper,
@@ -28,7 +29,34 @@ export default function A4PaperEngine({
     onDiagramResize,
     onQuestionSettingChange,
 }) {
-    const questions = useMemo(() => paper?.questions || [], [paper]);
+    // Stably group questions by subject to guarantee subjects NEVER interleave
+    const questions = useMemo(() => {
+        const raw = paper?.questions || [];
+        if (!raw || raw.length <= 1) return raw;
+
+        const subjectOrder = [];
+        const subjectMap = new Map();
+
+        raw.forEach(q => {
+            const sub = (q.sectionSubject || q.sectionName || q.subject || 'General').trim();
+            if (!subjectMap.has(sub)) {
+                subjectMap.set(sub, []);
+                subjectOrder.push(sub);
+            }
+            subjectMap.get(sub).push(q);
+        });
+
+        if (subjectOrder.length <= 1) return raw;
+
+        const sorted = [];
+        subjectOrder.forEach(sub => {
+            const list = subjectMap.get(sub);
+            const secA = list.filter(q => !q.isNumerical && (!q.type || !String(q.type).toUpperCase().includes('NUMERICAL')) && (!q.part || !String(q.part).toUpperCase().includes('SECTION B')));
+            const secB = list.filter(q => q.isNumerical || (q.type && String(q.type).toUpperCase().includes('NUMERICAL')) || (q.part && String(q.part).toUpperCase().includes('SECTION B')));
+            sorted.push(...secA, ...secB);
+        });
+        return sorted;
+    }, [paper]);
     const classes = useMemo(() => paper?.classes || [], [paper]);
     const totalMarks = useMemo(() => {
         if (paper?.total_marks || paper?.totalMarks) return Number(paper.total_marks || paper.totalMarks);
@@ -54,6 +82,161 @@ export default function A4PaperEngine({
         '15': '15px'
     };
     const marginBottomVal = gapQMap[settings?.gapBetweenQuestions] || settings.questionSpacing || (isTwoCol ? '8px' : '10px');
+
+    // ── 7. ONLY ANSWERS (Official Answer Key Grid) ──
+    if (settings.displayMode === '7. Only Answers') {
+        const subjectGroups = visibleQuestions.reduce((acc, q, idx) => {
+            const sub = (q.sectionSubject || q.sectionName || q.subject || 'General').toUpperCase();
+            let grp = acc.find(g => g.subject === sub);
+            if (!grp) {
+                grp = { subject: sub, items: [] };
+                acc.push(grp);
+            }
+            grp.items.push({ q, qNo: startQNo + idx });
+            return acc;
+        }, []);
+
+        return (
+            <div className="a4-engine-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div
+                    className="a4-print-document"
+                    style={{
+                        '--paper-font-size': settings.fontSize || '14px',
+                        '--paper-font-family': settings.fontFamily || '"Times New Roman", Times, serif',
+                        fontFamily: settings.fontFamily || '"Times New Roman", Times, serif',
+                        fontSize: settings.fontSize || '14px',
+                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
+                        transformOrigin: 'top center',
+                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
+                        width: '794px',
+                        maxWidth: '100%',
+                    }}
+                >
+                    <div className="a4-sheet-page a4-answer-key-page" style={{ position: 'relative', minHeight: '1123px', padding: '16mm 18mm', boxSizing: 'border-box', background: '#fff' }}>
+                        <PaperHeader
+                            title={`${paper?.title || 'Examination'} — Official Answer Key`}
+                            subject={paper?.subject}
+                            classes={classes}
+                            duration={paper?.duration}
+                            totalMarks={totalMarks}
+                            templateUrl={activeTemplate?.fileUrl}
+                            isAssignment={isAssignment}
+                            setName={paper?.setName || 'P'}
+                            headerConfig={paper?.headerConfig}
+                        />
+
+                        <div className="my-3 text-center">
+                            <span className="inline-block bg-[#001f6d] text-white font-black text-xs px-4 py-1 rounded-full uppercase tracking-widest shadow-2xs">
+                                OFFICIAL ANSWER KEY — SET {paper?.setName || 'P'}
+                            </span>
+                        </div>
+
+                        {/* Subject Grouped Answer Grids */}
+                        <div className="space-y-4 mt-4">
+                            {subjectGroups.map((grp, gIdx) => (
+                                <div key={gIdx} className="border border-slate-300 rounded-lg p-3 bg-white">
+                                    <div className="font-extrabold text-xs text-[#001f6d] uppercase tracking-wider mb-2 border-b border-slate-200 pb-1 flex justify-between items-center">
+                                        <span>SUBJECT: {grp.subject}</span>
+                                        <span className="text-[11px] text-slate-500 font-semibold">{grp.items.length} Questions</span>
+                                    </div>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {grp.items.map(({ q, qNo }) => {
+                                            const ansLabel = getResolvedAnswerLabel(q, settings?.optionStyle || null);
+                                            return (
+                                                <div
+                                                    key={q._id || qNo}
+                                                    className="flex items-center justify-between px-2.5 py-1.5 rounded-md border border-slate-200 bg-slate-50 text-xs shadow-2xs"
+                                                >
+                                                    <span className="font-bold text-slate-600">Q.{qNo}</span>
+                                                    <span className="font-black text-[#001f6d] bg-white border border-slate-300 px-2 py-0.5 rounded shadow-2xs text-xs">
+                                                        {ansLabel}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Marking Scheme Summary */}
+                        <div className="mt-6 pt-3 border-t border-slate-300 flex justify-between items-center text-xs text-slate-700">
+                            <div className="flex gap-4">
+                                <span>Correct: <strong className="text-emerald-700">+4 Marks</strong></span>
+                                <span>Incorrect: <strong className="text-rose-700">-1 Mark</strong></span>
+                                <span>Unattempted: <strong className="text-slate-500">0 Marks</strong></span>
+                            </div>
+                            <span className="font-bold text-slate-500">End of Answer Key</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ── 6. ONLY ANSWERS & SOLUTIONS ──
+    if (settings.displayMode === '6. Only Answers & Solutions') {
+        return (
+            <div className="a4-engine-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div
+                    className="a4-print-document"
+                    style={{
+                        '--paper-font-size': settings.fontSize || '14px',
+                        '--paper-font-family': settings.fontFamily || '"Times New Roman", Times, serif',
+                        fontFamily: settings.fontFamily || '"Times New Roman", Times, serif',
+                        fontSize: settings.fontSize || '14px',
+                        transform: zoomScale !== 1 ? `scale(${zoomScale})` : 'none',
+                        transformOrigin: 'top center',
+                        marginBottom: zoomScale !== 1 ? `${(zoomScale - 1) * 900}px` : '0px',
+                        width: '794px',
+                        maxWidth: '100%',
+                    }}
+                >
+                    <div className="a4-sheet-page a4-solutions-page" style={{ position: 'relative', minHeight: '1123px', padding: '16mm 18mm', boxSizing: 'border-box', background: '#fff' }}>
+                        <PaperHeader
+                            title={`${paper?.title || 'Examination'} — Answers & Solutions`}
+                            subject={paper?.subject}
+                            classes={classes}
+                            duration={paper?.duration}
+                            totalMarks={totalMarks}
+                            templateUrl={activeTemplate?.fileUrl}
+                            isAssignment={isAssignment}
+                            setName={paper?.setName || 'P'}
+                            headerConfig={paper?.headerConfig}
+                        />
+
+                        <div className="my-3 text-center">
+                            <span className="inline-block bg-emerald-800 text-white font-black text-xs px-4 py-1 rounded-full uppercase tracking-widest shadow-2xs">
+                                DETAILED SOLUTIONS GUIDE — SET {paper?.setName || 'P'}
+                            </span>
+                        </div>
+
+                        <div className="space-y-4 mt-4">
+                            {visibleQuestions.map((q, idx) => {
+                                const qNo = startQNo + idx;
+                                const ansLabel = getResolvedAnswerLabel(q, settings?.optionStyle || null);
+                                const solText = q.solutionText || q.solution || q.solution_text || q.explanation || 'Detailed step-by-step solution available upon evaluation.';
+                                return (
+                                    <div key={q._id || qNo} className="border border-slate-200 rounded-lg p-3 bg-white space-y-2 break-inside-avoid">
+                                        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                            <span className="font-extrabold text-xs text-slate-800">Q.{qNo} ({q.subject || 'General'})</span>
+                                            <span className="font-extrabold text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                                Correct Answer: {ansLabel}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs text-slate-700 bg-slate-50 p-2.5 rounded-md border border-slate-200">
+                                            <div className="font-bold text-[11px] text-slate-800 uppercase mb-1">Solution:</div>
+                                            <MathRenderer text={solText} />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="a4-engine-wrapper" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -219,6 +402,53 @@ export default function A4PaperEngine({
                         </div>
                     </div>
                 </div>
+
+                {/* ── 4. Questions after Answers & Solutions (Appendix) ── */}
+                {settings.displayMode === '4. Questions after Answers & Solutions' && (
+                    <div className="a4-sheet-page a4-appendix-page" style={{ position: 'relative', pageBreakBefore: 'always', breakBefore: 'page', marginTop: '28px', padding: '16mm 18mm', background: '#fff' }}>
+                        <div className="border-b-2 border-slate-900 pb-2 mb-4 text-center">
+                            <h2 className="text-sm font-black uppercase text-slate-900 tracking-wider">
+                                {paper?.title || 'Examination'} — Appendix: Answers & Solutions
+                            </h2>
+                            <span className="inline-block bg-[#001f6d] text-white font-extrabold text-[11px] px-3 py-0.5 rounded mt-1">
+                                SET {paper?.setName || 'P'}
+                            </span>
+                        </div>
+
+                        {/* Compact Answer Key Grid */}
+                        <div className="grid grid-cols-5 gap-1.5 mb-6">
+                            {visibleQuestions.map((q, idx) => {
+                                const qNo = startQNo + idx;
+                                const ansLabel = getResolvedAnswerLabel(q, settings?.optionStyle || null);
+                                return (
+                                    <div key={q._id || qNo} className="flex justify-between items-center px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs">
+                                        <span className="font-bold text-slate-600">Q.{qNo}</span>
+                                        <span className="font-black text-[#001f6d]">{ansLabel}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Detailed Solutions */}
+                        <div className="space-y-3">
+                            {visibleQuestions.map((q, idx) => {
+                                const qNo = startQNo + idx;
+                                const ansLabel = getResolvedAnswerLabel(q, settings?.optionStyle || null);
+                                const solText = q.solutionText || q.solution || q.solution_text || q.explanation;
+                                if (!solText) return null;
+                                return (
+                                    <div key={q._id || qNo} className="border border-slate-200 rounded-md p-2.5 bg-slate-50 text-xs break-inside-avoid">
+                                        <div className="font-bold text-slate-800 mb-1 flex justify-between">
+                                            <span>Q.{qNo}</span>
+                                            <span className="text-emerald-700 font-extrabold">Ans: {ansLabel}</span>
+                                        </div>
+                                        <MathRenderer text={solText} />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Optional Scheme of Valuation Sheet on Last Page */}
                 {(paper?.includeSchemeOnLastPage || settings?.includeSchemeOnLastPage) && (

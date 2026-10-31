@@ -16,7 +16,7 @@ import { Settings } from 'lucide-react';
 import MathRenderer from './MathRenderer';
 import ResizableDiagram from './ResizableDiagram';
 import QuestionSettingsPopover from './QuestionSettingsPopover';
-import { optionLabel, getQuestionOptionLabels, stripOptionPrefix, cleanItalicsPreservingBinomial } from '../utils/sanitize';
+import { optionLabel, getQuestionOptionLabels, stripOptionPrefix, cleanItalicsPreservingBinomial, isOptionCorrect } from '../utils/sanitize';
 
 /**
  * Dynamic option grid calculator based on length and complexity:
@@ -557,6 +557,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
     });
 
     const effectivePerLine = q.optionsPerLine || settings?.optionsPerLine;
+    const perLineNum = Number(effectivePerLine);
     const gapOptMap = {
         'No Spacing': '1px 4px',
         'Default': '2px 8px',
@@ -567,13 +568,13 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
     const currentGap = gapOptMap[settings?.gapBetweenOptions] || '2px 8px';
 
     const getOptionsGrid = (forceSingle = false) => {
-        if (forceSingle || effectivePerLine === 1) {
+        if (forceSingle || perLineNum === 1) {
             return { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: currentGap, marginTop: '2px' };
         }
-        if (effectivePerLine === 2) {
+        if (perLineNum === 2) {
             return { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: currentGap, marginTop: '2px' };
         }
-        if (effectivePerLine === 4) {
+        if (perLineNum === 4) {
             return { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: currentGap, marginTop: '2px' };
         }
         return getDynamicOptGrid(options, isTwoCol);
@@ -593,6 +594,8 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
     // Render Options List
     const renderOptions = (forceSingle = false) => {
         if (options.length === 0 || settings?.displayMode === '5. Only Questions with No Options') return null;
+        const showAnswerHighlight = settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions';
+
         return (
             <div style={getOptionsGrid(forceSingle)}>
                 {options.map((opt, i) => {
@@ -600,6 +603,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                     const optText = cleanOptionText(rawOpt);
                     const optHeight = q.customDiagramSizes?.[`opt_${i}`] || q.customOptionDiagramHeight || '60px';
                     const labelText = formatOptionLabel(i);
+                    const isCorrect = showAnswerHighlight && isOptionCorrect(q, i);
 
                     return (
                         <div
@@ -610,10 +614,11 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                                 alignItems: hasAnyOptionImage ? 'center' : 'baseline',
                                 textAlign: 'left',
                                 gap: '4px',
+                                ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}),
                             }}
                         >
-                            <span style={Q.optLbl}>({labelText})</span>
-                            <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
+                            <span style={{ ...Q.optLbl, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>({labelText})</span>
+                            <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: isCorrect ? 700 : 400 }}>
                                 <MathRenderer
                                     inline
                                     text={optText}
@@ -625,6 +630,11 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                                     onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key || `opt_${i}`) : undefined}
                                 />
                             </span>
+                            {isCorrect && (
+                                <span className="font-extrabold text-[9px] text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1 py-0.2 ml-1 self-center whitespace-nowrap">
+                                    ✓ Correct
+                                </span>
+                            )}
                         </div>
                     );
                 })}
@@ -632,10 +642,31 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
         );
     };
 
-    if (imageUrl && isSideBySide) {
-        // SIDE-BY-SIDE:
+    const align = String(q.diagramAlignment || '').trim().toLowerCase();
+    const effectiveSideBySide = align === 'right' || (align !== 'left' && align !== 'top' && align !== 'below' && align !== 'center' && isSideBySide);
+    const isLeftAlign = align === 'left';
+    const isTopAlign = align === 'top';
+    const isBelowAlign = align === 'below';
+
+    const diagramNode = imageUrl ? (
+        <div style={{ textAlign: 'center', margin: '3px auto 5px', clear: 'both' }}>
+            <ResizableDiagram
+                src={imageUrl}
+                alt="Diagram"
+                questionId={qId}
+                diagramKey="main"
+                initialHeight={currentDiagramHeight}
+                isManual={isMainManual}
+                onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key || 'main') : undefined}
+                maxWidth="100%"
+            />
+        </div>
+    ) : null;
+
+    if (imageUrl && effectiveSideBySide) {
+        // SIDE-BY-SIDE (RIGHT):
         // Top: Question statement (full width)
-        // Bottom: Left = Options (stacked vertically), Right = Diagram
+        // Bottom: Left = Options, Right = Diagram
         return (
             <>
                 {qText && (
@@ -670,7 +701,84 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
         );
     }
 
-    // INLINE / STANDARD LAYOUT
+    if (imageUrl && isLeftAlign) {
+        // SIDE-BY-SIDE (LEFT):
+        // Diagram on Left, Options on Right
+        return (
+            <>
+                {qText && (
+                    <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
+                        <MathRenderer
+                            inline
+                            text={qText}
+                            questionId={qId}
+                            customDiagramSizes={q.customDiagramSizes}
+                            onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key) : undefined}
+                        />
+                    </div>
+                )}
+                <div style={Q.sideBySideContainer}>
+                    <div style={Q.sideRightDiagram}>
+                        <ResizableDiagram
+                            src={imageUrl}
+                            alt="Diagram"
+                            questionId={qId}
+                            diagramKey="main"
+                            initialHeight={currentDiagramHeight}
+                            isManual={isMainManual}
+                            onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key || 'main') : undefined}
+                            maxWidth="100%"
+                        />
+                    </div>
+                    <div style={Q.sideLeftContent}>
+                        {renderOptions(true)}
+                    </div>
+                </div>
+            </>
+        );
+    }
+
+    if (imageUrl && isTopAlign) {
+        return (
+            <>
+                {diagramNode}
+                {qText && (
+                    <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
+                        <MathRenderer
+                            inline
+                            text={qText}
+                            questionId={qId}
+                            customDiagramSizes={q.customDiagramSizes}
+                            onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key) : undefined}
+                        />
+                    </div>
+                )}
+                {renderOptions(false)}
+            </>
+        );
+    }
+
+    if (imageUrl && isBelowAlign) {
+        return (
+            <>
+                {qText && (
+                    <div style={{ ...Q.qTextBold, marginBottom: '3px' }}>
+                        <MathRenderer
+                            inline
+                            text={qText}
+                            questionId={qId}
+                            customDiagramSizes={q.customDiagramSizes}
+                            onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key) : undefined}
+                        />
+                    </div>
+                )}
+                {renderOptions(false)}
+                {diagramNode}
+            </>
+        );
+    }
+
+    // Default: Center
     return (
         <>
             {qText && (
@@ -684,20 +792,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
                     />
                 </div>
             )}
-            {imageUrl && (
-                <div style={{ textAlign: 'center', margin: '3px auto 5px', clear: 'both' }}>
-                    <ResizableDiagram
-                        src={imageUrl}
-                        alt="Diagram"
-                        questionId={qId}
-                        diagramKey="main"
-                        initialHeight={currentDiagramHeight}
-                        isManual={isMainManual}
-                        onSizeChange={onDiagramResize ? (h, key) => onDiagramResize(qId, h, key || 'main') : undefined}
-                        maxWidth="100%"
-                    />
-                </div>
-            )}
+            {diagramNode}
             {renderOptions(false)}
         </>
     );
@@ -706,7 +801,7 @@ function BodyMCQ({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramRe
 /**
  * Assertion & Reason Body
  */
-function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
+function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null, settings = {} }) {
     const { assertion, reason } = parseAssertionReason(q);
     const isDummy = !Array.isArray(q.options) || q.options.length < 2 || q.options.every(o => {
         const s = String(typeof o === 'object' ? (o.text || '') : o).trim();
@@ -775,21 +870,29 @@ function BodyAssertionReason({ q, classes, isTwoCol, diagramMaxHeight = '180px',
                     />
                 </div>
             )}
-            <div style={arOptGrid}>
-                {opts.map((opt, i) => {
-                    const rawOpt = typeof opt === 'object' ? (opt.text || opt.option || '') : String(opt || '');
-                    const cleanOpt = cleanOptionText(rawOpt);
-                    const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
-                    return (
-                        <div key={i} style={Q.optRow}>
-                            <span style={Q.optLbl}>({labelText})</span>
-                            <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
-                                <MathRenderer inline text={cleanOpt} />
-                            </span>
-                        </div>
-                    );
-                })}
-            </div>
+            {settings?.displayMode !== '5. Only Questions with No Options' && (
+                <div style={arOptGrid}>
+                    {opts.map((opt, i) => {
+                        const rawOpt = typeof opt === 'object' ? (opt.text || opt.option || '') : String(opt || '');
+                        const cleanOpt = cleanOptionText(rawOpt);
+                        const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                        const isCorrect = (settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions') && isOptionCorrect(q, i);
+                        return (
+                            <div key={i} style={{ ...Q.optRow, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>
+                                <span style={{ ...Q.optLbl, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>({labelText})</span>
+                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: isCorrect ? 700 : 400 }}>
+                                    <MathRenderer inline text={cleanOpt} />
+                                </span>
+                                {isCorrect && (
+                                    <span className="font-extrabold text-[9px] text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1 py-0.2 ml-1 self-center whitespace-nowrap">
+                                        ✓ Correct
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }
@@ -1145,7 +1248,7 @@ function parseStatementsFromText(q) {
 /**
  * Match the Following Body
  */
-function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
+function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null, settings = {} }) {
     const { introText, pairs: parsedPairs, leftHeader: pLeftHeader, rightHeader: pRightHeader } = parseMatchFromText(q);
     const pairs = (Array.isArray(q.matchPairs) && q.matchPairs.length > 0) ? q.matchPairs : parsedPairs;
     const opts = q.options || [];
@@ -1220,17 +1323,23 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                     </tbody>
                 </table>
             )}
-            {opts.length > 0 && (
+            {opts.length > 0 && settings?.displayMode !== '5. Only Questions with No Options' && (
                 <div style={getDynamicOptGrid(opts, isTwoCol)}>
                     {opts.map((opt, i) => {
                         const optText = cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt);
                         const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                        const isCorrect = (settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions') && isOptionCorrect(q, i);
                         return (
-                            <div key={i} style={Q.optRow}>
-                                <span style={Q.optLbl}>({labelText})</span>
-                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
+                            <div key={i} style={{ ...Q.optRow, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>
+                                <span style={{ ...Q.optLbl, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>({labelText})</span>
+                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: isCorrect ? 700 : 400 }}>
                                     <MathRenderer inline text={optText} />
                                 </span>
+                                {isCorrect && (
+                                    <span className="font-extrabold text-[9px] text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1 py-0.2 ml-1 self-center whitespace-nowrap">
+                                        ✓ Correct
+                                    </span>
+                                )}
                             </div>
                         );
                     })}
@@ -1243,7 +1352,7 @@ function BodyMatchFollowing({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
 /**
  * Statement-Based Body
  */
-function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null }) {
+function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', onDiagramResize, displayNum, optionStyle = null, settings = {} }) {
     const { introText, statements: parsedStmts, outroText } = parseStatementsFromText(q);
     const statements = (Array.isArray(q.statements) && q.statements.length > 0) 
         ? q.statements.map((s, idx) => ({ label: `Statement ${idx + 1}:`, text: typeof s === 'object' ? (s.text || '') : String(s) }))
@@ -1302,17 +1411,23 @@ function BodyStatementBased({ q, classes, isTwoCol, diagramMaxHeight = '180px', 
                     />
                 </div>
             )}
-            {opts.length > 0 && (
+            {opts.length > 0 && settings?.displayMode !== '5. Only Questions with No Options' && (
                 <div style={getDynamicOptGrid(opts, isTwoCol)}>
                     {opts.map((opt, i) => {
                         const optText = cleanOptionText(typeof opt === 'object' ? (opt.text || opt.option || '') : opt);
                         const labelText = optionStyle === '1234' ? String(i + 1) : (optionStyle === 'ABCD' ? String.fromCharCode(65 + i) : (labels[i] || optionLabel(i, classes, optionStyle)));
+                        const isCorrect = (settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions') && isOptionCorrect(q, i);
                         return (
-                            <div key={i} style={Q.optRow}>
-                                <span style={Q.optLbl}>({labelText})</span>
-                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: 400 }}>
+                            <div key={i} style={{ ...Q.optRow, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>
+                                <span style={{ ...Q.optLbl, ...(isCorrect ? { fontWeight: 700, color: '#166534' } : {}) }}>({labelText})</span>
+                                <span style={{ flex: 1, minWidth: 0, maxWidth: '100%', fontWeight: isCorrect ? 700 : 400 }}>
                                     <MathRenderer inline text={optText} />
                                 </span>
+                                {isCorrect && (
+                                    <span className="font-extrabold text-[9px] text-emerald-800 bg-emerald-100 border border-emerald-300 rounded px-1 py-0.2 ml-1 self-center whitespace-nowrap">
+                                        ✓ Correct
+                                    </span>
+                                )}
                             </div>
                         );
                     })}
@@ -1339,12 +1454,14 @@ function BodyNumerical({
     diagramMaxHeight = 120,
     onDiagramResize,
     displayNum,
+    settings = {},
 }) {
     const rawQText = cleanQuestionText(q.questionText || q.question || '');
     const { cleanText: qText, diagramUrl: imageUrl } = extractDiagramFromText(rawQText, q.imageUrl || q.image_url);
     const qId = q._id || q.id || displayNum;
     const currentDiagramHeight = q.customDiagramSizes?.['main'] || q.customDiagramHeight || diagramMaxHeight;
     const isMainManual = Boolean(q.customDiagramSizes?.['main'] || q.customDiagramHeight);
+    const showAnswer = (settings?.displayMode === '2. Questions with Answers' || settings?.displayMode === '3. Questions with Answers & Solutions') && (q.num_answer !== undefined || q.answer || q.correctAnswer);
 
     return (
         <div style={{ width: '100%' }}>
@@ -1365,9 +1482,9 @@ function BodyNumerical({
                     <ResizableDiagram
                         src={imageUrl}
                         alt={`Question ${displayNum} diagram`}
-                        height={currentDiagramHeight}
+                        initialHeight={currentDiagramHeight}
                         isManual={isMainManual}
-                        onResize={(newH) => onDiagramResize && onDiagramResize(qId, newH, 'main')}
+                        onSizeChange={onDiagramResize ? (newH, key) => onDiagramResize(qId, newH, key || 'main') : undefined}
                     />
                 </div>
             )}
@@ -1394,7 +1511,9 @@ function BodyNumerical({
                 </span>
                 <span
                     style={{
-                        display: 'inline-block',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         minWidth: '70px',
                         height: '18px',
                         backgroundColor: '#ffffff',
@@ -1402,8 +1521,12 @@ function BodyNumerical({
                         border: '1px solid #cbd5e1',
                         borderBottom: '1.5px solid #001f6d',
                         padding: '0 6px',
+                        color: '#15803d',
+                        fontWeight: 800,
                     }}
-                />
+                >
+                    {showAnswer ? String(q.num_answer ?? q.answer ?? q.correctAnswer) : ''}
+                </span>
             </div>
         </div>
     );
@@ -1468,6 +1591,7 @@ export default function QuestionBlock({
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
                     optionStyle={resolvedOptionStyle}
+                    settings={settings}
                 />
             );
         }
@@ -1481,6 +1605,7 @@ export default function QuestionBlock({
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
                     optionStyle={resolvedOptionStyle}
+                    settings={settings}
                 />
             );
         }
@@ -1494,6 +1619,7 @@ export default function QuestionBlock({
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
                     optionStyle={resolvedOptionStyle}
+                    settings={settings}
                 />
             );
         }
@@ -1506,6 +1632,7 @@ export default function QuestionBlock({
                     diagramMaxHeight={diagramMaxHeight}
                     onDiagramResize={onDiagramResize}
                     displayNum={displayNum}
+                    settings={settings}
                 />
             );
         }
@@ -1524,6 +1651,8 @@ export default function QuestionBlock({
         );
     };
 
+    const solText = q.solutionText || q.solution || q.solution_text || q.explanation || '';
+
     return (
         <div style={{ ...Q.wrap, fontSize: activeFontSize, lineHeight, ...extraStyle }} className="question-block group relative">
             <div style={Q.row}>
@@ -1535,12 +1664,12 @@ export default function QuestionBlock({
                 )}
                 <div style={Q.body}>
                     {renderBody()}
-                    {q.solutionText && (settings?.displayMode === '3. Questions with Answers & Solutions' || settings?.displayMode === '6. Only Answers & Solutions') && (
+                    {solText && (settings?.displayMode === '3. Questions with Answers & Solutions' || settings?.displayMode === '6. Only Answers & Solutions') && (
                         <div style={{ marginTop: '6px', padding: '6px 10px', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', fontSize: '0.9em', color: '#166534' }}>
                             <div style={{ fontWeight: 700, fontSize: '0.85em', textTransform: 'uppercase', marginBottom: '2px', color: '#15803d' }}>
                                 Solution:
                             </div>
-                            <MathRenderer text={q.solutionText} />
+                            <MathRenderer text={solText} />
                         </div>
                     )}
                 </div>
@@ -1572,9 +1701,13 @@ export default function QuestionBlock({
                             if (onQuestionSettingChange) onQuestionSettingChange(id, 'optionsPerLine', num);
                         }}
                         onImageSizeDelta={(id, delta) => {
+                            const currentH = parsePx(q.customDiagramSizes?.main || q.customDiagramHeight || q.diagramHeight || diagramMaxHeight || 180);
+                            const nextH = Math.max(30, currentH + delta);
                             if (onDiagramResize) {
-                                const currentH = parsePx(q.customDiagramSizes?.main || q.diagramHeight || diagramMaxHeight || 180);
-                                onDiagramResize(id, Math.max(40, currentH + delta), 'main');
+                                onDiagramResize(id, nextH, 'main');
+                            }
+                            if (onQuestionSettingChange) {
+                                onQuestionSettingChange(id, 'customDiagramHeight', nextH);
                             }
                         }}
                     />
