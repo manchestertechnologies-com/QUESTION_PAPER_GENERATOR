@@ -63,6 +63,207 @@ function calculateGrade(percentage) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CANONICAL SUBJECT & EXAM MAPPING HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Normalizes subject string into canonical subject name
+ */
+export function normalizeSubjectName(sub) {
+    if (!sub || typeof sub !== 'string') return 'Physics';
+    const s = sub.trim().toLowerCase();
+    if (s.includes('physic')) return 'Physics';
+    if (s.includes('chem')) return 'Chemistry';
+    if (s.includes('math')) return 'Mathematics';
+    if (s.includes('botan')) return 'Botany';
+    if (s.includes('zool')) return 'Zoology';
+    if (s.includes('bio')) return 'Biology';
+    return sub.trim();
+}
+
+/**
+ * Returns standard canonical ordered subjects for an exam type:
+ * - JEE: PCM (Physics, Chemistry, Mathematics)
+ * - CET / KCET: PCMB (Physics, Chemistry, Mathematics, Biology)
+ * - NEET: PCBZ (Physics, Chemistry, Botany, Zoology) or PCB (Physics, Chemistry, Biology)
+ */
+export function getOrderedSubjectsForExam(examType = '', examTitle = '', detectedSubjects = []) {
+    const typeStr = (String(examType) + ' ' + String(examTitle)).toUpperCase();
+    
+    if (typeStr.includes('JEE')) {
+        return ['Physics', 'Chemistry', 'Mathematics'];
+    }
+    if (typeStr.includes('CET') || typeStr.includes('KCET')) {
+        return ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+    }
+    if (typeStr.includes('NEET')) {
+        const hasBotanyOrZoology = detectedSubjects.some(s => s === 'Botany' || s === 'Zoology');
+        if (hasBotanyOrZoology) {
+            return ['Physics', 'Chemistry', 'Botany', 'Zoology'];
+        }
+        return ['Physics', 'Chemistry', 'Biology'];
+    }
+
+    const priority = ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Botany', 'Zoology'];
+    const ordered = priority.filter(p => detectedSubjects.includes(p));
+    detectedSubjects.forEach(s => {
+        if (!ordered.includes(s)) ordered.push(s);
+    });
+    return ordered.length > 0 ? ordered : ['Physics', 'Chemistry', 'Mathematics'];
+}
+
+/**
+ * Compute robust subject scores for any student record (works for current & historical exams)
+ */
+export function computeSubjectScores(student = {}, exam = {}) {
+    const examType = exam.examType || student.examType || 'CET';
+    const examTitle = exam.title || exam.examTitle || student.examTitle || '';
+    const typeStr = (String(examType) + ' ' + String(examTitle)).toUpperCase();
+    const isCET = typeStr.includes('CET') || typeStr.includes('KCET');
+    const marksPerQ = isCET ? 1 : 4;
+    const negMark = isCET ? 0 : 1;
+
+    // Detect subjects present across all sources
+    const questions = exam.questions || [];
+    const responses = student.breakdown || student.questionResponses || student.answers || [];
+
+    const detected = new Set();
+    questions.forEach(q => { if (q.subject) detected.add(normalizeSubjectName(q.subject)); });
+    responses.forEach(r => { if (r.subject) detected.add(normalizeSubjectName(r.subject)); });
+    if (student.subjectScores) {
+        Object.keys(student.subjectScores).forEach(k => detected.add(normalizeSubjectName(k)));
+    }
+
+    const orderedSubjects = getOrderedSubjectsForExam(examType, examTitle, Array.from(detected));
+
+    const subStats = {};
+    orderedSubjects.forEach(sub => {
+        subStats[sub] = {
+            subject: sub,
+            correct: 0,
+            wrong: 0,
+            notAttempted: 0,
+            totalQuestions: 0,
+            score: 0,
+            accuracy: 0
+        };
+    });
+
+    // Check if student already has full subjectScores from server
+    if (student.subjectScores && typeof student.subjectScores === 'object') {
+        const keys = Object.keys(student.subjectScores);
+        let hasData = false;
+        keys.forEach(rawKey => {
+            const normKey = normalizeSubjectName(rawKey);
+            const val = student.subjectScores[rawKey] || {};
+            if (val.correct !== undefined || val.wrong !== undefined || val.score !== undefined) {
+                hasData = true;
+                if (!subStats[normKey]) {
+                    subStats[normKey] = {
+                        subject: normKey,
+                        correct: 0,
+                        wrong: 0,
+                        notAttempted: 0,
+                        totalQuestions: 0,
+                        score: 0,
+                        accuracy: 0
+                    };
+                    if (!orderedSubjects.includes(normKey)) orderedSubjects.push(normKey);
+                }
+                subStats[normKey].correct = Number(val.correct || 0);
+                subStats[normKey].wrong = Number(val.wrong || val.incorrect || 0);
+                subStats[normKey].notAttempted = Number(val.notAttempted || val.unattempted || 0);
+                subStats[normKey].totalQuestions = Number(val.totalQuestions || (subStats[normKey].correct + subStats[normKey].wrong + subStats[normKey].notAttempted) || 0);
+                subStats[normKey].score = val.score !== undefined 
+                    ? Number(val.score) 
+                    : (subStats[normKey].correct * marksPerQ - subStats[normKey].wrong * negMark);
+                const att = subStats[normKey].correct + subStats[normKey].wrong;
+                subStats[normKey].accuracy = att > 0 ? Math.round((subStats[normKey].correct / att) * 100) : 0;
+            }
+        });
+        if (hasData) {
+            let totalMarks = 0;
+            orderedSubjects.forEach(sub => {
+                totalMarks += subStats[sub]?.score || 0;
+            });
+            return { orderedSubjects, subStats, totalScore: student.score !== undefined ? Number(student.score) : totalMarks, isCET, marksPerQ, negMark };
+        }
+    }
+
+    // Otherwise calculate dynamically from questions & responses
+    const itemsToProcess = (responses.length >= questions.length && responses.length > 0)
+        ? responses
+        : (questions.length > 0 ? questions : responses);
+
+    itemsToProcess.forEach((item, idx) => {
+        const sid = typeof item === 'string' ? item : String(item._id || item.id || item.questionId || idx);
+        const resp = responses.find(r => String(r.questionId || r._id || r.id) === sid || String(r.questionNumber) === String(idx + 1)) || responses[idx] || {};
+        const qObj = questions.find(q => String(q._id || q.id || q.questionId) === sid) || questions[idx] || {};
+
+        let rawSub = item.subject || resp.subject || qObj.subject || '';
+        let normSub = 'Physics';
+        if (rawSub) {
+            normSub = normalizeSubjectName(rawSub);
+        } else {
+            // Partition based on standard chunks if subject is omitted
+            if (orderedSubjects.length === 3) {
+                normSub = idx < 25 ? 'Physics' : (idx < 50 ? 'Chemistry' : 'Mathematics');
+            } else if (orderedSubjects.length === 4) {
+                const chunk = Math.max(1, Math.floor(itemsToProcess.length / 4));
+                const cIdx = Math.min(3, Math.floor(idx / chunk));
+                normSub = orderedSubjects[cIdx];
+            } else {
+                normSub = orderedSubjects[idx % orderedSubjects.length];
+            }
+        }
+
+        if (!subStats[normSub]) {
+            subStats[normSub] = { subject: normSub, correct: 0, wrong: 0, notAttempted: 0, totalQuestions: 0, score: 0, accuracy: 0 };
+            if (!orderedSubjects.includes(normSub)) orderedSubjects.push(normSub);
+        }
+
+        subStats[normSub].totalQuestions++;
+
+        const userAns = resp.selectedOption ?? resp.markedBubble ?? resp.userAnswer ?? null;
+        const correctAns = resp.correctAnswer ?? resp.correctKey ?? qObj.answer ?? qObj.correctAnswer ?? null;
+        const isAttempted = Boolean(userAns !== null && userAns !== undefined && String(userAns).trim() !== '' && String(userAns) !== '—');
+
+        let isCorrect = false;
+        if (resp.isCorrect !== undefined) {
+            isCorrect = Boolean(resp.isCorrect);
+        } else if (isAttempted && correctAns !== null && correctAns !== undefined) {
+            isCorrect = String(userAns).trim().toUpperCase() === String(correctAns).trim().toUpperCase();
+        }
+
+        if (isAttempted) {
+            if (isCorrect) {
+                subStats[normSub].correct++;
+                subStats[normSub].score += marksPerQ;
+            } else {
+                subStats[normSub].wrong++;
+                subStats[normSub].score -= negMark;
+            }
+        } else {
+            subStats[normSub].notAttempted++;
+        }
+    });
+
+    let totalMarks = 0;
+    orderedSubjects.forEach(sub => {
+        const s = subStats[sub];
+        const att = s.correct + s.wrong;
+        s.accuracy = att > 0 ? Math.round((s.correct / att) * 100) : 0;
+        totalMarks += s.score;
+    });
+
+    const finalScore = (student.score !== undefined && student.score !== null)
+        ? Number(student.score)
+        : totalMarks;
+
+    return { orderedSubjects, subStats, totalScore: finalScore, isCET, marksPerQ, negMark };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 1. CLASS CONSOLIDATED RESULT SHEET & MERIT LIST PDF (LANDSCAPE)
 // ─────────────────────────────────────────────────────────────────────────────
 export function downloadClassResultSheetPdf({
@@ -70,7 +271,8 @@ export function downloadClassResultSheetPdf({
     examType = 'CBT / OMR Exam',
     institutionName = 'MANCHESTER TECHNOLOGIES',
     results = [],
-    aggregate = null
+    aggregate = null,
+    exam = null
 }) {
     if (!results || results.length === 0) {
         alert('No candidate results available to export.');
@@ -141,45 +343,58 @@ export function downloadClassResultSheetPdf({
         doc.text(st.val, xPos, 114, { align: 'center' });
     });
 
-    // ── Table Data Formatting ──
-    const firstSubjKeys = Object.keys(results[0]?.subjectScores || {});
-    const hasSubjectBreakdown = firstSubjKeys.length > 0;
+    // ── Dynamic Subject Calculation & Table Formatting ──
+    const sampleExam = exam || { examType, title };
+    const { orderedSubjects, isCET, marksPerQ } = computeSubjectScores(results[0] || {}, sampleExam);
 
-    let tableHead = [];
-    if (hasSubjectBreakdown) {
-        tableHead = [
-            ['Rank', 'Roll No', 'Student Name', 'Set', ...firstSubjKeys.map(k => `${k}\n(C/W/NA)`), 'Score', 'Status']
-        ];
-    } else {
-        tableHead = [
-            ['Rank', 'Roll No', 'Student Name', 'Total Qs', 'Correct', 'Incorrect', 'Skipped', 'Score', 'Status']
-        ];
-    }
+    const tableHead = [
+        [
+            'Rank',
+            'Roll No',
+            'Student Name',
+            'Set',
+            ...orderedSubjects.map(sub => `${sub}\n(Corr / Inc / Marks)`),
+            'Total Marks',
+            'Status'
+        ]
+    ];
 
     const tableRows = results.map((r, i) => {
         const rank = r.rank ?? (i + 1);
         const roll = r.rollNumber ?? r.roll_number ?? '—';
         const name = r.studentName ?? r.student_name ?? 'Candidate';
-        const score = Number(r.score ?? r.scoreData?.totalScore ?? 0);
-        const correct = Number(r.correct ?? r.scoreData?.correctCount ?? 0);
-        const wrong = Number(r.incorrect ?? r.scoreData?.wrongCount ?? 0);
-        const blank = Number(r.unattempted ?? r.scoreData?.blankCount ?? 0);
-        const totalQ = Number(r.totalQuestions ?? (correct + wrong + blank) ?? 0);
         const series = r.series || 'P';
+
+        const { subStats, totalScore } = computeSubjectScores(r, sampleExam);
 
         let statusText = 'Completed';
         if (r.malpracticeFlag) statusText = 'Malpractice';
 
-        if (hasSubjectBreakdown) {
-            const subjCols = firstSubjKeys.map(k => {
-                const s = r.subjectScores?.[k] || { correct: 0, wrong: 0, notAttempted: 0, score: 0 };
-                return `${s.correct}/${s.wrong}/${s.notAttempted} (${s.score})`;
-            });
-            return [`#${rank}`, roll, name, series, ...subjCols, score, statusText];
-        } else {
-            return [`#${rank}`, roll, name, totalQ, correct, wrong, blank, score, statusText];
-        }
+        const subjCols = orderedSubjects.map(sub => {
+            const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
+            return `${s.correct} C  /  ${s.wrong} W\n(${s.score > 0 ? '+' : ''}${s.score} M)`;
+        });
+
+        return [`#${rank}`, roll, name, series, ...subjCols, totalScore, statusText];
     });
+
+    // Class Average Footer Row
+    const classAvgCols = orderedSubjects.map(sub => {
+        let sumC = 0, sumW = 0, sumM = 0;
+        results.forEach(resItem => {
+            const { subStats } = computeSubjectScores(resItem, sampleExam);
+            const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
+            sumC += s.correct || 0;
+            sumW += s.wrong || 0;
+            sumM += s.score || 0;
+        });
+        const avgC = (sumC / (totalStudents || 1)).toFixed(1);
+        const avgW = (sumW / (totalStudents || 1)).toFixed(1);
+        const avgM = (sumM / (totalStudents || 1)).toFixed(1);
+        return `${avgC} C / ${avgW} W\n(${avgM} M)`;
+    });
+
+    tableRows.push(['CLASS AVERAGE', '—', 'All Candidates', '—', ...classAvgCols, `${avgScore}`, `${totalStudents} Total`]);
 
     // ── Render AutoTable ──
     runAutoTable(doc, {
@@ -189,9 +404,10 @@ export function downloadClassResultSheetPdf({
         margin: { left: 30, right: 30, bottom: 35 },
         styles: {
             font: 'helvetica',
-            fontSize: 8.5,
-            cellPadding: 5,
-            valign: 'middle'
+            fontSize: 8,
+            cellPadding: 4.5,
+            valign: 'middle',
+            halign: 'center'
         },
         headStyles: {
             fillColor: [15, 23, 42],
@@ -205,26 +421,21 @@ export function downloadClassResultSheetPdf({
             fillColor: [248, 250, 252]
         },
         columnStyles: {
-            0: { halign: 'center', fontStyle: 'bold', cellWidth: 40 },
-            1: { halign: 'center', fontStyle: 'bold', cellWidth: 60 },
+            0: { halign: 'center', fontStyle: 'bold', cellWidth: 35 },
+            1: { halign: 'center', fontStyle: 'bold', cellWidth: 55 },
             2: { halign: 'left', fontStyle: 'bold' },
-            ...(hasSubjectBreakdown
-                ? {
-                    3: { halign: 'center', cellWidth: 35 },
-                    [tableHead[0].length - 2]: { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42] },
-                    [tableHead[0].length - 1]: { halign: 'center', fontStyle: 'bold' }
-                }
-                : {
-                    3: { halign: 'center' },
-                    4: { halign: 'center', textColor: [16, 185, 129], fontStyle: 'bold' },
-                    5: { halign: 'center', textColor: [239, 68, 68], fontStyle: 'bold' },
-                    6: { halign: 'center', textColor: [148, 163, 184] },
-                    7: { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42] },
-                    8: { halign: 'center', fontStyle: 'bold' }
-                })
+            3: { halign: 'center', cellWidth: 28 },
+            [tableHead[0].length - 2]: { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 65 },
+            [tableHead[0].length - 1]: { halign: 'center', fontStyle: 'bold', cellWidth: 55 }
+        },
+        didParseCell: (data) => {
+            if (data.row.index === tableRows.length - 1) {
+                data.cell.styles.fontStyle = 'bold';
+                data.cell.styles.fillColor = [241, 245, 249];
+                data.cell.styles.textColor = [15, 23, 42];
+            }
         },
         didDrawPage: (data) => {
-            // Footer on each page
             const curPage = data.pageNumber;
             const totalPages = doc.internal.getNumberOfPages();
             doc.setFont('helvetica', 'normal');
@@ -374,38 +585,64 @@ export function downloadIndividualScorecardPdf(student = {}, exam = {}) {
 
     let currentCursorY = 212;
 
-    // ── Section 1: Subject-Wise Performance (If Available) ──
-    const subjKeys = Object.keys(student.subjectScores || {});
-    if (subjKeys.length > 0) {
+    // ── Section 1: Subject-Wise Performance (PCM / PCMB / PCBZ) ──
+    const { orderedSubjects, subStats } = computeSubjectScores(student, exam);
+    if (orderedSubjects.length > 0) {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(15, 23, 42);
-        doc.text('SUBJECT-WISE PERFORMANCE BREAKDOWN', 35, currentCursorY);
+        const subjGroup = isCET ? 'PCMB' : (String(examType).toUpperCase().includes('NEET') ? 'PCBZ' : 'PCM');
+        doc.text(`SUBJECT-WISE PERFORMANCE BREAKDOWN (${subjGroup})`, 35, currentCursorY);
         currentCursorY += 6;
 
-        const subjRows = subjKeys.map(k => {
-            const s = student.subjectScores[k] || {};
-            const subScore = s.score ?? 0;
-            const subCorr = s.correct ?? 0;
-            const subWrong = s.wrong ?? 0;
-            const subBlank = s.notAttempted ?? 0;
-            const subTot = subCorr + subWrong + subBlank;
-            const subPct = subTot > 0 ? Math.round((subCorr / subTot) * 100) : 0;
-            return [k, `${subScore}`, `${subCorr}`, `${subWrong}`, `${subBlank}`, `${subTot}`, `${subPct}%`];
+        const subjRows = orderedSubjects.map(sub => {
+            const s = subStats[sub] || { correct: 0, wrong: 0, notAttempted: 0, totalQuestions: 0, score: 0, accuracy: 0 };
+            return [
+                sub,
+                `${s.correct} (+${s.correct * marksPerQ})`,
+                `${s.wrong} (${s.wrong > 0 && !isCET ? `-${s.wrong * 1}` : '0'})`,
+                `${s.notAttempted}`,
+                `${s.totalQuestions}`,
+                `${s.score > 0 ? '+' : ''}${s.score} Marks`,
+                `${s.accuracy}%`
+            ];
         });
 
+        // Add Overall Total row at the end
+        subjRows.push([
+            'OVERALL TOTAL',
+            `${correctCount} (+${correctCount * marksPerQ})`,
+            `${incorrectCount} (${incorrectCount > 0 && !isCET ? `-${incorrectCount * 1}` : '0'})`,
+            `${unattemptedCount}`,
+            `${totalQ}`,
+            `${score} / ${maxMarks} Marks`,
+            `${percentage}%`
+        ]);
+
         runAutoTable(doc, {
-            head: [['Subject', 'Score', 'Correct', 'Wrong', 'Skipped', 'Total Qs', 'Accuracy']],
+            head: [['Subject', 'Correct (+)', 'Incorrect (-)', 'Skipped', 'Total Qs', 'Subject Marks', 'Accuracy']],
             body: subjRows,
             startY: currentCursorY,
             margin: { left: 35, right: 35 },
-            styles: { font: 'helvetica', fontSize: 8, cellPadding: 4, halign: 'center' },
+            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 3.5, halign: 'center' },
             headStyles: { fillColor: [15, 23, 42], textColor: [212, 175, 55], fontStyle: 'bold' },
             columnStyles: {
-                0: { halign: 'left', fontStyle: 'bold' },
-                1: { fontStyle: 'bold' },
-                2: { textColor: [16, 185, 129], fontStyle: 'bold' },
-                3: { textColor: [239, 68, 68], fontStyle: 'bold' }
+                0: { halign: 'left', fontStyle: 'bold', cellWidth: 80 },
+                1: { textColor: [16, 185, 129], fontStyle: 'bold' },
+                2: { textColor: [239, 68, 68], fontStyle: 'bold' },
+                3: { textColor: [100, 116, 139] },
+                4: { cellWidth: 50 },
+                5: { fontStyle: 'bold', textColor: [15, 23, 42], cellWidth: 85 },
+                6: { fontStyle: 'bold', cellWidth: 55 }
+            },
+            didParseCell: (data) => {
+                if (data.row.index === subjRows.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [241, 245, 249];
+                    if (data.column.index === 0 || data.column.index === 5) {
+                        data.cell.styles.textColor = [15, 23, 42];
+                    }
+                }
             }
         });
 

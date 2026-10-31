@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../../api';
 import * as XLSX from 'xlsx';
 import { checkAnswerCorrect } from '../../utils/answerEvaluation';
-import { downloadClassResultSheetPdf, downloadIndividualScorecardPdf } from '../../utils/resultPdfExport';
+import { downloadClassResultSheetPdf, downloadIndividualScorecardPdf, computeSubjectScores } from '../../utils/resultPdfExport';
 
 export default function AdminResults() {
     const navigate = useNavigate();
@@ -319,6 +319,7 @@ export default function AdminResults() {
             examType: exam.examType || 'CBT Exam',
             institutionName: 'MANCHESTER TECHNOLOGIES',
             results: displayResults,
+            exam: exam,
             aggregate: {
                 totalStudents: displayResults.length,
                 topScore: displayResults.length > 0 ? Math.max(...displayResults.map(r => r.score || 0)) : 0,
@@ -524,128 +525,159 @@ export default function AdminResults() {
                         </div>
                     )}
 
-                    <div style={styles.tableWrap}>
-                        <table style={styles.table}>
-                            <thead>
-                                <tr style={styles.thead}>
-                                    <th style={styles.th}>#</th>
-                                    <th style={styles.th}>Student</th>
-                                    <th style={styles.th}>Roll No</th>
-                                    <th style={styles.th}>Score</th>
-                                    <th style={styles.th}>Correct</th>
-                                    <th style={styles.th}>Incorrect</th>
-                                    <th style={styles.th}>Unattempted</th>
-                                    <th style={styles.th}>Source</th>
-                                    <th style={styles.th}>Weak Areas</th>
-                                    <th style={styles.th}>Submitted</th>
-                                    <th style={styles.th}>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {displayResults.map((r, i) => (
-                                    <tr key={r._id || r.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
-                                        <td style={styles.td}>{i + 1}</td>
-                                        <td style={styles.td}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span style={{ fontWeight: 600 }}>{r.studentName}</span>
-                                                {r.malpracticeFlag && (
-                                                    <span style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
-                                                        ⚠️ Malpractice Detected
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div style={{ fontSize: 12, color: '#6b7280' }}>{r.studentEmail}</div>
-                                            {r.malpracticeFlag && (
-                                                <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 4 }}>
-                                                    Reason: {r.malpracticeReason || 'Tab switched or window blurred'}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td style={styles.td}>{r.rollNumber || '—'}</td>
-                                        <td style={{ ...styles.td, fontWeight: 700, color: getScoreColor(r.score) }}>{r.score}</td>
-                                        <td style={{ ...styles.td, color: '#10b981' }}>✅ {r.correct}</td>
-                                        <td style={{ ...styles.td, color: '#ef4444' }}>❌ {r.incorrect}</td>
-                                        <td style={{ ...styles.td, color: '#9ca3af' }}>— {r.unattempted}</td>
-                                        <td style={styles.td}>
-                                            <span style={{ ...styles.sourceBadge, background: r.fromLabIp ? '#dbeafe' : '#fef3c7', color: r.fromLabIp ? '#1e40af' : '#92400e' }}>
-                                                {r.fromLabIp ? '🏫 Lab' : '🌐 Remote'}
-                                            </span>
-                                        </td>
-                                        <td style={styles.td}>
-                                            <div style={{ fontSize: 12 }}>
-                                                {r.weakAreas?.slice(0, 2).map((w, j) => (
-                                                    <div key={j} style={{ color: '#ef4444' }}>• {w.chapter} ({w.incorrect}✕)</div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td style={{ ...styles.td, fontSize: 12, color: '#6b7280' }}>
-                                            {r.endTime ? new Date(r.endTime).toLocaleString() : (
-                                                <span style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, display: 'inline-block' }}>
-                                                    ✍️ Writing Now
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td style={styles.td}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                                <a 
-                                                    href={`/exam/${selectedExam}/scorecard/${r._id || r.id}`} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer"
-                                                    style={{
-                                                        display: 'inline-block',
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#8b5cf6',
-                                                        color: 'white',
-                                                        textDecoration: 'none',
-                                                        borderRadius: '4px',
-                                                        fontSize: '12px',
-                                                        fontWeight: '600',
-                                                        textAlign: 'center'
-                                                    }}
-                                                >
-                                                    View Scorecard
-                                                </a>
-                                                <button
-                                                    onClick={() => downloadIndividualPDF(r)}
-                                                    style={{
-                                                        display: 'inline-block',
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#10b981',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        fontSize: '12px',
-                                                        fontWeight: '600',
-                                                        cursor: 'pointer'
-                                                    }}
-                                                >
-                                                    Download PDF
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteIndividualAttempt(r)}
-                                                    style={{
-                                                        display: 'inline-block',
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#fee2e2',
-                                                        color: '#dc2626',
-                                                        border: '1px solid #fca5a5',
-                                                        borderRadius: '4px',
-                                                        fontSize: '12px',
-                                                        fontWeight: '700',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.15s ease'
-                                                    }}
-                                                    title="Delete this trial attempt so the student can attend fresh tomorrow"
-                                                >
-                                                    🗑️ Delete Attempt
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    {(() => {
+                        const currentExamObj = exams.find(e => String(e._id || e.id) === String(selectedExam)) || {};
+                        const { orderedSubjects } = computeSubjectScores(displayResults[0] || {}, currentExamObj);
+
+                        return (
+                            <div style={styles.tableWrap}>
+                                <table style={styles.table}>
+                                    <thead>
+                                        <tr style={styles.thead}>
+                                            <th style={styles.th}>#</th>
+                                            <th style={styles.th}>Student</th>
+                                            <th style={styles.th}>Roll No</th>
+                                            {orderedSubjects.map(sub => (
+                                                <th key={sub} style={{ ...styles.th, textAlign: 'center', minWidth: 105 }}>
+                                                    <div>{sub}</div>
+                                                    <div style={{ fontSize: 10, fontWeight: 500, color: '#94a3b8' }}>(Corr / Inc / Marks)</div>
+                                                </th>
+                                            ))}
+                                            <th style={{ ...styles.th, textAlign: 'center', minWidth: 90 }}>Total Marks</th>
+                                            <th style={styles.th}>Correct</th>
+                                            <th style={styles.th}>Incorrect</th>
+                                            <th style={styles.th}>Unattempted</th>
+                                            <th style={styles.th}>Source</th>
+                                            <th style={styles.th}>Weak Areas</th>
+                                            <th style={styles.th}>Submitted</th>
+                                            <th style={styles.th}>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {displayResults.map((r, i) => {
+                                            const { subStats, totalScore } = computeSubjectScores(r, currentExamObj);
+                                            return (
+                                                <tr key={r._id || r.id || i} style={{ background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                                                    <td style={styles.td}>{i + 1}</td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                            <span style={{ fontWeight: 600 }}>{r.studentName}</span>
+                                                            {r.malpracticeFlag && (
+                                                                <span style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+                                                                    ⚠️ Malpractice Detected
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: '#6b7280' }}>{r.studentEmail}</div>
+                                                        {r.malpracticeFlag && (
+                                                            <div style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, marginTop: 4 }}>
+                                                                Reason: {r.malpracticeReason || 'Tab switched or window blurred'}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td style={styles.td}>{r.rollNumber || '—'}</td>
+                                                    {orderedSubjects.map(sub => {
+                                                        const s = subStats[sub] || { correct: 0, wrong: 0, score: 0 };
+                                                        return (
+                                                            <td key={sub} style={{ ...styles.td, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                                                <span style={{ color: '#10b981', fontWeight: 700 }}>{s.correct} C</span>
+                                                                <span style={{ color: '#94a3b8' }}> / </span>
+                                                                <span style={{ color: '#ef4444', fontWeight: 700 }}>{s.wrong} W</span>
+                                                                <div style={{ fontSize: 11, fontWeight: 800, color: s.score >= 0 ? '#1e293b' : '#ef4444', marginTop: 2 }}>
+                                                                    {s.score > 0 ? `+${s.score}` : s.score} Marks
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td style={{ ...styles.td, textAlign: 'center', fontWeight: 800, color: getScoreColor(totalScore), fontSize: 14 }}>
+                                                        {totalScore}
+                                                    </td>
+                                                    <td style={{ ...styles.td, color: '#10b981' }}>✅ {r.correct}</td>
+                                                    <td style={{ ...styles.td, color: '#ef4444' }}>❌ {r.incorrect}</td>
+                                                    <td style={{ ...styles.td, color: '#9ca3af' }}>— {r.unattempted}</td>
+                                                    <td style={styles.td}>
+                                                        <span style={{ ...styles.sourceBadge, background: r.fromLabIp ? '#dbeafe' : '#fef3c7', color: r.fromLabIp ? '#1e40af' : '#92400e' }}>
+                                                            {r.fromLabIp ? '🏫 Lab' : '🌐 Remote'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ fontSize: 12 }}>
+                                                            {r.weakAreas?.slice(0, 2).map((w, j) => (
+                                                                <div key={j} style={{ color: '#ef4444' }}>• {w.chapter} ({w.incorrect}✕)</div>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td style={{ ...styles.td, fontSize: 12, color: '#6b7280' }}>
+                                                        {r.endTime ? new Date(r.endTime).toLocaleString() : (
+                                                            <span style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #86efac', borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 700, display: 'inline-block' }}>
+                                                                ✍️ Writing Now
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td style={styles.td}>
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                                            <a 
+                                                                href={`/exam/${selectedExam}/scorecard/${r._id || r.id}`} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    padding: '4px 8px',
+                                                                    backgroundColor: '#8b5cf6',
+                                                                    color: 'white',
+                                                                    textDecoration: 'none',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '600',
+                                                                    textAlign: 'center'
+                                                                }}
+                                                            >
+                                                                View Scorecard
+                                                            </a>
+                                                            <button
+                                                                onClick={() => downloadIndividualPDF(r)}
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    padding: '4px 8px',
+                                                                    backgroundColor: '#10b981',
+                                                                    color: 'white',
+                                                                    border: 'none',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '600',
+                                                                    cursor: 'pointer'
+                                                                }}
+                                                            >
+                                                                Download PDF
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteIndividualAttempt(r)}
+                                                                style={{
+                                                                    display: 'inline-block',
+                                                                    padding: '4px 8px',
+                                                                    backgroundColor: '#fee2e2',
+                                                                    color: '#dc2626',
+                                                                    border: '1px solid #fca5a5',
+                                                                    borderRadius: '4px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '700',
+                                                                    cursor: 'pointer',
+                                                                    transition: 'all 0.15s ease'
+                                                                }}
+                                                                title="Delete this trial attempt so the student can attend fresh tomorrow"
+                                                            >
+                                                                🗑️ Delete Attempt
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        );
+                    })()}
                 </>
             )}
 

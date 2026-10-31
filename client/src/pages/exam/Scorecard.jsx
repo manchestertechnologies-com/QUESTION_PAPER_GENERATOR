@@ -5,7 +5,7 @@ import { sanitize } from '../../utils/sanitize';
 import MathRenderer from '../../components/MathRenderer';
 import { checkAnswerCorrect, resolveOptionIndex, stripLeadingLabel, normalizeText } from '../../utils/answerEvaluation';
 import safeStorage from '../../utils/safeStorage';
-import { downloadIndividualScorecardPdf } from '../../utils/resultPdfExport';
+import { downloadIndividualScorecardPdf, computeSubjectScores } from '../../utils/resultPdfExport';
 
 export default function Scorecard() {
     const { examId, sessionId } = useParams();
@@ -453,6 +453,79 @@ export default function Scorecard() {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Subject-Wise Performance Matrix (PCM / PCMB / PCBZ) */}
+                            {(() => {
+                                const { orderedSubjects, subStats } = computeSubjectScores(evalData, {
+                                    examType: evalData.examType,
+                                    title: evalData.examTitle,
+                                    questions: evalData.breakdown || []
+                                });
+                                const subjGroup = isCET ? 'PCMB' : (String(evalData.examType).toUpperCase().includes('NEET') ? 'PCBZ' : 'PCM');
+
+                                return (
+                                    <div style={{ marginTop: 24, padding: 20, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                                            <h4 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                                                📚 Subject-Wise Performance ({subjGroup})
+                                            </h4>
+                                            <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+                                                Total Marks: <strong style={{ color: '#0f172a' }}>{evalData.score}</strong> / {maxMarks}
+                                            </span>
+                                        </div>
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#334155' }}>Subject</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#10b981' }}>Correct</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#ef4444' }}>Incorrect</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#64748b' }}>Skipped</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#334155' }}>Total Qs</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: '#0f172a' }}>Subject Marks</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#334155' }}>Accuracy</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {orderedSubjects.map((sub, sIdx) => {
+                                                        const s = subStats[sub] || { correct: 0, wrong: 0, notAttempted: 0, totalQuestions: 0, score: 0, accuracy: 0 };
+                                                        return (
+                                                            <tr key={sub} style={{ borderBottom: '1px solid #f1f5f9', background: sIdx % 2 === 0 ? '#fff' : '#fcfdfe' }}>
+                                                                <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0f172a' }}>{sub}</td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'center', color: '#10b981', fontWeight: 700 }}>
+                                                                    {s.correct} <span style={{ fontSize: 11, color: '#059669' }}>(+{s.correct * marksPerQ})</span>
+                                                                </td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'center', color: '#ef4444', fontWeight: 700 }}>
+                                                                    {s.wrong} <span style={{ fontSize: 11, color: '#dc2626' }}>({s.wrong > 0 && !isCET ? `-${s.wrong * 1}` : '0'})</span>
+                                                                </td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'center', color: '#64748b' }}>{s.notAttempted}</td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>{s.totalQuestions}</td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: s.score >= 0 ? '#0f172a' : '#ef4444' }}>
+                                                                    {s.score > 0 ? `+${s.score}` : s.score} Marks
+                                                                </td>
+                                                                <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: s.accuracy >= 70 ? '#10b981' : s.accuracy >= 40 ? '#f59e0b' : '#ef4444' }}>
+                                                                    {s.accuracy}%
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                    <tr style={{ background: '#f8fafc', borderTop: '2px solid #cbd5e1', fontWeight: 800 }}>
+                                                        <td style={{ padding: '10px 12px', color: '#0f172a' }}>OVERALL TOTAL</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#10b981' }}>{evalData.correct || 0}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#ef4444' }}>{evalData.incorrect || 0}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#64748b' }}>{evalData.unattempted || 0}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>{evalData.totalQuestions || 0}</td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'center', color: '#0f172a', fontSize: 14 }}>
+                                                            {evalData.score} / {maxMarks}
+                                                        </td>
+                                                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>{percentage}%</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {evalData.classStats && (
                                 <div style={{ marginTop: 24, padding: 18, background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>

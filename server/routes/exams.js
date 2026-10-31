@@ -99,6 +99,99 @@ function filterQuestionsForExamType(questions, examType) {
     return questions;
 }
 
+// Helper to compute subject-wise scores for exam session (PCM for JEE, PCMB for CET, PCBZ for NEET)
+function computeSubjectScoresForSession(sessionAnswers = [], examQuestions = [], examType = '', examTitle = '') {
+    const typeStr = (String(examType) + ' ' + String(examTitle)).toUpperCase();
+    const isCET = typeStr.includes('CET');
+    const marksPerQ = isCET ? 1 : 4;
+    const negMark = isCET ? 0 : 1;
+
+    let targetSubjects = ['Physics', 'Chemistry', 'Mathematics'];
+    if (typeStr.includes('JEE')) {
+        targetSubjects = ['Physics', 'Chemistry', 'Mathematics'];
+    } else if (typeStr.includes('CET')) {
+        targetSubjects = ['Physics', 'Chemistry', 'Mathematics', 'Biology'];
+    } else if (typeStr.includes('NEET')) {
+        const hasBotanyOrZoology = (examQuestions || []).some(q => {
+            const s = String(q.subject || '').toLowerCase();
+            return s.includes('botan') || s.includes('zool');
+        });
+        targetSubjects = hasBotanyOrZoology 
+            ? ['Physics', 'Chemistry', 'Botany', 'Zoology'] 
+            : ['Physics', 'Chemistry', 'Biology'];
+    }
+
+    const subMap = {};
+    targetSubjects.forEach(sub => {
+        subMap[sub] = { correct: 0, wrong: 0, notAttempted: 0, totalQuestions: 0, score: 0 };
+    });
+
+    const questionsToIterate = (Array.isArray(examQuestions) && examQuestions.length > 0)
+        ? examQuestions
+        : (Array.isArray(sessionAnswers) ? sessionAnswers : []);
+
+    questionsToIterate.forEach((q, idx) => {
+        const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+        const ans = Array.isArray(sessionAnswers)
+            ? sessionAnswers.find(a => String(a.questionId) === sid || String(a.questionId) === String(idx)) || sessionAnswers[idx]
+            : null;
+
+        let rawSub = q.subject || ans?.subject || '';
+        let normSub = 'Physics';
+        const lower = String(rawSub).toLowerCase();
+        if (lower.includes('physic')) normSub = 'Physics';
+        else if (lower.includes('chem')) normSub = 'Chemistry';
+        else if (lower.includes('math')) normSub = 'Mathematics';
+        else if (lower.includes('botan')) normSub = 'Botany';
+        else if (lower.includes('zool')) normSub = 'Zoology';
+        else if (lower.includes('bio')) normSub = 'Biology';
+        else {
+            if (targetSubjects.length === 3) {
+                if (idx < 25) normSub = 'Physics';
+                else if (idx < 50) normSub = 'Chemistry';
+                else normSub = 'Mathematics';
+            } else if (targetSubjects.length === 4) {
+                const chunk = Math.max(1, Math.floor(questionsToIterate.length / 4));
+                const chunkIdx = Math.min(3, Math.floor(idx / chunk));
+                normSub = targetSubjects[chunkIdx];
+            } else {
+                normSub = targetSubjects[idx % targetSubjects.length];
+            }
+        }
+
+        if (!subMap[normSub]) {
+            subMap[normSub] = { correct: 0, wrong: 0, notAttempted: 0, totalQuestions: 0, score: 0 };
+        }
+
+        subMap[normSub].totalQuestions++;
+
+        const userAns = ans?.selectedOption ?? ans?.userAnswer ?? null;
+        const isAttempted = Boolean(userAns !== null && userAns !== undefined && String(userAns).trim() !== '' && String(userAns) !== '—');
+
+        let isCorrect = false;
+        if (ans?.isCorrect !== undefined) {
+            isCorrect = Boolean(ans.isCorrect);
+        } else if (isAttempted && (q.answer || q.correctAnswer)) {
+            const corr = String(q.answer || q.correctAnswer).trim().toUpperCase();
+            isCorrect = String(userAns).trim().toUpperCase() === corr;
+        }
+
+        if (isAttempted) {
+            if (isCorrect) {
+                subMap[normSub].correct++;
+                subMap[normSub].score += marksPerQ;
+            } else {
+                subMap[normSub].wrong++;
+                subMap[normSub].score -= negMark;
+            }
+        } else {
+            subMap[normSub].notAttempted++;
+        }
+    });
+
+    return subMap;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // ADMIN: Commission a new Exam Assignment to Faculty
 // POST /api/exams/commission
@@ -1867,6 +1960,8 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             };
         });
 
+        const subScores = computeSubjectScoresForSession(sessionAnswers, exam.questions, exam.examType, exam.title);
+
         res.json({
             sessionId: session ? (session._id || session.id) : req.params.sessionId,
             studentName: session?.student_name || session?.studentName || 'Student',
@@ -1882,6 +1977,7 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
             unattempted: session?.unattempted !== undefined ? session.unattempted : (exam.questions || []).length,
             weakAreas: session?.weak_areas || session?.weakAreas || [],
             breakdown,
+            subjectScores: subScores,
             classStats: {
                 classAverageScore,
                 classTopScore,
@@ -1903,26 +1999,35 @@ router.get('/:id/scorecard/:sessionId', detectLabIp, async (req, res) => {
 router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
     try {
         const rawExam = await getExamOrPaperAsExam(req.params.id);
+        const hydratedExam = await hydrateExamQuestions(rawExam);
+        const examQuestions = hydratedExam?.questions || [];
+        const examType = hydratedExam?.examType || rawExam?.exam_type || 'CET';
+        const examTitle = rawExam?.title || hydratedExam?.title || '';
+
         const sessions = await storage.getSessionsByExam(req.params.id);
-        const mapped = (sessions || []).map(s => ({
-            ...s,
-            _id: String(s._id || s.id),
-            id: s.id,
-            studentName: s.student_name || s.studentName || 'Student',
-            rollNumber: s.roll_number || s.rollNumber || '—',
-            studentEmail: s.student_email || s.studentEmail || '',
-            fromLabIp: Boolean(s.from_lab_ip !== undefined ? s.from_lab_ip : s.fromLabIp),
-            malpracticeFlag: Boolean(s.malpractice_flag !== undefined ? s.malpractice_flag : s.malpracticeFlag),
-            malpracticeReason: s.malpractice_reason || s.malpracticeReason || '',
-            weakAreas: s.weak_areas || s.weakAreas || [],
-            endTime: s.end_time || s.endTime,
-            score: Number(s.score) || 0,
-            correct: Number(s.correct) || 0,
-            incorrect: Number(s.incorrect) || 0,
-            unattempted: Number(s.unattempted) || 0,
-            totalQuestions: Number(s.total_questions || s.totalQuestions) || 0,
-            submitted: Boolean(s.submitted)
-        }));
+        const mapped = (sessions || []).map(s => {
+            const subScores = computeSubjectScoresForSession(s.answers, examQuestions, examType, examTitle);
+            return {
+                ...s,
+                _id: String(s._id || s.id),
+                id: s.id,
+                studentName: s.student_name || s.studentName || 'Student',
+                rollNumber: s.roll_number || s.rollNumber || '—',
+                studentEmail: s.student_email || s.studentEmail || '',
+                fromLabIp: Boolean(s.from_lab_ip !== undefined ? s.from_lab_ip : s.fromLabIp),
+                malpracticeFlag: Boolean(s.malpractice_flag !== undefined ? s.malpractice_flag : s.malpracticeFlag),
+                malpracticeReason: s.malpractice_reason || s.malpracticeReason || '',
+                weakAreas: s.weak_areas || s.weakAreas || [],
+                endTime: s.end_time || s.endTime,
+                score: Number(s.score) || 0,
+                correct: Number(s.correct) || 0,
+                incorrect: Number(s.incorrect) || 0,
+                unattempted: Number(s.unattempted) || 0,
+                totalQuestions: Number(s.total_questions || s.totalQuestions) || examQuestions.length || 75,
+                subjectScores: subScores,
+                submitted: Boolean(s.submitted)
+            };
+        });
 
         // Guarantee all enrolled / PACE students are visible in admin results
         const existingRolls = new Set(
@@ -1945,7 +2050,8 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
                 ? rawExam.allowedStudents.map(r => ({ rollNumber: r, name: `Candidate ${r}` }))
                 : [];
 
-        const totalQ = rawExam?.questions?.length || 75;
+        const totalQ = examQuestions.length || rawExam?.questions?.length || 75;
+        const emptySubScores = computeSubjectScoresForSession([], examQuestions, examType, examTitle);
 
         for (const item of roster) {
             const clean = String(item.rollNumber).trim().replace(/[\s\-_]/g, '').toUpperCase();
@@ -1966,6 +2072,7 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
                     incorrect: 0,
                     unattempted: totalQ,
                     totalQuestions: totalQ,
+                    subjectScores: emptySubScores,
                     submitted: false
                 });
                 existingRolls.add(clean);
