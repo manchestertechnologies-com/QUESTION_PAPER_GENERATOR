@@ -74,8 +74,13 @@ export function resolveOptionIndex(val, options = []) {
  * Robustly checks if candidate answer is correct
  */
 export function checkAnswerCorrect(userAns, correctAns, options = [], tolerance = 0, qType = 'MCQ') {
-    if (userAns === null || userAns === undefined || String(userAns).trim() === '') return false;
+    if (userAns === null || userAns === undefined || String(userAns).trim() === '' || String(userAns).trim() === 'null') return false;
     if (correctAns === null || correctAns === undefined || String(correctAns).trim() === '') return false;
+
+    // Grace rule: If correctAns is 'Grace' or 'GRACE', any attempted answer is correct!
+    if (String(correctAns).trim().toUpperCase() === 'GRACE') {
+        return true;
+    }
 
     // Numerical Question Check
     const qTypeUpper = String(qType || '').toUpperCase();

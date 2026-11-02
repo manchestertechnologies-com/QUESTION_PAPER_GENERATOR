@@ -166,14 +166,21 @@ function computeSubjectScoresForSession(sessionAnswers = [], examQuestions = [],
         subMap[normSub].totalQuestions++;
 
         const userAns = ans?.selectedOption ?? ans?.userAnswer ?? null;
-        const isAttempted = Boolean(userAns !== null && userAns !== undefined && String(userAns).trim() !== '' && String(userAns) !== '—');
+        const isAttempted = Boolean(userAns !== null && userAns !== undefined && String(userAns).trim() !== '' && String(userAns).trim() !== 'null' && String(userAns) !== '—');
 
         let isCorrect = false;
+        const isGrace = Boolean(
+            q?.isGrace ||
+            String(q?.answer || q?.correctAnswer || '').trim().toUpperCase() === 'GRACE'
+        );
         if (ans?.isCorrect !== undefined) {
             isCorrect = Boolean(ans.isCorrect);
-        } else if (isAttempted && (q.answer || q.correctAnswer)) {
-            const corr = String(q.answer || q.correctAnswer).trim().toUpperCase();
-            isCorrect = String(userAns).trim().toUpperCase() === corr;
+        } else if (isAttempted) {
+            if (isGrace) {
+                isCorrect = true;
+            } else if (q.answer || q.correctAnswer) {
+                isCorrect = checkAnswerCorrect(userAns, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
+            }
         }
 
         if (isAttempted) {
@@ -1694,7 +1701,15 @@ router.post('/:id/submit', detectLabIp, async (req, res) => {
 
             let isCorrect = false;
             if (isAttempted) {
-                isCorrect = checkAnswerCorrect(selected, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
+                const isGrace = Boolean(
+                    q?.isGrace ||
+                    String(q?.answer || q?.correctAnswer || '').trim().toUpperCase() === 'GRACE'
+                );
+                if (isGrace) {
+                    isCorrect = true;
+                } else {
+                    isCorrect = checkAnswerCorrect(selected, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
+                }
 
                 if (isCorrect) {
                     score += correctMarks;
@@ -2081,6 +2096,152 @@ router.get('/:id/results', [auth, checkRole(['admin'])], async (req, res) => {
 
         res.json(mapped);
     } catch (err) {
+        res.status(500).json({ msg: 'Server Error: ' + err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN: Recalculate Exam Results using updated answer keys & grace rules
+// POST /api/exams/:id/recalculate-results
+// ─────────────────────────────────────────────────────────────────
+router.post('/:id/recalculate-results', [auth, checkRole(['admin'])], async (req, res) => {
+    try {
+        const rawExam = await getExamOrPaperAsExam(req.params.id);
+        if (!rawExam) return res.status(404).json({ msg: 'Exam not found' });
+        const exam = await hydrateExamQuestions(rawExam);
+        const examQuestions = exam.questions || [];
+        const isKcetExam = (exam.examType === 'CET' || exam.examType === 'KCET');
+        const correctMarks = isKcetExam ? 1 : 4;
+        const incorrectMarks = isKcetExam ? 0 : -1;
+
+        const sessions = await storage.getSessionsByExam(req.params.id);
+        const updatedList = [];
+
+        for (const session of (sessions || [])) {
+            if (!session.answers || !Array.isArray(session.answers) || session.answers.length === 0) {
+                continue;
+            }
+
+            const answerMap = {};
+            session.answers.forEach(a => {
+                if (a.questionId !== undefined && a.questionId !== null) {
+                    answerMap[String(a.questionId)] = a;
+                }
+            });
+
+            let score = 0, correct = 0, incorrect = 0, unattempted = 0;
+            const weakMap = {};
+
+            const processedAnswers = examQuestions.map((q, idx) => {
+                const sid = typeof q === 'string' ? q : String(q._id || q.id || q.questionId || idx);
+                const submitted = answerMap[sid] || answerMap[String(idx)] || session.answers[idx];
+                let selected = submitted?.selectedOption !== undefined ? submitted.selectedOption : null;
+                const markedForReview = submitted?.markedForReview || false;
+                const timeTaken = Math.max(0, parseFloat(submitted?.timeTaken) || 0);
+
+                let isAttempted = selected !== null && selected !== undefined && String(selected).trim() !== '' && String(selected).trim() !== 'null' && String(selected) !== '—';
+
+                const isGrace = Boolean(
+                    q.isGrace ||
+                    String(q.answer || q.correctAnswer || '').trim().toUpperCase() === 'GRACE'
+                );
+
+                let isCorrect = false;
+                if (isAttempted) {
+                    if (isGrace) {
+                        isCorrect = true;
+                    } else {
+                        isCorrect = checkAnswerCorrect(selected, q.answer || q.correctAnswer, q.options || [], q.numericalTolerance || 0, q.type || 'MCQ');
+                    }
+
+                    if (isCorrect) {
+                        score += correctMarks;
+                        correct++;
+                    } else {
+                        score += incorrectMarks;
+                        incorrect++;
+                    }
+                } else {
+                    unattempted++;
+                }
+
+                const chapterName = q.chapter || submitted?.chapter || 'General';
+                const conceptName = q.concept || q.subConcept || submitted?.concept || 'General';
+                const topicKey = `${q.subject || 'Subject'}::${chapterName}::${conceptName}`;
+                if (!weakMap[topicKey]) {
+                    weakMap[topicKey] = {
+                        subject: q.subject || submitted?.subject || 'General',
+                        chapter: chapterName,
+                        concept: conceptName,
+                        incorrect: 0,
+                        unattempted: 0,
+                        correct: 0,
+                        totalQuestions: 0,
+                        timeSpent: 0
+                    };
+                }
+                weakMap[topicKey].totalQuestions++;
+                weakMap[topicKey].timeSpent += timeTaken;
+                if (isAttempted) {
+                    if (isCorrect) weakMap[topicKey].correct++;
+                    else weakMap[topicKey].incorrect++;
+                } else {
+                    weakMap[topicKey].unattempted++;
+                }
+
+                return {
+                    questionId: sid,
+                    selectedOption: selected,
+                    markedForReview,
+                    visited: Boolean(submitted?.visited ?? true),
+                    timeTaken,
+                    isCorrect,
+                    isAttempted,
+                    subject: q.subject || submitted?.subject,
+                    chapter: chapterName,
+                    concept: conceptName
+                };
+            });
+
+            const weakAreas = Object.values(weakMap)
+                .map(w => ({
+                    ...w,
+                    totalWeak: w.incorrect + w.unattempted,
+                    accuracy: (w.correct + w.incorrect) > 0 ? Math.round((w.correct / (w.correct + w.incorrect)) * 100) : 0,
+                    attemptRate: w.totalQuestions > 0 ? Math.round(((w.correct + w.incorrect) / w.totalQuestions) * 100) : 0,
+                    avgTimePerQuestion: w.totalQuestions > 0 ? Math.round(w.timeSpent / w.totalQuestions) : 0
+                }))
+                .sort((a, b) => b.totalWeak - a.totalWeak);
+
+            await storage.updateSession(session.id || session._id, {
+                answers: processedAnswers,
+                score,
+                correct,
+                incorrect,
+                unattempted,
+                attempted: correct + incorrect,
+                weakAreas
+            });
+
+            updatedList.push({
+                id: session.id || session._id,
+                studentName: session.student_name || session.studentName,
+                rollNumber: session.roll_number || session.rollNumber,
+                oldScore: session.score,
+                newScore: score,
+                correct,
+                incorrect,
+                attempted: correct + incorrect
+            });
+        }
+
+        res.json({
+            msg: `Successfully recalculated ${updatedList.length} student results.`,
+            count: updatedList.length,
+            updatedList
+        });
+    } catch (err) {
+        console.error('Error recalculating results:', err);
         res.status(500).json({ msg: 'Server Error: ' + err.message });
     }
 });

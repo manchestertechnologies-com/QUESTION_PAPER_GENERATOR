@@ -170,6 +170,21 @@ export default function AdminResults() {
         setMsg('✅ Bridge key copied to clipboard!');
     };
 
+    const handleRecalculateResults = async () => {
+        if (!selectedExam) return setMsg('Select an exam first');
+        if (!window.confirm('Are you sure you want to re-evaluate all candidate results using the updated answer keys and grace rules?')) return;
+        setLoading(true);
+        try {
+            const res = await api.post(`/api/exams/${selectedExam}/recalculate-results`);
+            setMsg(`✅ ${res.data?.msg || 'Scores recalculated successfully!'}`);
+            await fetchResults(selectedExam);
+        } catch (err) {
+            setMsg('Failed to recalculate: ' + (err.response?.data?.msg || err.message));
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const downloadIndividualPDF = (student) => {
         const exam = exams.find(e => String(e._id || e.id) === String(selectedExam)) || {};
         downloadIndividualScorecardPdf(student, exam);
@@ -371,6 +386,11 @@ export default function AdminResults() {
                         </button>
                     )}
                     <button style={styles.keyBtn} onClick={generateBridgeKey}>🔑 Generate Bridge Key</button>
+                    {selectedExam && (
+                        <button style={{ ...styles.keyBtn, background: '#d97706' }} onClick={handleRecalculateResults} title="Recalculate all candidate scores using updated answer keys and grace rules">
+                            ⚡ Re-evaluate Results
+                        </button>
+                    )}
                     {displayResults && displayResults.length > 0 && (
                         <>
                             <button style={{...styles.keyBtn, background: '#10b981'}} onClick={exportExcel}>📊 Excel</button>
